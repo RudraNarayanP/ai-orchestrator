@@ -67,3 +67,28 @@ def test_model_free_answer_says_dont_know_when_the_only_supported_claims_are_bes
     assert best["confidence"] == Confidence.NONE and not best["sources"]
     # without the question the old behaviour is unchanged
     assert verifier._best_supported([], [verdict], [ev])["answer"].startswith("The University of Manchester")
+
+def test_future_year_questions_are_not_answered_with_what_happened_earlier():
+    from backend.research.router import addresses_question, future_year
+
+    q = "Which amendments will Parliament make to the Employment Rights Act 1996 during 2028?"
+    assert future_year(q, now_year=2026) == "2028" and future_year("What happened in 1995?") is None
+    assert not addresses_question(q, "The Employment Rights Act 2025 amended the Employment Rights Act 1996 through numerous provisions.")
+
+
+def test_ledger_supported_claims_about_other_years_become_a_reasoned_dont_know():
+    from backend.models import Claim, ClaimStatus, ClaimVerdict, Confidence, Evidence, SourceCheckStatus, SourceTier, VerifierReport
+    from backend.verification.llm import Endpoint
+    from backend.verification.verifier import Verifier
+
+    q = "Which amendments will Parliament make to the Employment Rights Act 1996 during 2028?"
+    claim = Claim(job_id="j", id="c1", claim="The Employment Rights Act 2025 amended the Employment Rights Act 1996.", kind="legal")
+    evs = [
+        Evidence(job_id="j", claim_id="c1", url=f"https://www.legislation.gov.uk/ukpga/2025/36/{i}", domain=d, tier=SourceTier.GOVERNMENT, check_status=SourceCheckStatus.CONFIRMED)
+        for i, d in enumerate(["www.legislation.gov.uk", "www.gov.uk"])
+    ]
+    verdict = ClaimVerdict(claim_id="c1", claim=claim.claim, verdict=ClaimStatus.SUPPORTED, confidence=Confidence.HIGH, reasoning="r", strong_evidence=[e.url for e in evs])
+    report = VerifierReport(job_id="j", round=1, verdicts=[verdict], answer="The 2025 Act amended the 1996 Act in many ways.", confidence=Confidence.HIGH)
+    Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)._reconcile(report, [claim], evs, q)
+    assert report.answer.startswith("I don't know.") and "2028" in report.answer and "hasn't happened yet" in report.answer
+    assert not report.sources and report.confidence != Confidence.HIGH

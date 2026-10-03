@@ -31,7 +31,7 @@ from backend.models import (
     VerifierReport,
     WebResearchStatus,
 )
-from backend.research.router import addresses_question
+from backend.research.router import addresses_question, future_year
 from backend.research.style import (
     ANSWER_CONTRACT,
     BANNED_PHRASES,
@@ -141,7 +141,7 @@ class Verifier:
             return report
         # Deterministic cross-check: a model that calls a claim "supported" with
         # zero confirmed sources in our own records gets overruled, not trusted.
-        self._reconcile(report, claims, evidence)
+        self._reconcile(report, claims, evidence, question)
         report.raw_output = reply.text[:4000]
         report.verifier_model = f"{self.endpoint.provider}:{self.endpoint.model}"
         report.answer, leaked = scrub(report.answer)
@@ -574,7 +574,9 @@ class Verifier:
             sources = [Citation(url=u, title=by_url[u].title, published=by_url[u].published) for u in list(dict.fromkeys(urls)) if u in by_url][:6]
         else:
             answer = (
-                "I don't know. The pages I opened don't answer this question directly, so I won't guess."
+                f"I don't know. That's about {future_year(question)}, which hasn't happened yet, so nothing published can say."
+                if off_point and future_year(question)
+                else "I don't know. The pages I opened don't answer this question directly, so I won't guess."
                 if off_point
                 else "I don't know. I couldn't confirm an answer from any page I opened, so I won't guess."
             )
@@ -656,7 +658,7 @@ class Verifier:
         except Exception:  # noqa: BLE001
             return None
 
-    def _reconcile(self, report: VerifierReport, claims: list[Claim], evidence: list[Evidence]) -> None:
+    def _reconcile(self, report: VerifierReport, claims: list[Claim], evidence: list[Evidence], question: str = "") -> None:
         """A model cannot promote a claim our own ledger does not support."""
         confirmed_by_claim: dict[str, int] = {}
         domains_by_claim: dict[str, set[str]] = {}
@@ -700,6 +702,10 @@ class Verifier:
             report.confidence_note = (report.confidence_note or "") + " No claim survived the evidence ledger."
             report.unresolved.append("verifier answer overruled to low confidence by the ledger")
         standing = [v for v in report.verdicts if v.verdict in {ClaimStatus.REFUTED, ClaimStatus.CONTESTED}]
+        future = future_year(question)
+        if future and supported and not any(future in v.claim for v in supported):
+            # Live: "which amendments will Parliament make during 2028?" was answered with what an Act of 2025 did.
+            supported, standing = [], []
         if not supported and not standing:
             # Live run: with zero pages confirming anything, the model still wrote a confident answer and a `why`
             # citing sources of its own. The ledger decides what may be said as fact; the draft is kept as a caveat.
@@ -707,7 +713,9 @@ class Verifier:
             if draft and not draft.startswith("I couldn't verify this reliably."):
                 report.caveats = [f"Not confirmed by any page we opened: {draft[:260]}"] + list(report.caveats)
             report.answer = (
-                "I couldn't verify this reliably. None of the pages I opened confirms an answer, so I won't guess."
+                f"I don't know. That's about {future}, which hasn't happened yet, so nothing published can say."
+                if future
+                else "I couldn't verify this reliably. None of the pages I opened confirms an answer, so I won't guess."
             )
             report.why = ""
             report.sources = []

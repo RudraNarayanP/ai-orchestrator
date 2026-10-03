@@ -340,6 +340,17 @@ def off_topic(question: str, answer: str) -> bool:
 _ASK_STOP = _TOPIC_STOP | {"university", "people", "number", "being", "explain", "describe", "define", "defines", "guidance", "students", "please", "known", "using", "regarding", "current", "currently", "year", "years"}
 
 
+def future_year(question: str, *, now_year: int | None = None) -> str | None:
+    """A year later than today that the question asks about ("... during 2028"), else None."""
+    import datetime as _dt
+
+    this_year = now_year or _dt.date.today().year
+    for y in re.findall(r"\b(20\d{2}|21\d{2})\b", question or ""):
+        if int(y) > this_year:
+            return y
+    return None
+
+
 def addresses_question(question: str, claim: str) -> bool:
     """Does this claim speak to what was asked, not merely to the same subject?
 
@@ -351,6 +362,9 @@ def addresses_question(question: str, claim: str) -> bool:
     """
     q = question or ""
     c = (claim or "").lower()
+    future = future_year(q)
+    if future and future not in c:
+        return False  # asked about a year that has not happened; a claim about other years is beside the point
     words = re.findall(r"[A-Za-z][A-Za-z'-]+", q)
     asked = [
         w.lower()
