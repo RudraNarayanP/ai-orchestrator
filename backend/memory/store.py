@@ -38,6 +38,7 @@ create index if not exists ix_mem_project on memories(project, status);
 create index if not exists ix_mem_slot on memories(slot, scope, project, status);
 create table if not exists memory_fts_map (memory_id text primary key, rid integer not null);
 create virtual table if not exists memory_fts using fts5(memory_id unindexed, content, entities, topics, tokenize='porter unicode61');
+create virtual table if not exists memory_fts_vocab using fts5vocab(memory_fts, 'row');
 create table if not exists memory_entities (memory_id text not null, entity text not null, primary key (memory_id, entity));
 create index if not exists ix_ent on memory_entities(entity);
 create table if not exists memory_links (src text not null, dst text not null, kind text not null, weight real default 1.0, primary key (src, dst, kind));
@@ -78,6 +79,7 @@ class MemoryStore:
         self._live: np.ndarray | None = None  # bool mask: row is a searchable (ACTIVE or history) memory
         self._loaded = False
         self._gen, self._proj_gen, self._projects = 0, -1, set()
+        self._ndocs, self._ndocs_gen = 0, -1
         if self.db.execute("select count(*) from memory_fts_map").fetchone()[0] == 0 and self.count() > 0:
             self.db.execute("delete from memory_fts")
             for row in self.db.execute("select * from memories").fetchall():
@@ -274,11 +276,29 @@ class MemoryStore:
             self._proj_gen = self._gen
         return self._projects
 
+    COMMON_DF = 0.03  # a term in more than 3% of a large store carries no signal and makes OR-queries scan most of the index
+    COMMON_MIN_DOCS = 20000
+
+    def _drop_ubiquitous(self, terms: list[str]) -> list[str]:
+        """On big stores skip query terms that appear in a large share of memories (never if that would leave nothing)."""
+        if self._ndocs_gen != self._gen:
+            self._ndocs = self.db.execute("select count(*) from memory_fts_map").fetchone()[0]
+            self._ndocs_gen = self._gen
+        if self._ndocs < self.COMMON_MIN_DOCS:
+            return terms
+        keep = []
+        for t in terms:
+            r = self.db.execute("select doc from memory_fts_vocab where term=?", (t,)).fetchone()
+            if r is None or r["doc"] <= self._ndocs * self.COMMON_DF:
+                keep.append(t)
+        return keep or terms
+
     def fts_search(self, query_terms: list[str], k: int = 50, *, statuses: tuple[str, ...] = ("ACTIVE",)) -> list[tuple[str, float, int]]:
         """BM25 over content+entities+topics. Returns (id, score>0, matched_term_count)."""
         terms = [t for t in dict.fromkeys(query_terms) if t and re.fullmatch(r"[\w']+", t)]
         if not terms:
             return []
+        terms = self._drop_ubiquitous(terms)
         match = " OR ".join(f'"{t}"' for t in terms)
         try:
             rows = self.db.execute(

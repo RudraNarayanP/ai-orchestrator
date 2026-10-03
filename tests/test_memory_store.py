@@ -189,3 +189,12 @@ def test_entity_and_project_lookup_is_by_name_not_by_scanning(store):
     assert svc.retriever.understand("tell me about atlas")[1] == "atlas"  # project cache is invalidated by the write
     store.delete_all()
     assert svc.retriever.understand("tell me about atlas")[1] is None
+
+def test_big_store_drops_ubiquitous_query_terms_but_never_all_of_them(store, monkeypatch):
+    for i in range(30):
+        store.add(f"Colleague number {i} works on the platform team", entities=[f"c{i}"])
+    store.add("Owns a kayak stored in the garage")
+    monkeypatch.setattr(MemoryStore, "COMMON_MIN_DOCS", 10)
+    hits = store.fts_search(["colleagu", "kayak"])
+    assert hits and store.get(hits[0][0]).content.startswith("Owns a kayak"), "the rare term decides"
+    assert store._drop_ubiquitous(["colleagu"]) == ["colleagu"], "if every term is common, keep them rather than search for nothing"

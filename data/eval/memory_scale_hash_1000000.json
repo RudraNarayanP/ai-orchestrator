@@ -1,0 +1,30 @@
+{
+ "embedder": "hash-v1",
+ "floor": 0.22,
+ "sizes": {
+  "1000000": {
+   "cold_first_query_ms": 21863.4,
+   "warm_p50_ms": 106.63,
+   "warm_p95_ms": 2723.72,
+   "general_question_p50_ms": 0.189,
+   "avg_candidates": 80.1,
+   "avg_final_hits": 0.81,
+   "recall": 0.389,
+   "MRR": 0.361,
+   "precision_of_returned": 0.264,
+   "general_suppressed": 1.0,
+   "distractor_suppressed": 0.875,
+   "avg_injected_tokens": 7.6,
+   "stage_ms": {
+    "understand_ms": 0.22,
+    "vector_ms": 74.49,
+    "fts_ms": 683.19,
+    "hydrate_ms": 11.33,
+    "score_ms": 2.7
+   },
+   "db_MB": 2370.7,
+   "ram_matrix_MB": 1536.0,
+   "build_s": 263.1
+  }
+ }
+}
