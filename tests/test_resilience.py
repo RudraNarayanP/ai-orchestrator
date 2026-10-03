@@ -51,7 +51,7 @@ async def test_every_provider_failing_yields_honest_ignorance(settings, net):
     }
     job, _, _ = await run_job(settings, scripts, "When did Acme release the Bolt?")
     assert job.status.value == "completed"
-    assert job.final.answer.strip() in {"I don't know.", "I couldn't verify this reliably."}
+    assert job.final.answer.strip().startswith(("I don't know.", "I couldn't verify this reliably."))
     assert job.final.confidence.value == "insufficient_evidence"
 
 
@@ -140,7 +140,7 @@ async def test_hallucinated_citation_is_not_evidence(settings, net):
     job, _, _ = await run_job(settings, scripts, "When did Acme release the Bolt?")
     assert job.evidence
     assert all(e.check_status != SourceCheckStatus.CONFIRMED for e in job.evidence)
-    assert job.final.answer.strip() in {"I don't know.", "I couldn't verify this reliably."} or "March 2026" not in job.final.why
+    assert job.final.answer.strip().startswith(("I don't know.", "I couldn't verify this reliably.")) or "March 2026" not in job.final.why
 
 
 async def test_outdated_source_is_flagged_not_promoted(settings, net):
@@ -184,7 +184,7 @@ async def test_provider_that_says_nothing_is_never_called_sufficient(settings, n
     }
     job, adapters, _ = await run_job(settings, scripts, "When did ChatGPT Agent launch?")
     assert job.claims == [] or all(not c.claim.lower().startswith("sign in") for c in job.claims)
-    assert job.final.answer.strip() in {"I don't know.", "I couldn't verify this reliably."}
+    assert job.final.answer.strip().startswith(("I don't know.", "I couldn't verify this reliably."))
     assert "sufficient" not in (job.stop_reason or "").lower(), job.stop_reason
     assert job.final.confidence.value == "insufficient_evidence"
 

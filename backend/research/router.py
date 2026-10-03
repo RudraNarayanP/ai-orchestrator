@@ -306,6 +306,37 @@ def _sub_questions(text: str) -> list[str]:
     return clauses[:4] if len(clauses) >= 2 else []
 
 
+_TOPIC_STOP = {"which", "what", "when", "where", "does", "under", "about", "there", "their", "these", "those", "with", "from", "that", "this", "have", "will", "would", "could", "should", "into", "than", "then", "also"}
+
+
+def question_from_prompt(prompt: str) -> str:
+    """The user's question inside a provider prompt (round 1 is the question itself; later rounds quote it)."""
+    text = (prompt or "").strip()
+    m = re.search(r"Original question:\s*\n?(.+?)(?:\n\s*\n|\Z)", text, re.S)
+    if m:
+        return m.group(1).strip()
+    return text.split("\n\n", 1)[0].strip()
+
+
+def off_topic(question: str, answer: str) -> bool:
+    """True when an answer shares nothing distinctive with the question.
+
+    Live eval defect: a reused chat window answered the *previous* question (an
+    Employment Rights Act reply to a Ukrainian Family Code question) and the claims
+    from it flowed into the ledger. Capitalised names (Ukraine, Family Code, ...) are
+    the strongest signal; failing that, no overlap at all on four or more content words.
+    """
+    q, a = (question or "").strip(), (answer or "").lower()
+    if len(a) < 80 or len(q) < 12:
+        return False
+    words = re.findall(r"[A-Za-z][A-Za-z'-]+", q)
+    proper = [w.lower() for i, w in enumerate(words) if i > 0 and w[0].isupper() and len(w) >= 4 and w.lower() not in _TOPIC_STOP]
+    if proper:
+        return not any(w in a for w in proper)
+    content = [w.lower() for w in words if len(w) >= 5 and w.lower() not in _TOPIC_STOP]
+    return len(content) >= 4 and not any(w in a for w in content)
+
+
 def is_failure_phrase(text: str) -> list[str]:
     """Section 4: an admitted inability is a routing signal, not a shrug."""
     patterns = [

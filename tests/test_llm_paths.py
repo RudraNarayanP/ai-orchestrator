@@ -212,7 +212,7 @@ async def test_a_model_cannot_call_a_claim_supported_with_no_confirmed_source(fa
     assert report.verdicts[0].verdict == ClaimStatus.INSUFFICIENT_EVIDENCE
     assert any("overruled" in p for p in report.verdicts[0].problems)
     assert report.confidence == Confidence.LOW, "no claim survived the ledger -> the overall band drops"
-    assert report.answer == "I couldn't verify this reliably.", "the model's confident draft must not be stated as fact"
+    assert report.answer.startswith("I couldn't verify this reliably.") and "won't guess" in report.answer, "the model's confident draft must not be stated as fact"
     assert not report.why and not report.sources
     assert any("The Bolt costs $549." in c and c.startswith("Not confirmed") for c in report.caveats), report.caveats
 

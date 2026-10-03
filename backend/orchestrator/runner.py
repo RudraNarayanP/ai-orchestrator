@@ -540,6 +540,13 @@ class ResearchRunner:
                     response.error = f"{type(exc).__name__}: {exc}"
                     response.answer_text = ""
                 self.politeness.after(provider, response.status.value)
+        if response.status.value == "completed" and router.off_topic(router.question_from_prompt(prompt), response.answer_text or ""):
+            # a reused chat answered an earlier question: never let it into the ledger
+            response.status = ProviderStatus.FAILED
+            response.error = "off_topic: the reply does not address this question"
+            response.raw_text = response.answer_text or response.raw_text
+            response.answer_text = ""
+            response.citations = []
         response.role = role
         response.escalation_reason = escalation_reason
         response.pages_visited = [c.url for c in response.citations if c.url][:20]
@@ -614,7 +621,7 @@ class ResearchRunner:
         dead: set[str] = set()
         for provider, items in by_provider.items():
             if all(
-                r.status in dead_status or (r.status == ProviderStatus.FAILED and (r.error or "").startswith("readiness=blocked"))
+                r.status in dead_status or (r.status == ProviderStatus.FAILED and (r.error or "").startswith(("readiness=blocked", "off_topic")))
                 for r in items
             ):
                 dead.add(provider)

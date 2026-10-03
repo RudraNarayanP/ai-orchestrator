@@ -694,9 +694,11 @@ class Verifier:
             # Live run: with zero pages confirming anything, the model still wrote a confident answer and a `why`
             # citing sources of its own. The ledger decides what may be said as fact; the draft is kept as a caveat.
             draft = (report.answer or "").strip()
-            if draft and draft != "I couldn't verify this reliably.":
+            if draft and not draft.startswith("I couldn't verify this reliably."):
                 report.caveats = [f"Not confirmed by any page we opened: {draft[:260]}"] + list(report.caveats)
-            report.answer = "I couldn't verify this reliably."
+            report.answer = (
+                "I couldn't verify this reliably. None of the pages I opened confirms an answer, so I won't guess."
+            )
             report.why = ""
             report.sources = []
             report.important_disagreement = None
