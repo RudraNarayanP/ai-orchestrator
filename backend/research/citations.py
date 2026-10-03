@@ -21,17 +21,36 @@ def normalise(url: str) -> str:
     return re.sub(r"[.,;:]+$", "", (url or "").strip()).rstrip("/").lower()
 
 
+_HEAD_MENTIONED = re.compile(r"\b(?:mentioned only|not opened|did not open|didn'?t open|unopened|only seen|only mentioned|not read)\b", re.I)
+_HEAD_OPENED = re.compile(r"\b(?:pages?|sources?|links?|urls?|documents?)?\s*(?:i|we)?\s*(?:have\s+)?(?:actually\s+)?(?:opened|read|visited)\b|\bopened (?:pages?|sources?|links?)\b", re.I)
+
+
 def labels_from_text(text: str) -> dict[str, bool]:
-    """url -> opened?, from lines like 'https://x/y - OPENED' or 'https://x/z (MENTIONED ONLY)'."""
+    """url -> opened?, from lines like 'https://x/y - OPENED' or 'https://x/z (MENTIONED ONLY)'.
+
+    A heading without a URL ("Pages I opened:" / "Mentioned only:") labels the bare URLs listed under it, up to the
+    next blank line or heading -- the AI said it opened them, even if it did not repeat the word on every line.
+    """
     out: dict[str, bool] = {}
+    section: bool | None = None
     for line in (text or "").splitlines():
         urls = URL_RE.findall(line)
         if not urls:
+            if not line.strip():
+                section = None
+            elif _HEAD_MENTIONED.search(line):
+                section = False
+            elif _HEAD_OPENED.search(line) and len(line) < 140:
+                section = True
+            elif len(line) < 60 and line.rstrip().endswith(":"):
+                section = None
             continue
         if _MENTIONED.search(line):
             flag = False
         elif _OPENED.search(line):
             flag = True
+        elif section is not None:
+            flag = section
         else:
             continue
         for url in urls:

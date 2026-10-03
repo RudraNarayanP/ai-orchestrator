@@ -540,6 +540,31 @@ def similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
     return max(reduced, jaccard(set(left["tokens"]), set(right["tokens"])))
 
 
+_IDENT_NUM = re.compile(
+    r"\b(section|sections|article|articles|paragraph|paragraphs|para|clause|schedule|chapter|part|rule|page|pages|step)\s*"
+    r"\(?\d+[a-z]?\)?(?:\(\d+\))*(?:\s*[-\u2013]\s*\d+)?", re.I)
+_NAMED_YEAR = re.compile(r"\b(act|acts|regulations?|order|bill|code|directive|rules)\s+(?:of\s+)?(?:19|20)\d\d\b", re.I)
+_REPLACED = re.compile(
+    r"(?:\d[\d,.]*)(?=[\s\-\u2018\u2019\u201c\u201d'\"]*(?:years?|year-old|months?|days?|%|percent)?[\s\u2018\u2019\u201c\u201d'\"]*"
+    r"[^.;]{0,90}?\b(?:read as|reads? as|replaced (?:by|with)|instead of|rather than|reduced to|lowered to|raised to|changed to|is substituted))", re.I)
+_FROM_TO = re.compile(r"\bfrom\s+\d[\d,.]*(?:\s*(?:years?|months?|days?|%))?\s+to\b", re.I)
+
+
+def comparable_text(text: str) -> str:
+    """Strip numbers that are labels, not claims, before comparing two claims for a figure/date conflict.
+
+    "section 9" / "Article 8(1)" are identifiers; "Act 2018" is part of a name; in "references to 16 years are read as
+    13 years" the 16 is what the text replaces, not a competing answer. Comparing those as figures invented conflicts
+    (live run: uk-dpa-age, "enactment date|figure" vs "primary legislation is section 9").
+    """
+    t = text or ""
+    t = _IDENT_NUM.sub(lambda m: m.group(1), t)
+    t = _NAMED_YEAR.sub(lambda m: m.group(1), t)
+    t = _FROM_TO.sub("to", t)
+    t = _REPLACED.sub("", t)
+    return t
+
+
 def find_contradictions(claims: list[Claim]) -> list[dict[str, Any]]:
     """Deterministic conflict detection: same subject, different figure/date/polarity.
 
@@ -549,11 +574,11 @@ def find_contradictions(claims: list[Claim]) -> list[dict[str, Any]]:
     conflicts: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for i, left in enumerate(claims):
-        lsig = signature(left.claim)
+        lsig = signature(comparable_text(left.claim))
         if not (lsig["numbers"] or lsig["years"] or lsig["dates"] or lsig["polarity"]):
             continue
         for right in claims[i + 1 :]:
-            rsig = signature(right.claim)
+            rsig = signature(comparable_text(right.claim))
             if left.provider_sources == right.provider_sources and left.claim == right.claim:
                 continue
             topic_overlap = similarity(lsig, rsig)

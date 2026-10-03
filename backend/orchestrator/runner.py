@@ -898,7 +898,8 @@ class ResearchRunner:
         stale = [e for e in evidence if e.check_status == SourceCheckStatus.OUTDATED]
         unanswered = _unanswered_subquestions(analysis, claims)
         weak_only = bool(confirmed) and not has_primary and analysis.high_stakes
-        contradictions = len([d for d in disagreements if d.severity == "material"])
+        material_conflicts = [d for d in disagreements if d.severity == "material"]
+        contradictions = len(material_conflicts)
 
         signals: list[str] = []
         if established:
@@ -915,6 +916,17 @@ class ResearchRunner:
         # this, a provider that produced no text at all could look "sufficiently
         # verified" and the run would stop while saying "I don't know."
         attached = [e for e in confirmed if e.claim_id]
+
+        # Only the claims that answer the question that was asked can be blocked by a conflict. A disagreement about
+        # something beside the point (an enactment date, a section number) is reported but never keeps research going.
+        question = self._q(job)
+        on_point = [c for c in open_material if router.addresses_question(question, c.claim)] or open_material
+        best = max((router.asked_overlap(question, c.claim) for c in on_point), default=0)
+        key = [c for c in on_point if best >= 2 and router.asked_overlap(question, c.claim) >= max(2, best - 1)] or on_point
+        key_ids = {c.id for c in key}
+        key_conflicts = [d for d in material_conflicts if set(d.claim_ids) & key_ids]
+        if key:
+            contradictions = len(key_conflicts)
 
         # "Enough" is a property of the evidence, never of how the answer was
         # phrased.
@@ -935,12 +947,6 @@ class ResearchRunner:
         }
         # "Every claim" would mean the side remarks too (a guidance page's update date) -- the test is the claims
         # that answer the question that was asked, and only conflicts about THOSE can block it.
-        question = self._q(job)
-        on_point = [c for c in open_material if router.addresses_question(question, c.claim)] or open_material
-        best = max((router.asked_overlap(question, c.claim) for c in on_point), default=0)
-        key = [c for c in on_point if best >= 2 and router.asked_overlap(question, c.claim) >= max(2, best - 1)] or on_point
-        key_ids = {c.id for c in key}
-        key_conflicts = [d for d in disagreements if d.severity == "material" and (set(d.claim_ids) & key_ids)]
         strong_primary = bool(key) and all(c.id in strong for c in key) and not key_conflicts and not unanswered
         ledger_ok = ledger_ok or (strong_primary and bool(claims))
         sufficient = ledger_ok
@@ -1220,12 +1226,12 @@ class ResearchRunner:
     @staticmethod
     def _settled(assessment: SufficiencyAssessment, disagreements: list[Disagreement]) -> bool:
         """Sufficient, and nothing that matters conflicts. Strong primary evidence already accounts for conflicts that touch the asked claims."""
-        return assessment.sufficient and (assessment.strong_primary or not disagreements)
+        return assessment.sufficient and (assessment.strong_primary or assessment.contradictions == 0)
 
     def _stop_reason(self, assessment: SufficiencyAssessment, disagreements: list[Disagreement], analysis: Any, round_no: int, max_rounds: int, note: str = "") -> str:
         if note:
             return note
-        if assessment.sufficient and not disagreements:
+        if assessment.sufficient and (assessment.strong_primary or assessment.contradictions == 0):
             return f"remaining uncertainty is not material to the question (round {round_no})"
         if round_no >= max_rounds:
             return f"stopped at max rounds ({max_rounds}) with material uncertainty still open"

@@ -69,6 +69,12 @@ SOCIAL_RE = re.compile(
     r"linkedin\.com/posts|threads\.net|bsky\.app|mastodon\.social)",
     re.I,
 )
+# Statutory regulators, courts and legislatures that do not end in .gov*: their own pages are primary for their own rules.
+REGULATOR_RE = re.compile(
+    r"(^|\.)(ico|ofcom|fca|nice|cqc|ofqual|ofsted|nhs|parliament|supremecourt|judiciary|bankofengland|"
+    r"hse|ons|cma|ema|edpb|cnil|bfdi|aepd)\.(org\.uk|uk|europa\.eu|eu|fr|de|es)$",
+    re.I,
+)
 AI_SOURCE_RE = re.compile(r"(chatgpt\.com|gemini\.google|copilot\.microsoft|meta\.ai|chat\.mistral|pi\.ai|perplexity\.ai)")
 
 BLOCK_HINT_RE = re.compile(
@@ -122,7 +128,7 @@ def tier_for(url: str) -> SourceTier:
         return SourceTier.UNKNOWN
     if AI_SOURCE_RE.search(host):
         return SourceTier.AI_UNSOURCED
-    if GOV_RE.search(host):
+    if GOV_RE.search(host) or REGULATOR_RE.search(host):
         # A regulator's own filing is primary evidence about the filing.
         return SourceTier.GOVERNMENT
     if JOURNAL_RE.search(host):
