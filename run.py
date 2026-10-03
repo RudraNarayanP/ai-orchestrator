@@ -5,6 +5,7 @@
     python run.py ask "question"         one-shot research run in the terminal
     python run.py login gemini           open that provider's window to sign in once
     python run.py probe chatgpt --login  inspect the real DOM before trusting selectors
+    python run.py promote-selectors NAME turn the newest probe into verified=probe selectors
     python run.py close                  shut any OmniBrain browser windows left open
 
 Nothing here opens your everyday Chrome. Every window OmniBrain uses is a
@@ -289,6 +290,40 @@ def cmd_probe(args: argparse.Namespace) -> int:
     return subprocess.call([sys.executable, str(script), *args.providers, *forwarded])
 
 
+def cmd_promote_selectors(args: argparse.Namespace) -> int:
+    """Rewrite a provider's composer/send selectors from its newest probe (verified="probe")."""
+    settings = load()
+    from backend.settings import DATA_DIR
+    from browser.adapters.promote import PromotionError, promote
+
+    cfg = settings.providers.get(args.provider)
+    if cfg is None:
+        print(f"unknown provider {args.provider!r}; known: {', '.join(settings.providers)}")
+        return 2
+    try:
+        result = promote(
+            args.provider,
+            provider_url=cfg.url,
+            probe_dir=Path(args.probe_dir) if args.probe_dir else DATA_DIR / "probe",
+            probe_path=Path(args.probe) if args.probe else None,
+            out_path=Path(args.out) if args.out else None,
+            dry_run=args.dry_run,
+        )
+    except PromotionError as exc:
+        print(f"not promoted: {exc}")
+        return 1
+    print(f"{args.provider}: probe {Path(result.source).name} (observed {result.observed_at})")
+    for name, entry in result.promoted.items():
+        shown = {k: v for k, v in entry.items() if k not in {"verified", "verified_at"} and v}
+        print(f"  {name}: {json.dumps(shown, ensure_ascii=False)}")
+    for note in result.skipped:
+        print(f"  - {note}")
+    print(f"{'wrote' if result.written else 'dry run, nothing written:'} {result.path}")
+    if result.written:
+        print("  these now sit in front of the existing selectors (verified=probe); commit the file to keep the checkpoint.")
+    return 0
+
+
 def cmd_jobs(_: argparse.Namespace) -> int:
     settings = load()
     from backend.storage.db import Store
@@ -338,6 +373,14 @@ def build_parser() -> argparse.ArgumentParser:
     probe.add_argument("--login", action="store_true")
     probe.add_argument("--wait", type=int)
     probe.set_defaults(func=cmd_probe)
+
+    promote = sub.add_parser("promote-selectors", help="promote a provider's newest probe to verified=probe selectors")
+    promote.add_argument("provider")
+    promote.add_argument("--probe", help="a specific probe JSON (default: newest data/probe/<provider>_*.json)")
+    promote.add_argument("--probe-dir", help=argparse.SUPPRESS)
+    promote.add_argument("--out", help=argparse.SUPPRESS)
+    promote.add_argument("--dry-run", action="store_true", help="show what would change, write nothing")
+    promote.set_defaults(func=cmd_promote_selectors)
 
     sub.add_parser("close", help="close leftover OmniBrain browser windows").set_defaults(func=cmd_close)
     sub.add_parser("jobs", help="list stored research jobs").set_defaults(func=cmd_jobs)

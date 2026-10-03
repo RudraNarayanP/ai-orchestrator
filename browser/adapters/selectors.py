@@ -4,7 +4,7 @@ inline in logic.
 PROVENANCE RULE -- important for trusting this file. Each field carries
 ``verified``:
 
-* ``probe``   = observed live on this machine by ``scripts/probe_selectors.py``
+* ``probe``   = observed live on this machine by ``scripts/probe.py``
   against the real site, with a timestamp in ``verified_at``.
 * ``prior``   = taken from an open-source council project's selector map
   (MIT-licensed: jumas45/no-api-llm-council, AmT42/agent-council-browser).
@@ -13,12 +13,17 @@ PROVENANCE RULE -- important for trusting this file. Each field carries
   expected to carry the load; do not trust these ids.
 
 Anything not marked ``probe`` must be treated as provisional. Run
-``python run.py probe`` after logging in to promote entries to ``probe``.
+``python run.py probe <provider> --login`` after signing in, then
+``python run.py promote-selectors <provider>``, to promote entries to ``probe``.
 """
 
 from __future__ import annotations
 
+import copy
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -484,5 +489,43 @@ GENERIC = SelectorSet(
 )
 
 
-def selectors_for(provider: str) -> SelectorSet:
-    return SELECTORS.get(provider, GENERIC)
+#: written by ``run.py promote-selectors``; overlays the ladders above (see promote.py)
+PROMOTED_PATH = Path(__file__).with_name("promoted_selectors.json")
+
+
+def load_promotions(path: Path | None = None) -> dict[str, dict[str, Any]]:
+    target = Path(path) if path else PROMOTED_PATH
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def merge_fieldset(base: FieldSet, promoted: dict[str, Any]) -> FieldSet:
+    """Observed locators first, the old ladder behind them as fallbacks."""
+
+    def front(new: list[str] | None, old: list[str]) -> list[str]:
+        return list(dict.fromkeys([*(new or []), *old]))
+
+    return FieldSet(
+        css=front(promoted.get("css"), base.css),
+        aria=front(promoted.get("aria"), base.aria),
+        testids=front(promoted.get("testids"), base.testids),
+        placeholders=front(promoted.get("placeholders"), base.placeholders),
+        text_regex=promoted.get("text_regex") or base.text_regex,
+        verified=promoted.get("verified", "probe"),
+        verified_at=promoted.get("verified_at"),
+    )
+
+
+def selectors_for(provider: str, promotions: dict[str, dict[str, Any]] | None = None) -> SelectorSet:
+    base = SELECTORS.get(provider, GENERIC)
+    promo = (promotions if promotions is not None else load_promotions()).get(provider)
+    if not promo:
+        return base
+    merged = copy.deepcopy(base)
+    for name in ("input", "send"):
+        if isinstance(promo.get(name), dict):
+            setattr(merged, name, merge_fieldset(getattr(base, name), promo[name]))
+    return merged
