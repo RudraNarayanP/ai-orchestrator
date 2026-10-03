@@ -99,3 +99,10 @@ the follow-up and the 80 s wasted on Le Chat's two empty attempts per use (now s
 - Provenance "INSPECTED" means: the AI said it opened it AND OmniBrain's audit of the same page loaded; OmniBrain cannot see what the AI actually read.
 - The ChatGPT/Gemini answers' source URLs are the AI's text; a site that lists sources only in an unlabelled UI chip is under-counted.
 - Two "unanswerable" traps still produce confident negative answers from the AIs' text (ua-closed-session, res-private-review).
+
+## arch3 re-run: uk-dpa-age with the final early-stop code (ab69f34)  (eval_20261004_003949)
+- Verdict WARN ("no primary source cited"), 253 s (arch2 run: 339 s; phase-1 baseline see table above). Answer: "13 years old" - correct.
+- Early stop did NOT fire in the live run: still 3 rounds, 1 same-thread follow-up, gemini x2, copilot (logged out) x2, le_chat (failed) x1, 1 curator pass.
+- Cause seen in the stop note: "sources still conflict on Data Protection Act 2018 enactment date|figure". A conflict on an unasked claim (enactment date) is still blocking the settled test in this run; the unit test for asked_overlap passes but the live claim-text/question overlap did not match. OPEN BUG, not fixed in this phase.
+- legislation.gov.uk section 9 was opened by OmniBrain (omnibrain_opened) but not by the AI, so provenance stays below OPENED for that URL; the notes page was opened by the AI.
+- Per-run provider results: chatgpt 2/2 completed, gemini 2/2 completed, copilot 2 logged_out, le_chat 1 failed (empty capture).
