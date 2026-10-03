@@ -413,6 +413,16 @@ class VerifierReport(BaseModel):
     raw_output: str = ""
     verifier_model: str | None = None
 
+    reviewer_status: str = "NOT_RUN"
+    """COMPLETED (the model answered usably) | UNAVAILABLE (error, 429, timeout) | INVALID_OUTPUT (answered, unusable) |
+    NOT_RUN (the evidence settled it; no reviewer was needed)."""
+
+    synthesis_status: str = "DETERMINISTIC"
+    """CURATED (the model wrote the verdicts) | FALLBACK (the model failed, ledger wrote them) | DETERMINISTIC (by design)."""
+
+    fallback_reason: str = ""
+    """Why a fallback happened, in the words of the failure. Empty when there was none."""
+
 
 class ConversationTurn(BaseModel):
     """One earlier question in the same thread: what was asked, what we answered,
@@ -547,6 +557,13 @@ class FinalAnswer(BaseModel):
     rounds_run: int = 1
     providers_used: list[str] = Field(default_factory=list)
     providers_failed: list[str] = Field(default_factory=list)
+
+    research_status: str = "COMPLETED"
+    """NOT_NEEDED (answered at level 0) | COMPLETED (settled) | UNRESOLVED (researched, not settled) | BLOCKED (no AI answered)."""
+
+    reviewer_status: str = "NOT_RUN"
+    synthesis_status: str = "DETERMINISTIC"
+    fallback_reason: str = ""
 
 
 class Complaint(BaseModel):

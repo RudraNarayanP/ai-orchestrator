@@ -167,6 +167,9 @@ class ResearchRunner:
                 rounds_run=0,
                 providers_used=[],
                 providers_failed=[],
+                research_status="NOT_NEEDED",
+                reviewer_status="NOT_RUN",
+                synthesis_status="DIRECT",
             )
             job.stop_reason = "question answered at level 0; no investigation earned"
             await self._emit("final", job.final.answer, job=job)
@@ -1183,12 +1186,21 @@ class ResearchRunner:
                 rounds_run=rounds,
                 providers_used=[],
                 providers_failed=sorted({r.provider for r in responses}),
+                research_status="BLOCKED",
+                reviewer_status="NOT_RUN",
+                synthesis_status="DETERMINISTIC",
             )
             job.stop_reason = stop
             return job
         final = build_final_answer(report, responses, rounds)
         # community-sourced owner reports are a labelled caveat of their own, never part of the answer
         final.caveats = [c for c in final.caveats if c][:5] + review_caveats(job.reviews)
+        if not any(r.status.value == "completed" for r in responses):
+            final.research_status = "BLOCKED"
+        elif final.confidence.value in {"high", "moderate"}:
+            final.research_status = "COMPLETED"
+        else:
+            final.research_status = "UNRESOLVED"
         job.final = final
         job.status = JobStatus.COMPLETED
         job.stop_reason = stop

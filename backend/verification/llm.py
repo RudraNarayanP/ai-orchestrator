@@ -324,6 +324,10 @@ def extract_json(text: str) -> dict[str, Any] | None:
                 return parsed
             if isinstance(parsed, list):
                 return {"items": parsed}
+    # A reply cut off by max_tokens: keep everything up to the last complete value and close the brackets.
+    fixed = _repair_truncated(stripped)
+    if fixed is not None:
+        return fixed
     # Single-key rescue, only after every whole-object candidate has failed:
     # {"claims": [ ... ]} with a broken tail. Doing it per candidate used to let a
     # fenced reply be "rescued" down to its first array, dropping answer/confidence.
@@ -334,6 +338,47 @@ def extract_json(text: str) -> dict[str, Any] | None:
                 return {match.group(1): json.loads(_tidy(match.group(2)))}
             except json.JSONDecodeError:
                 continue
+    return None
+
+
+def _repair_truncated(text: str) -> dict[str, Any] | None:
+    """Close a JSON object that was cut off mid-way. Returns None unless a complete object results."""
+    start = text.find("{")
+    if start == -1:
+        return None
+    stack: list[str] = []
+    in_str = esc = False
+    cuts: list[tuple[int, str]] = []  # (end index, closers needed) after each complete value
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]":
+            if not stack:
+                return None
+            stack.pop()
+            cuts.append((i + 1, "".join(reversed(stack))))
+        elif ch == "," and len(stack) <= 2 and (len(stack) == 1 or stack[-1] == "]"):
+            cuts.append((i, "".join(reversed(stack))))
+    if not stack:
+        return None  # it was not truncated; the normal paths already tried
+    for end, closers in reversed(cuts[-60:]):
+        try:
+            parsed = json.loads(text[start:end].rstrip().rstrip(",") + closers)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and parsed:
+            return parsed
     return None
 
 

@@ -41,6 +41,7 @@ from backend.research.style import (
     humanize,
     plain_caveats,
     scrub,
+    tiny,
 )
 from backend.research.prompts import fence_all
 from backend.verification.llm import Endpoint, LLMClient
@@ -82,6 +83,9 @@ PROBLEM_VOCAB = [
 VERIFIER_SCHEMA = """Return strict JSON only, no prose before or after:
 
 {
+ "answer": "the conclusion, stated the way a researcher would say it out loud",
+ "confidence": "high|moderate|low|insufficient_evidence",
+ "needs_more_research": false,
  "verdicts": [
    {"claim_id": "...", "claim": "...",
     "verdict": "supported|partially_supported|contested|refuted|insufficient_evidence",
@@ -91,13 +95,10 @@ VERIFIER_SCHEMA = """Return strict JSON only, no prose before or after:
     "weak_or_bad_evidence": ["what is weak and why"],
     "problems": ["citation_mismatch|hallucinated_citation|broken_url|outdated|secondary_misrepresents_primary|unsupported_inference|exaggeration|no_web_research|single_source|conflicting_primary_sources|unverifiable"]}
  ],
- "answer": "the conclusion, stated the way a researcher would say it out loud",
  "why": "the strongest evidence in up to four sentences, or empty",
  "important_disagreement": "only what materially conflicts, else null",
- "confidence": "high|moderate|low|insufficient_evidence",
  "confidence_note": "one plain sentence only if the band needs qualifying, else null",
  "caveats": ["only real ones"],
- "needs_more_research": true,
  "research_needed": [{"claim": "the exact claim still open", "reason": "why the evidence so far does not settle it",
     "preferred_researcher": "gemini", "instruction": "what to ask that AI to find, open and report"}],
  "unresolved": ["what is still not settled"]
@@ -139,7 +140,8 @@ class Verifier:
             report = self.deterministic(
                 job_id=job_id, question=question, round_no=round_no, claims=claims,
                 evidence=evidence, responses=responses, disagreements=disagreements,
-                reason=(reply.error or "verifier returned unparsable output"),
+                reason=(reply.error or ("verifier output was cut off and could not be repaired" if reply.truncated else "verifier returned unparsable output")),
+                status="UNAVAILABLE" if not reply.ok else "INVALID_OUTPUT",
             )
             report.raw_output = reply.text[:4000]
             report.verifier_model = self.endpoint.model
@@ -147,6 +149,7 @@ class Verifier:
         # Deterministic cross-check: a model that calls a claim "supported" with
         # zero confirmed sources in our own records gets overruled, not trusted.
         self._reconcile(report, claims, evidence, question)
+        report.reviewer_status, report.synthesis_status, report.fallback_reason = "COMPLETED", "CURATED", ""
         report.raw_output = reply.text[:4000]
         report.verifier_model = f"{self.endpoint.provider}:{self.endpoint.model}"
         report.answer, leaked = scrub(report.answer)
@@ -312,6 +315,7 @@ class Verifier:
         responses: list[ProviderResponse],
         disagreements: list[Disagreement],
         reason: str,
+        status: str = "NOT_RUN",
     ) -> VerifierReport:
         by_claim: dict[str, list[Evidence]] = {}
         for ev in evidence:
@@ -351,16 +355,21 @@ class Verifier:
             needs_more_research=any(v.verdict in {ClaimStatus.CONTESTED, ClaimStatus.INSUFFICIENT_EVIDENCE} for v in verdicts),
         )
         report.follow_ups = self._follow_ups(claims, verdicts, disagreements, round_no)
-        report.unresolved = [
-            f"verifier model unavailable ({reason}); verdicts come from the evidence ledger, not from a language model"
-        ]
+        report.reviewer_status = status
+        report.synthesis_status = "DETERMINISTIC" if status == "NOT_RUN" else "FALLBACK"
+        report.fallback_reason = "" if status == "NOT_RUN" else reason
+        # Only a real failure gets an explanation. A reviewer that was simply not needed is not "unavailable".
+        if status == "UNAVAILABLE":
+            report.unresolved = [f"verifier model unavailable ({reason}); verdicts come from the evidence ledger, not from a language model"]
+        elif status == "INVALID_OUTPUT":
+            report.unresolved = [f"verifier output unusable ({reason}); verdicts come from the evidence ledger, not from a language model"]
         best = self._best_supported(claims, verdicts, evidence, question)
         report.confidence = best["confidence"]
         report.answer = best["answer"]
         report.why = best["why"]
         report.important_disagreement = best["disagreement"]
         report.sources = best["sources"]
-        report.caveats = best["caveats"] + [f"(no model verifier active: {reason})"]
+        report.caveats = best["caveats"] + ([f"(no model verifier active: {reason})"] if status != "NOT_RUN" else [])
         self.attach_sources(report, evidence)
         return report
 
@@ -949,14 +958,17 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
     return FinalAnswer(
-        answer=humanize(report.answer, report.confidence.value if hasattr(report.confidence, "value") else str(report.confidence)),
+        answer=humanize(tiny(report.answer), report.confidence.value if hasattr(report.confidence, "value") else str(report.confidence)),
         why=report.why,
         important_disagreement=report.important_disagreement,
         confidence=report.confidence,
         confidence_label=confidence_label(report.confidence),
         sources=report.sources,
-        caveats=plain_caveats(list(report.caveats) + ([report.confidence_note] if report.confidence_note else []) + list(report.unresolved or [])),
+        caveats=plain_caveats(list(report.caveats) + ([report.confidence_note] if report.confidence_note else []) + list(report.unresolved or []), limit=1),
         rounds_run=rounds_run,
         providers_used=used,
         providers_failed=failed,
+        reviewer_status=report.reviewer_status,
+        synthesis_status=report.synthesis_status,
+        fallback_reason=report.fallback_reason,
     )

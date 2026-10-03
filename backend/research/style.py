@@ -362,6 +362,33 @@ def humanize(answer: str, confidence: str = "moderate") -> str:
     return f"{body} {mark}"
 
 
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\u2018\u201c\"'(])")
+_ABBREV_TAIL = re.compile(r"(?:\b(?:No|Nos|Art|Sec|s|ss|cl|Mr|Mrs|Dr|vs|etc|e\.g|i\.e)\.|\b\d\.|\b[A-Z]\.)$")
+
+
+def split_sentences(text: str) -> list[str]:
+    parts: list[str] = []
+    for chunk in _SENTENCE_END.split(" ".join((text or "").split())):
+        if parts and _ABBREV_TAIL.search(parts[-1]):
+            parts[-1] += " " + chunk
+        else:
+            parts.append(chunk)
+    return [p for p in parts if p]
+
+
+def tiny(answer: str, *, max_sentences: int = 2, max_chars: int = 260) -> str:
+    """The external answer: one sentence, two at most, no methodology. Detail lives behind the expanders."""
+    text = (answer or "").strip()
+    if not text:
+        return text
+    kept: list[str] = []
+    for sentence in split_sentences(text):
+        if kept and (len(kept) >= max_sentences or len(" ".join(kept + [sentence])) > max_chars):
+            break
+        kept.append(sentence)
+    return " ".join(kept)
+
+
 def _tidy(text: str) -> str:
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)
@@ -370,6 +397,7 @@ def _tidy(text: str) -> str:
 
 _CAVEAT_REWRITES = (
     (re.compile(r"^verifier model unavailable", re.I), "The AI reviewer wasn't available, so this rests only on the pages I could open and check."),
+    (re.compile(r"^verifier output unusable", re.I), "The AI reviewer's reply couldn't be used, so this rests only on the pages I could open and check."),
     (re.compile(r"^\(?no model verifier active", re.I), ""),
     (re.compile(r"^verifier answer overruled", re.I), ""),
     (re.compile(r"^voice scrub removed", re.I), ""),
