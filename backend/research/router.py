@@ -404,6 +404,11 @@ def is_failure_phrase(text: str) -> list[str]:
         r"\bi'?d need (?:further|additional) (?:research|verification|checking)\b",
         r"\bmy knowledge (?:cutoff|cut-off)|training data (?:cutoff|cut-off)|as of my (?:knowledge|training)\b",
         r"\bi cannot (?:browse|search|access the web)\b",
+        r"\b(?:i )?(?:couldn'?t|could not|can'?t|cannot|unable to|wasn'?t able to) find\b",
+        r"\bnot (?:entirely |fully |completely )?(?:certain|sure)\b",
+        r"\b(?:don'?t|do not) have enough (?:information|data|evidence)\b",
+        r"\bsources? (?:are |is )?(?:unclear|ambiguous)\b",
+        r"\bi cannot establish this\b",
     ]
     hits: list[str] = []
     low = (text or "").lower()

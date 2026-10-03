@@ -226,12 +226,35 @@ class ProviderResponse(BaseModel):
     """Detected uncertainty admissions and structural failures that justify
     escalating past this answer rather than accepting it."""
 
+    superseded: bool = False
+    """The same AI corrected this answer in a follow-up. The transcript is kept
+    for the curator; its claims no longer count."""
+
     def note(self, status: ProviderStatus, error: str | None = None, detail: str | None = None) -> None:
         self.status = status
         if error:
             self.error = error
         if detail:
             self.detail = detail
+
+
+class SelfCorrection(BaseModel):
+    """An AI's answer before and after a same-conversation re-investigation."""
+
+    id: str = Field(default_factory=lambda: new_id("corr"))
+    job_id: str
+    provider: str
+    thread_id: str | None = None
+    round: int = 1
+    initial_claim: str = ""
+    follow_up_result: str = ""
+    verdict: str = "unclear"
+    """confirmed | corrected | cannot_establish | unclear"""
+
+    correction_reason: str = ""
+    final_position: str = ""
+    first_response_id: str | None = None
+    follow_up_response_id: str | None = None
 
 
 class Claim(BaseModel):
@@ -543,6 +566,7 @@ class Job(BaseModel):
     evidence: list[Evidence] = Field(default_factory=list)
     disagreements: list[Disagreement] = Field(default_factory=list)
     follow_ups: list[FollowUp] = Field(default_factory=list)
+    corrections: list[SelfCorrection] = Field(default_factory=list)
     reports: list[VerifierReport] = Field(default_factory=list)
     final: FinalAnswer | None = None
     error: str | None = None

@@ -163,7 +163,10 @@ async def test_contradiction_reaches_verifier_and_generates_targeted_followup(se
     assert any("Resolve this" in f.question or "primary or official source" in f.question for f in job.follow_ups)
     asked_rounds = {c["round"] for a in adapters.values() for c in a.calls}
     assert max(asked_rounds) >= 2, "targeted round 2 should have run"
-    for call in [c for a in adapters.values() for c in a.calls if c["round"] >= 2 and a.provider != "search"]:
+    for call in [
+        c for a in adapters.values() for c in a.calls
+        if c["round"] >= 2 and a.provider != "search" and "re-investigate this specific point" not in c["prompt"] and "Primary researcher:" not in c["prompt"]
+    ]:
         assert "Please answer the question again" not in call["prompt"]
         assert "Do not rely on what another AI model said" in call["prompt"]
 

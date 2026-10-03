@@ -240,7 +240,7 @@ async def test_a_provider_that_hit_a_login_wall_is_not_asked_again_in_later_roun
     job, adapters, _ = await _run(settings, scripts, "How much does the Acme Bolt cost?", max_rounds=3)
     assert max(c["round"] for name in ("chatgpt", "gemini") for c in adapters[name].calls) >= 2, "a later round must have happened"
     for dead in ("copilot", "google_ai"):
-        assert [c["round"] for c in adapters[dead].calls] == [1], (dead, adapters[dead].calls)
+        assert len(adapters[dead].calls) == 1, (dead, adapters[dead].calls)  # asked once, never retried in later rounds
 
 
 def test_unusable_this_job_means_every_response_was_a_wall_or_a_break():

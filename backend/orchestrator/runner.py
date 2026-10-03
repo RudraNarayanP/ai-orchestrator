@@ -46,7 +46,8 @@ from backend.orchestrator.politeness import PolitenessGate
 from backend.evidence.reviews import caveat_lines as review_caveats
 from backend.evidence.reviews import gather_reviews, subject_for
 from backend.research import memory
-from backend.research.prompts import angle_for, escalation_prompt, follow_up_prompt, research_prompt
+from backend.research import corrections as correction_ops
+from backend.research.prompts import angle_for, escalation_prompt, follow_up_prompt, research_prompt, thread_follow_up_prompt
 from backend.research.style import style_prompt
 from backend.verification.llm import Endpoint, LLMClient
 from backend.verification.verifier import Verifier, build_final_answer, confidence_label
@@ -261,6 +262,19 @@ class ResearchRunner:
             report = await self._lightweight_report(job, analysis, claims, evidence, responses, round_no)
             return self._complete(job, report, responses, rounds=round_no, stop="evidence sufficient after the primary researcher; no escalation earned")
 
+        # FIRST escalation: the same AI, in the same conversation, looks again.
+        # Parallelism comes only after that has failed to settle it.
+        if not assessment.sufficient:
+            before = len(job.responses)
+            (round_no, responses, claims, evidence, disagreements, assessment) = await self._thread_follow_up(
+                job, analysis, primary, round_no, responses, claims, evidence, disagreements, assessment
+            )
+            if len(job.responses) > before:
+                max_rounds += 1  # the follow-up is a step of its own, not a round taken from the budget
+            if assessment.sufficient and not analysis.high_stakes and not disagreements:
+                report = await self._lightweight_report(job, analysis, claims, evidence, responses, round_no)
+                return self._complete(job, report, responses, rounds=round_no, stop="settled by a same-conversation follow-up with the primary researcher")
+
         # Level 2 -- expansion, earned by failure, never assumed.
         job.level = EscalationLevel.PARALLEL
         partial = bool(assessment.established) and bool(assessment.unresolved)
@@ -287,7 +301,8 @@ class ResearchRunner:
         # A full swarm is for the case where nothing was established at all.
         # After a targeted expansion, what remains is a conflict for the verifier,
         # not a gap more researchers would fill.
-        if secondaries and not partial:
+        # Sufficient but high-stakes goes to the curator, not to a swarm: parallel research is for an unresolved claim.
+        if secondaries and not partial and not assessment.sufficient:
             context = self._failure_context(responses, claims, evidence, disagreements, assessment)
             job.escalation_log.append(
                 EscalationStep(
@@ -383,13 +398,23 @@ class ResearchRunner:
             # A site that already hit a login wall, a block or a broken page in this job will do so again; do not
             # spend another round (up to 90 s for Google AI Mode) finding that out.
             unusable = self._unusable_this_job(responses)
+            # Researchers nobody has asked yet come first: a minority holding the evidence must get a turn.
+            asked = {r.provider for r in responses}
             targets = router.select_secondaries(
                 analysis,
                 [p for p in enabled if p not in unusable],
-                exclude=[primary] if round_no == 1 else [],
+                exclude=sorted(asked),
                 count=max(2, self.settings.research.follow_up_providers),
                 health=self.health,
             )
+            if len(targets) < 2 or not any(t not in asked for t in targets):
+                targets = router.select_secondaries(
+                    analysis,
+                    [p for p in enabled if p not in unusable],
+                    exclude=[primary] if round_no == 1 else [],
+                    count=max(2, self.settings.research.follow_up_providers),
+                    health=self.health,
+                )
             follow_round = RoundRecord(number=next_round, kind="follow_up")
             job.rounds.append(follow_round)
             job.active_round = next_round
@@ -425,6 +450,81 @@ class ResearchRunner:
             rounds=round_no,
             stop=self._stop_reason(assessment, disagreements, analysis, round_no, max_rounds),
         )
+
+    # ----------------------------------------------- same-conversation follow-up
+
+    async def _thread_follow_up(
+        self,
+        job: Job,
+        analysis: Any,
+        primary: str,
+        round_no: int,
+        responses: list[ProviderResponse],
+        claims: list[Claim],
+        evidence: list[Evidence],
+        disagreements: list[Disagreement],
+        assessment: SufficiencyAssessment,
+    ):
+        """Ask the primary AI, in its own conversation, to re-investigate what is unsettled."""
+        unchanged = (round_no, responses, claims, evidence, disagreements, assessment)
+        first = next((r for r in responses if r.provider == primary and r.status.value == "completed" and not r.superseded), None)
+        if first is None or self._turns.get((job.id, primary), 0) < 1:
+            return unchanged
+        points = [p for p in assessment.unresolved[:3] if p] or [correction_ops.headline(first) or self._q(job)]
+        claim_text = "\n".join(f"- {p}" for p in points)
+        next_round = round_no + 1
+        record = RoundRecord(number=next_round, kind="thread_follow_up")
+        job.rounds.append(record)
+        job.active_round = next_round
+        job.escalation_log.append(
+            EscalationStep(
+                level=EscalationLevel.PRIMARY,
+                reason=f"first escalation: {primary} re-investigates in the same conversation ({assessment.reason})",
+                providers=[primary],
+                triggered_by=(assessment.failure_signals[:6] or ["not_sufficient"]),
+                round=next_round,
+            )
+        )
+        await self._emit(
+            "escalation",
+            f"follow-up in the same {primary} conversation -- asking it to re-check: {points[0][:80]}",
+            provider=primary,
+            round_no=next_round,
+            job=job,
+        )
+        prompt = thread_follow_up_prompt(claim_text, f"Why I am asking: {assessment.reason}.")
+        follow = await self._ask(
+            primary, prompt, next_round, role="thread_follow_up", job_id=job.id, continue_thread=True,
+            escalation_reason="same-conversation follow-up",
+        )
+        if follow is None:
+            return unchanged
+        job.responses.append(follow)
+        responses = list(job.responses)
+        record.response_ids = [follow.id]
+        if follow.status.value != "completed":
+            record.finished_at = time.time()
+            return (next_round, responses, claims, evidence, disagreements, assessment)
+        correction = correction_ops.build_record(first, follow, round_no=next_round)
+        job.corrections.append(correction)
+        if correction.verdict == "corrected":
+            first.superseded = True
+        await self._emit(
+            "correction",
+            f"{primary} {correction.verdict.replace('_', ' ')} its earlier answer",
+            provider=primary,
+            round_no=next_round,
+            job=job,
+        )
+        claims = await self._extract(responses, job)
+        more_evidence, _ = await self._pool(job, claims, [follow], next_round)
+        evidence = _merge_evidence(evidence, more_evidence)
+        disagreements = await self._disagreements(job, claims, next_round)
+        assessment = self._assess(job, analysis, claims, evidence, disagreements, next_round, focus="follow-up")
+        job.assessments.append(assessment)
+        record.finished_at = time.time()
+        await self._emit("assessment", f"after the follow-up {assessment.reason}", provider=primary, round_no=next_round, job=job, sufficient=assessment.sufficient)
+        return (next_round, responses, claims, evidence, disagreements, assessment)
 
     # ------------------------------------------------------------ components
 
@@ -549,7 +649,11 @@ class ResearchRunner:
                     response.error = f"{type(exc).__name__}: {exc}"
                     response.answer_text = ""
                 self.politeness.after(provider, response.status.value)
-        if response.status.value == "completed" and router.off_topic(router.question_from_prompt(prompt), response.answer_text or ""):
+        if (
+            response.status.value == "completed"
+            and not continue_thread
+            and router.off_topic(router.question_from_prompt(prompt), response.answer_text or "")
+        ):
             # a reused chat answered an earlier question: never let it into the ledger
             response.status = ProviderStatus.FAILED
             response.error = "off_topic: the reply does not address this question"
@@ -651,7 +755,12 @@ class ResearchRunner:
                 break
             provider = pool[index % len(pool)]
             prompt = follow_up_prompt(self._q(job), follow_up)
-            tasks.append(self._ask(provider, prompt, round_no, role="targeted", escalation_reason=follow_up.reason, job_id=job.id))
+            tasks.append(
+                self._ask(
+                    provider, prompt, round_no, role="targeted", escalation_reason=follow_up.reason, job_id=job.id,
+                    continue_thread=self._turns.get((job.id, provider), 0) > 0,
+                )
+            )
         done = await asyncio.gather(*tasks, return_exceptions=True)
         return [item for item in done if isinstance(item, ProviderResponse)]
 
@@ -660,7 +769,7 @@ class ResearchRunner:
         job.status = JobStatus.EXTRACTING
         await self._emit("status", "extracting atomic claims", round_no=job.active_round, job=job)
         extracted = await claim_ops.extract_claims(
-            [r for r in responses if r.status.value in {"completed", "timeout"}],
+            [r for r in responses if r.status.value in {"completed", "timeout"} and not r.superseded],
             job.id,
             endpoint=self.analysis_endpoint if self.analysis_endpoint and self.analysis_endpoint.enabled else None,
             batch_size=self.settings.research.claim_batch_size,
@@ -755,8 +864,10 @@ class ResearchRunner:
         # so it is not "unresolved" -- but it also establishes nothing.
         refuted_only = [c for c in material if c.id in contradicted and not any(e.claim_id == c.id for e in confirmed)]
         unresolved = [c.claim for c in material if c not in established and c not in refuted_only]
-        failure_signals = sorted({s for r in job.responses if r.role in {"primary", "secondary"} for s in r.failure_signals})
-        no_sources = [r.provider for r in job.responses if r.status.value == "completed" and not r.citations]
+        failure_signals = sorted(
+            {s for r in job.responses if r.role in {"primary", "secondary", "thread_follow_up"} and not r.superseded for s in r.failure_signals}
+        )
+        no_sources = [r.provider for r in job.responses if r.status.value == "completed" and not r.citations and not r.superseded]
         mismatch = [e for e in evidence if e.check_status in {SourceCheckStatus.MISMATCH, SourceCheckStatus.HALLUCINATED, SourceCheckStatus.BROKEN_URL}]
         stale = [e for e in evidence if e.check_status == SourceCheckStatus.OUTDATED]
         unanswered = _unanswered_subquestions(analysis, claims)

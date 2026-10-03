@@ -156,7 +156,7 @@ class ResearchConfig(BaseModel):
     rate_limit_backoff_max_s: float = 600.0
     rate_limit_max_wait_s: float = 45.0
     """A backoff longer than this is not waited out: the site is skipped for this question instead."""
-    swarm_providers: int = 5
+    swarm_providers: int = 3
     """How many independent researchers a level-2 escalation uses. Small because
     each one is a browser session, but large enough that an evidenced minority
     actually gets a turn: with four slots and six families, the one provider
