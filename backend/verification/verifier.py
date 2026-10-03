@@ -239,6 +239,8 @@ class Verifier:
                 "verbatim_excerpt_found_in_page": (e.verbatim_excerpt or "")[:400],
                 "cited_by_ai": e.cited_by or ("nobody -- OmniBrain found it itself" if e.origin != "provider" else []),
                 "ai_said_it_opened_it": {True: "opened", False: "MENTIONED ONLY (never read by the AI)", None: "not stated"}[e.ai_opened],
+        "provenance": e.provenance or "OMNIBRAIN_ONLY (no AI cited it: an audit, not the AI's research)",
+        "omnibrain_opened": bool(e.omnibrain_opened),
             }
             for e in evidence
         ]
@@ -846,6 +848,8 @@ class Verifier:
             if (ev.polarity == "refute") != refuting or ev.polarity == "neutral":
                 continue
             slot = by_url.setdefault(ev.url, {"ev": ev, "claims": []})
+            if _rank(ev) > _rank(slot["ev"]):
+                slot["ev"] = ev  # the record showing the most of what the AI itself did
             if ev.claim_id not in slot["claims"]:
                 slot["claims"].append(ev.claim_id)
         known = {c.url: c for c in report.sources}
@@ -859,12 +863,26 @@ class Verifier:
             citation.ai_opened = ev.ai_opened
             citation.cited_by = list(ev.cited_by or [])
             citation.audited = True
+            citation.omnibrain_opened = bool(ev.omnibrain_opened)
+            citation.provenance = ev.provenance
         weights = {e.url: TIER_WEIGHT.get(e.tier, 0) for e in evidence if e.url}
-        report.sources = sorted(report.sources, key=lambda c: -weights.get(c.url, 0))[:6]
+        # A page only OmniBrain opened is an audit, not the AI's research: it never outranks one the AI used.
+        report.sources = sorted(report.sources, key=lambda c: (-_rank_name(c.provenance), -weights.get(c.url, 0)))[:6]
 
     @staticmethod
     def _strip_numbers(text: str) -> str:
         return re.sub(r"\bconfidence (?:level|score)(?: of)? [\d.]+(?:%|/\s?10| out of \d+)?\b", "confidence", text, flags=re.I)
+
+
+_PROV = ["MENTIONED", "OPENED", "INSPECTED", "CITED", "CLAIM_SUPPORTED"]
+
+
+def _rank_name(name: str | None) -> int:
+    return _PROV.index(name) + 1 if name in _PROV else 0
+
+
+def _rank(ev: Evidence) -> int:
+    return _rank_name(ev.provenance)
 
 
 def _enum(enum_cls: type, value: Any, default: Any):

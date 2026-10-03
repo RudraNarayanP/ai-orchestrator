@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from backend.models import ProviderResponse
+from backend.models import Citation, ProviderResponse
 
 URL_RE = re.compile(r"https?://[^\s<>\")\]]+", re.I)
 _MENTIONED = re.compile(r"\b(?:mentioned only|not opened|did not open|didn'?t open|unopened|only seen in results|not read)\b", re.I)
@@ -51,3 +51,71 @@ def mark_opened(response: ProviderResponse) -> None:
             citation.ai_opened = hit
         if not citation.provider:
             citation.provider = response.provider
+
+# ------------------------------------------------------------- the AI's own citations from its text
+
+_FIRST_PARTY = re.compile(
+    r"^(?:[\w-]+\.)*(?:chatgpt\.com|openai\.com|gemini\.google\.com|copilot\.microsoft\.com|meta\.ai|chat\.mistral\.ai|pi\.ai|"
+    r"chat\.qwen\.ai|chat\.deepseek\.com|bard\.google\.com|accounts\.google\.com|support\.google\.com)$",
+    re.I,
+)
+
+
+def _clean_url(url: str) -> str:
+    return re.sub(r"[.,;:*_)\]]+$", "", url.strip())
+
+
+def text_citations(response: ProviderResponse) -> int:
+    """Add a Citation for every URL the AI wrote into its answer and the site did not render as a link.
+
+    Logged-out ChatGPT shows its source chips as bare text, so its real citations arrive only as the URLs it
+    was told to list. These are the AI's own words, kept as the AI's citations (origin="text"); nothing is
+    searched for or invented. Returns how many were added.
+    """
+    text = response.answer_text or response.raw_text or ""
+    have = {normalise(c.url) for c in response.citations}
+    added = 0
+    for line in text.splitlines():
+        for raw in URL_RE.findall(line):
+            url = _clean_url(raw)
+            key = normalise(url)
+            host = (re.sub(r"^https?://", "", url).split("/")[0]).lower()
+            if not key or key in have or _FIRST_PARTY.match(host) or len(response.citations) >= 40:
+                continue
+            have.add(key)
+            label = re.split(r"\s+[-\u2014\u2013]\s+|\s*\(", line.replace(raw, " ", 1), maxsplit=1)[0].strip(" *-\u2022:[]\"'")
+            response.citations.append(
+                Citation(url=url, title=(label[:200] or host), snippet=line.strip()[:400], provider=response.provider, origin="text")
+            )
+            added += 1
+    return added
+
+
+ORDER = ["MENTIONED", "OPENED", "INSPECTED", "CITED", "CLAIM_SUPPORTED"]
+
+
+def provenance(*, cited_by: list[str], ai_opened: bool | None, omnibrain_opened: bool, claim_attached: bool, supported: bool) -> str | None:
+    """Highest state reached. OmniBrain opening a page never raises it: only what the AI did counts."""
+    if not cited_by:
+        return None
+    if ai_opened is not True:
+        return "MENTIONED"
+    state = "OPENED"
+    if omnibrain_opened:
+        state = "INSPECTED"
+    if claim_attached:
+        state = "CITED"
+        if supported:
+            state = "CLAIM_SUPPORTED"
+    return state
+
+
+def aggregate_opened(responses: list[ProviderResponse], url: str) -> bool | None:
+    """True if any AI said it opened the URL; False if every AI that listed it said mentioned only."""
+    key = normalise(url)
+    flags = [c.ai_opened for r in responses for c in r.citations if normalise(c.url) == key]
+    if True in flags:
+        return True
+    if flags and all(f is False for f in flags):
+        return False
+    return None

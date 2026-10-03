@@ -155,7 +155,9 @@ class Store:
             ],
             "corrections": [c.model_dump(mode="json") for c in job.corrections],
             "evidence_flags": [
-                {"id": e.id, "url": e.url, "ai_opened": e.ai_opened, "cited_by": e.cited_by} for e in job.evidence
+                {"id": e.id, "url": e.url, "claim_id": e.claim_id, "ai_opened": e.ai_opened, "cited_by": e.cited_by,
+                 "provenance": e.provenance, "omnibrain_opened": e.omnibrain_opened}
+                for e in job.evidence
             ],
         }
         self._conn.execute(

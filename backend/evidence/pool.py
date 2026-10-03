@@ -13,7 +13,8 @@ import re
 from typing import Any, Awaitable, Callable, Iterable
 
 from backend.evidence.sources import TIER_WEIGHT, gather_from_links, subject_names, tier_for
-from backend.models import Claim, Evidence, ProviderResponse, ResearchMode
+from backend.models import Claim, Evidence, ProviderResponse, ResearchMode, SourceCheckStatus
+from backend.research import citations as citation_ops
 from backend.research.claims import signature
 from backend.settings import Settings
 
@@ -299,8 +300,16 @@ async def build_pool(
         if link.get("cited_by") and ev.check_notes:
             ev.check_notes += f"; offered by {link['cited_by']}"
         if link.get("origin", "provider") == "provider":
-            ev.ai_opened = link.get("ai_opened")
+            ev.ai_opened = citation_ops.aggregate_opened(responses, ev.url or "")
             ev.cited_by = sorted({r.provider for r in responses if any(c.url == ev.url for c in r.citations)})
+        ev.omnibrain_opened = ev.check_status not in {SourceCheckStatus.NOT_CHECKED, SourceCheckStatus.BROKEN_URL}
+        ev.provenance = citation_ops.provenance(
+            cited_by=ev.cited_by,
+            ai_opened=ev.ai_opened,
+            omnibrain_opened=ev.omnibrain_opened,
+            claim_attached=bool(ev.claim_id),
+            supported=ev.check_status == SourceCheckStatus.CONFIRMED and ev.polarity != "refute",
+        )
 
     trace = {
         "links_collected": len(raw_links),

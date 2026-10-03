@@ -178,6 +178,16 @@ class Citation(BaseModel):
     cited_by: list[str] = Field(default_factory=list)
     """Which AIs cited it."""
 
+    origin: str = "native"
+    """native: a link the chat site itself rendered (source chip / anchor). text: a URL the AI wrote in its
+    answer. Either way it is the AI's citation; OmniBrain never adds one."""
+
+    omnibrain_opened: bool = False
+    """OmniBrain's own audit fetched this page. Says nothing about whether the AI did."""
+
+    provenance: str | None = None
+    """MENTIONED -> OPENED -> INSPECTED -> CITED -> CLAIM_SUPPORTED (highest reached). None: no AI cited it."""
+
 
 class ProviderResponse(BaseModel):
     """One provider, one prompt, one round -- fully auditable (section 19)."""
@@ -332,6 +342,12 @@ class Evidence(BaseModel):
     cited_by: list[str] = Field(default_factory=list)
     """AIs that cited this URL. Empty means OmniBrain found it itself (optional discovery)."""
 
+    omnibrain_opened: bool = False
+    """OmniBrain's audit fetched the page. Not the AI's research."""
+
+    provenance: str | None = None
+    """MENTIONED -> OPENED -> INSPECTED -> CITED -> CLAIM_SUPPORTED; None = no AI cited it (OmniBrain-only)."""
+
 
 class Disagreement(BaseModel):
     id: str = Field(default_factory=lambda: new_id("dis"))
@@ -475,6 +491,9 @@ class SufficiencyAssessment(BaseModel):
     has_primary_source: bool = False
     contradictions: int = 0
     coverage: float = 0.0
+    strong_primary: bool = False
+    """Every material claim is backed by a primary page the AI itself opened (provenance CLAIM_SUPPORTED)."""
+
     reason: str = ""
     recommends_level: EscalationLevel = EscalationLevel.PRIMARY
 
@@ -567,6 +586,8 @@ class Job(BaseModel):
     finished_at: float | None = None
 
     max_rounds: int = 3
+    stop_note: str = ""
+    """Why the loop ended early when a stop rule (not the round limit) ended it."""
     rounds_run: int = 0
     active_round: int = 0
 

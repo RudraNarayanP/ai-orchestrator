@@ -359,6 +359,8 @@ class ResearchRunner:
 
         # Level 3 -- adversarial verification, then targeted rounds.
         report: VerifierReport | None = None
+        progress = (len(assessment.established), assessment.confirmed_sources)
+        stalled = 0
         while round_no <= max_rounds:
             job.status = JobStatus.VERIFYING
             job.level = EscalationLevel.DEEP if (analysis.high_stakes or disagreements) else job.level
@@ -377,6 +379,13 @@ class ResearchRunner:
 
             actionable = [f for f in report.follow_ups if f.question]
             if not report.needs_more_research or not actionable or round_no >= max_rounds:
+                break
+            # Stop rules: the curator may ask, but it does not get to keep asking.
+            if assessment.strong_primary and not disagreements:
+                job.stop_note = "the AI opened a primary source that supports every claim; the curator's request for more research was not followed"
+                break
+            if stalled >= 2:
+                job.stop_note = "the last two targeted rounds added no new confirmed claim or source; stopped instead of asking again"
                 break
 
             # Target only what is unresolved. Never restart the whole thing.
@@ -437,6 +446,9 @@ class ResearchRunner:
             assessment = self._assess(job, analysis, claims, evidence, disagreements, next_round, focus="targeted")
             job.assessments.append(assessment)
             follow_round.finished_at = time.time()
+            now = (len(assessment.established), assessment.confirmed_sources)
+            stalled = stalled + 1 if (now[0] <= progress[0] and now[1] <= progress[1]) else 0
+            progress = (max(progress[0], now[0]), max(progress[1], now[1]))
             round_no = next_round
             if assessment.sufficient and not disagreements and not analysis.high_stakes:
                 report = await self._verify(job, analysis, claims, evidence, responses, disagreements, round_no)
@@ -451,7 +463,7 @@ class ResearchRunner:
             report,
             responses,
             rounds=round_no,
-            stop=self._stop_reason(assessment, disagreements, analysis, round_no, max_rounds),
+            stop=self._stop_reason(assessment, disagreements, analysis, round_no, max_rounds, job.stop_note),
         )
 
     # ----------------------------------------------- same-conversation follow-up
@@ -674,6 +686,7 @@ class ResearchRunner:
         if response.status.value in {"completed", "timeout"}:
             self._turns[thread_key] = turn
         response.escalation_reason = escalation_reason
+        citation_ops.text_citations(response)
         citation_ops.mark_opened(response)
         response.pages_visited = [c.url for c in response.citations if c.url][:20]
         response.failure_signals = router.is_failure_phrase(response.answer_text or response.raw_text or "")
@@ -911,6 +924,14 @@ class ResearchRunner:
             and not unresolved
             and not unanswered
         )
+        # Strong primary evidence ends the hunt: every open claim rests on a primary/official page that the AI
+        # itself opened (and OmniBrain's check of the same page agrees). More rounds could only repeat it.
+        strong = {
+            e.claim_id for e in attached
+            if e.tier.value in {"primary_official", "original_research", "government"} and e.provenance == "CLAIM_SUPPORTED"
+        }
+        strong_primary = bool(open_material) and all(c.id in strong for c in open_material) and contradictions == 0 and not unanswered
+        ledger_ok = ledger_ok or (strong_primary and bool(claims))
         sufficient = ledger_ok
         if analysis.high_stakes:
             sufficient = sufficient and has_primary and not weak_only
@@ -976,6 +997,7 @@ class ResearchRunner:
             has_primary_source=has_primary,
             contradictions=contradictions,
             coverage=round(coverage, 2),
+            strong_primary=strong_primary and bool(claims),
             reason=reason,
             recommends_level=recommends,
         )
@@ -1175,7 +1197,9 @@ class ResearchRunner:
             record.finished_at = record.finished_at or time.time()
         return job
 
-    def _stop_reason(self, assessment: SufficiencyAssessment, disagreements: list[Disagreement], analysis: Any, round_no: int, max_rounds: int) -> str:
+    def _stop_reason(self, assessment: SufficiencyAssessment, disagreements: list[Disagreement], analysis: Any, round_no: int, max_rounds: int, note: str = "") -> str:
+        if note:
+            return note
         if assessment.sufficient and not disagreements:
             return f"remaining uncertainty is not material to the question (round {round_no})"
         if round_no >= max_rounds:
