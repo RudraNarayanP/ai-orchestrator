@@ -263,6 +263,7 @@ async def build_pool(
         browser_fetch=browser_fetch,
         round_no=round_no,
         max_chars=settings.search.fetch_body_chars,
+        attribute_to=[(c.id, c.claim) for c in _rank_claims(claims)[:12]],
     )
 
     # Look for the other side. Nothing above ever asks "who says this is wrong?",

@@ -23,7 +23,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from backend.models import Evidence, SourceCheckStatus, SourceTier
+from backend.models import Evidence, SourceCheckStatus, SourceTier, new_id
 
 GOV_RE = re.compile(r"\.(gov|mil)(\.[a-z]{2})?$|\.gov\.uk$|europa\.eu$|un\.org$|who\.int$|worldbank\.org$|imf\.org$|oecd\.org$")
 EDU_RE = re.compile(r"\.edu(\.[a-z]{2})?$|\.ac\.[a-z]{2}$")
@@ -507,8 +507,15 @@ async def gather_from_links(
     round_no: int = 1,
     origin: str = "provider",
     max_chars: int = 12000,
+    attribute_to: list[tuple[str, str]] | None = None,
 ) -> list[Evidence]:
     """Fetch many cited pages without letting one slow server serialise us.
+
+    ``attribute_to`` is a list of (claim_id, claim_text). Once a page is read, it is
+    checked against each of those claims and filed under every claim whose figures
+    and wording it actually contains. A link's own title and snippet are too thin to
+    decide that (a legislation.gov.uk section that settles the answer used to end up
+    attached to no claim at all), but the full text can.
 
     ``max_chars`` is ``search.fetch_body_chars``: how much of each page is read and kept.
     """
@@ -520,7 +527,7 @@ async def gather_from_links(
             unique[url] = link
     items = list(unique.values())[:max_pages]
 
-    async def one(link: dict[str, Any]) -> Evidence | None:
+    async def one(link: dict[str, Any]) -> list[Evidence]:
         url = link.get("href") or link.get("url")
         async with sem:
             page = await fetch_page(url, browser_fetch=browser_fetch, max_chars=max_chars)
@@ -544,7 +551,7 @@ async def gather_from_links(
                     "refutation": refutation,
                 }
             elif counter and check["status"] != SourceCheckStatus.CONFIRMED:
-                return None
+                return []
         else:
             check = {
                 "status": SourceCheckStatus.CONFIRMED if page.ok else SourceCheckStatus.UNREACHABLE,
@@ -575,10 +582,35 @@ async def gather_from_links(
         if ev.check_status == SourceCheckStatus.UNREACHABLE and not _looks_like_host(ev.domain or ""):
             ev.check_status = SourceCheckStatus.HALLUCINATED
             ev.check_notes = (ev.check_notes or "") + "; domain does not exist"
-        return ev
+        out = [ev]
+        if attribute_to and page.ok and not link.get("counter"):
+            out.extend(_attributed_copies(ev, page, attribute_to, skip=link.get("claim_id")))
+        return out
 
     gathered = await asyncio.gather(*(one(link) for link in items)) if items else []
-    return [ev for ev in gathered if ev is not None]
+    return [ev for group in gathered for ev in group]
+
+
+def _attributed_copies(base: Evidence, page: FetchedPage, targets: list[tuple[str, str]], *, skip: str | None = None) -> list[Evidence]:
+    """One extra evidence row per claim this page's text really supports."""
+    copies: list[Evidence] = []
+    if base.check_status not in {SourceCheckStatus.CONFIRMED, SourceCheckStatus.OUTDATED, SourceCheckStatus.NOT_CHECKED, SourceCheckStatus.IRRELEVANT, SourceCheckStatus.MISMATCH}:
+        return copies
+    for claim_id, claim_text in targets:
+        if not claim_id or claim_id == skip or claim_id == base.claim_id:
+            continue
+        check = check_support(claim_text, page)
+        if check["status"] != SourceCheckStatus.CONFIRMED:
+            continue
+        copy = base.model_copy(deep=True)
+        copy.id = new_id("ev")
+        copy.claim_id = claim_id
+        copy.polarity = "support"
+        copy.check_status = SourceCheckStatus.OUTDATED if base.check_status == SourceCheckStatus.OUTDATED else SourceCheckStatus.CONFIRMED
+        copy.verbatim_excerpt = check.get("excerpt") or copy.verbatim_excerpt
+        copy.check_notes = (f"token coverage {check.get('coverage')}; read in full and matched to this claim")[:400]
+        copies.append(copy)
+    return copies
 
 
 def summarise(evidence: list[Evidence]) -> dict[str, Any]:

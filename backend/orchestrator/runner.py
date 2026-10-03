@@ -1066,25 +1066,29 @@ def _has_figure(text: str) -> bool:
 
 
 def _merge_evidence(old: list[Evidence], new: list[Evidence]) -> list[Evidence]:
-    by_url = {e.url: e for e in old if e.url}
+    # One row per (page, claim): a single page can legitimately settle several claims.
+    by_url = {(e.url, e.claim_id): e for e in old if e.url}
     for ev in new:
-        if ev.url and ev.url in by_url:
-            existing = by_url[ev.url]
+        key = (ev.url, ev.claim_id)
+        if ev.url and not ev.claim_id and key not in by_url:
+            # an unattributed sighting of a page already filed under a claim
+            key = next((k for k in by_url if k[0] == ev.url), key)
+        if ev.url and ev.claim_id and key not in by_url and (ev.url, None) in by_url:
+            # a page first filed under no claim is now known to belong to this one
+            by_url[(ev.url, None)].claim_id = ev.claim_id
+            by_url[key] = by_url.pop((ev.url, None))
+        if ev.url and key in by_url:
+            existing = by_url[key]
             rank = {SourceCheckStatus.CONFIRMED: 3, SourceCheckStatus.OUTDATED: 2, SourceCheckStatus.NOT_CHECKED: 1}
             if rank.get(ev.check_status, 0) > rank.get(existing.check_status, 0):
                 existing.check_status = ev.check_status
                 existing.polarity = ev.polarity
                 existing.verbatim_excerpt = ev.verbatim_excerpt or existing.verbatim_excerpt
                 existing.check_notes = ev.check_notes or existing.check_notes
-            existing.claim_id = ev.claim_id or existing.claim_id
-            # Later passes see the full claim set, so their attribution beats the
-            # earlier guess made when only the first answer existed.
-            if ev.claim_id and existing.claim_id != ev.claim_id:
-                existing.claim_id = ev.claim_id
             continue
         old.append(ev)
         if ev.url:
-            by_url[ev.url] = ev
+            by_url[key] = ev
     return old
 
 

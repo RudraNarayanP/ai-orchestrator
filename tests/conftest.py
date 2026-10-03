@@ -173,7 +173,7 @@ def world(monkeypatch):
 
     ledger = Ledger()
 
-    async def fake_gather(job_id, links, *, max_pages=20, concurrency=5, browser_fetch=None, round_no=1, origin="provider", max_chars=12000):
+    async def fake_gather(job_id, links, *, max_pages=20, concurrency=5, browser_fetch=None, round_no=1, origin="provider", max_chars=12000, attribute_to=None):
         out: list[Evidence] = []
         for link in links:
             url = link.get("href") or link.get("url")
