@@ -292,6 +292,7 @@ SELECTORS: dict[str, SelectorSet] = {
         hard_timeout_ms=200000,
         stable_ms=4000,
         force_capture_ms=70000,
+        never_started_ms=90000,
     ),
     "meta_ai": SelectorSet(
         provider="meta_ai",

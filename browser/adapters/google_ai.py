@@ -43,10 +43,15 @@ class GoogleAIAdapter(ChatAdapter):
         await self._submit(page)
 
         deadline = time.time() + self.sel.hard_timeout_ms / 1000.0
+        # Logged out, AI Mode can sit on animated dots forever (observed: nothing after 400 s). It is slow when it
+        # works, but if no text at all has appeared by never_started_ms there is nothing to wait for.
+        give_up_if_empty = time.time() + self.sel.never_started_ms / 1000.0
         best: dict[str, Any] | None = None
         last_len = 0
         last_change = time.time()
         while time.time() < deadline:
+            if not best and time.time() > give_up_if_empty:
+                break
             try:
                 capture = await self._call(page, "capture", self._sel_dict, baseline)
             except DOMUnavailable as exc:

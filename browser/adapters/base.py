@@ -295,7 +295,7 @@ class ChatAdapter:
             if response.status == ProviderStatus.RATE_LIMITED:
                 # Never retry straight into a rate limit; the runner backs this site off.
                 return self._finish(response)
-            if (response.error or "").startswith(("readiness=login_wall", "readiness=blocked")):
+            if (response.error or "").startswith(("readiness=login_wall", "readiness=blocked", "no-response-element: AI Mode")):
                 # A login wall, captcha or age gate does not go away by asking again; report it and move on.
                 return self._finish(response)
             if attempt + 1 >= attempts:

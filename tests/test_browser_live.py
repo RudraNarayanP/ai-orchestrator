@@ -277,3 +277,31 @@ async def test_an_answer_inside_nested_wrappers_is_captured_once(browser_setting
         assert "330 metres" in response.answer_text
     finally:
         await engine.stop(keep_windows=False)
+
+async def test_ai_mode_that_never_answers_gives_up_early_and_is_not_retried(browser_settings, fixture_server):
+    """Live logged-out run: AI Mode produced nothing and the adapter waited 404 s (two 200 s attempts)."""
+    import time
+
+    url = fixture_server.rsplit("/", 1)[0] + "/ai_mode_silent.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"google_ai": {"enabled": True, "label": "Google AI", "url": url, "max_retries": 1}},
+    })
+    engine = BrowserEngine(settings)
+    events = []
+
+    async def emit(kind, msg, provider=None, round_no=None):
+        events.append(str(msg))
+
+    try:
+        adapter = build_adapter("google_ai", engine, settings, settings.providers["google_ai"])
+        adapter.sel.never_started_ms = 3000
+        adapter.sel.hard_timeout_ms = 60000
+        started = time.time()
+        response = await adapter.ask("jobq", "Is anything there?", 1, emit=emit)
+        assert response.status.value == "broken", (response.status, response.error, events)
+        assert "no-response-element" in (response.error or "")
+        assert time.time() - started < 30, "should give up long before the hard timeout"
+        assert not any("retrying" in e for e in events), events
+    finally:
+        await engine.stop(keep_windows=False)
