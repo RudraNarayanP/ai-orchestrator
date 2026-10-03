@@ -127,9 +127,13 @@ SELECTORS: dict[str, SelectorSet] = {
             text_regex=r"(answer now|quick answer|fast answer|get a quick answer)",
             verified="prior",
         ),
-        response_root=['[role="log"]', "main"],
+        # Logged-out ChatGPT (observed live 2026-10-03) renders ol[data-conversation-transcript] with
+        # li[data-message-role=user|assistant] and a "ChatGPT said:" attribution heading; the signed-in
+        # DOM uses [data-message-author-role]. Both ladders are kept.
+        response_root=['[role="log"]', "ol[data-conversation-transcript]", "main"],
         assistant_message=[
             '[data-message-author-role="assistant"]',
+            'li[data-message-role="assistant"]',
             "div[data-message-id] .markdown",
             "article",
         ],

@@ -202,3 +202,78 @@ async def test_cancel_mid_answer_stops_the_wait_and_closes_the_tab(adapter):
     assert time.monotonic() - started < 20
     session = adapter.engine._sessions.get(adapter.engine._profile_key("fixture"))
     assert session is None or "fixture" not in session.pages, "the provider tab must be closed on cancel"
+
+async def test_logged_out_chatgpt_transcript_dom_is_captured(browser_settings, fixture_server):
+    """Regression from the first live logged-out run: chatgpt.com served a transcript of
+    ol[data-conversation-transcript] > li[data-message-role=assistant] (no data-message-author-role),
+    so the answer was 'captured but empty after cleaning' and ChatGPT counted as failed.
+    The fixture reproduces that DOM, including the 'ChatGPT said:' heading, which must not leak."""
+    url = fixture_server.rsplit("/", 1)[0] + "/chatgpt_logged_out.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"chatgpt": {"enabled": True, "label": "ChatGPT", "url": url, "max_retries": 0}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("chatgpt", engine, settings, settings.providers["chatgpt"])
+        adapter.sel.stable_ms = 700
+        adapter.sel.tiny_fragment_ms = 1500
+        adapter.sel.never_started_ms = 12000
+        adapter.sel.force_capture_ms = 25000
+        adapter.sel.hard_timeout_ms = 45000
+        response = await adapter.ask("jobx", "When was the Eiffel Tower completed and how tall is it?", 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        assert "March 31, 1889" in response.answer_text and "330 metres" in response.answer_text, response.answer_text
+        assert "ChatGPT said" not in response.answer_text and "You said" not in response.answer_text
+        assert "When was the Eiffel Tower" not in response.answer_text, "the user's own prompt must not be read as the answer"
+    finally:
+        await engine.stop(keep_windows=False)
+
+async def test_an_age_gate_is_reported_blocked_and_never_answered(browser_settings, fixture_server):
+    """Live finding: chat.qwen.ai put 'Confirm your age ... What year were you born? [Continue]' over its composer.
+    The old flow typed into the composer anyway and ended 'answer captured but empty after cleaning'.
+    We must not fill in or click through someone's age declaration: report it blocked, type nothing, retry nothing."""
+    url = fixture_server.rsplit("/", 1)[0] + "/age_gate.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"qwen": {"enabled": True, "label": "Qwen", "url": url, "max_retries": 2}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("qwen", engine, settings, settings.providers["qwen"])
+        events = []
+
+        async def emit(kind, message, provider=None, round_no=None):
+            events.append(message)
+
+        response = await adapter.ask("jobg", "What is the capital of France?", 1, emit=emit)
+        assert response.status.value == "failed" and "readiness=blocked" in response.error, (response.status, response.error)
+        page = await engine.open_research_page("qwen", url)
+        assert await page.evaluate("window.__ageClicked === true") is False, "the age gate's Continue button must never be pressed"
+        assert await page.input_value("#q") == "", "nothing may be typed while the gate is up"
+        assert not any("retrying" in e for e in events), events
+    finally:
+        await engine.stop(keep_windows=False)
+
+async def test_an_answer_inside_nested_wrappers_is_captured_once(browser_settings, fixture_server):
+    """Regression from the first live Gemini run: model-response > message-content > .markdown matched three
+    selectors, so the answer text appeared two or three times in the stored response."""
+    url = fixture_server.rsplit("/", 1)[0] + "/gemini_nested.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"gemini": {"enabled": True, "label": "Gemini", "url": url, "max_retries": 0}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("gemini", engine, settings, settings.providers["gemini"])
+        adapter.sel.stable_ms = 700
+        adapter.sel.tiny_fragment_ms = 1500
+        adapter.sel.never_started_ms = 12000
+        adapter.sel.force_capture_ms = 25000
+        adapter.sel.hard_timeout_ms = 45000
+        response = await adapter.ask("jobn", "When was the Eiffel Tower completed?", 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        assert response.answer_text.count("March 31, 1889") == 1, response.answer_text
+        assert "330 metres" in response.answer_text
+    finally:
+        await engine.stop(keep_windows=False)

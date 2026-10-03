@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Qwen (age gate fixture)</title>
+<!-- Mirrors chat.qwen.ai logged out on 2026-10-03: a normal composer, with an age-confirmation dialog on top. -->
+</head><body>
+<textarea placeholder="Ask Qwen" id="q" style="position:fixed;bottom:20px;left:20px;width:500px;height:40px"></textarea>
+<div id="gate" style="position:fixed;top:80px;left:80px;background:#222;color:#eee;padding:20px">
+  <p>Confirm your age to continue</p><p>What year were you born?</p>
+  <select id="year"><option>2000</option></select>
+  <button id="go" onclick="window.__ageClicked = true">Continue</button>
+</div>
+</body></html>

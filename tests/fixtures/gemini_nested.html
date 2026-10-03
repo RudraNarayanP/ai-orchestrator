@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Gemini (nested wrappers fixture)</title>
+<!-- Gemini renders one answer inside nested wrappers that several of our selectors match at once:
+     model-response > message-content > div.markdown. The answer must be captured once. -->
+</head><body>
+<div id="t"></div>
+<div style="position:fixed;bottom:10px;left:10px;right:10px;display:flex;gap:8px">
+  <div role="textbox" contenteditable="true" aria-label="Enter a prompt for Gemini" id="c" style="flex:1;min-height:30px;border:1px solid #888"></div>
+  <button aria-label="Send message" id="s">Send</button>
+</div>
+<script>
+const t = document.getElementById('t'), c = document.getElementById('c');
+function go() {
+  const q = c.innerText.trim(); if (!q) return; c.innerText = '';
+  const u = document.createElement('user-query'); u.textContent = q; t.appendChild(u);
+  setTimeout(() => {
+    const r = document.createElement('model-response');
+    r.innerHTML = '<message-content><div class="markdown"><p>The Eiffel Tower was completed on March 31, 1889.</p><p>It is 330 metres tall with its antenna.</p></div></message-content>';
+    t.appendChild(r);
+  }, 600);
+}
+document.getElementById('s').onclick = go;
+c.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+</script></body></html>

@@ -44,7 +44,8 @@ LOGIN_RE = re.compile(
     r"get started for free|must (log in|sign in)|please (log|sign) ?in)",
     re.I,
 )
-BROKEN_RE = re.compile(r"(access denied|are you a robot|unusual traffic|verify you are a human)", re.I)
+# An age gate asks the person for a personal declaration; we never answer it for them.
+BROKEN_RE = re.compile(r"(access denied|are you a robot|unusual traffic|verify you are a human|confirm your age|what year were you born|date of birth|verify your age|what should i call you|preferred name)", re.I)
 # Signals that the provider actually went and looked something up (section 17).
 WEB_RESEARCH_RE = re.compile(
     r"(searched the web|browsed|browsing|searching the web|web results|"
@@ -52,9 +53,13 @@ WEB_RESEARCH_RE = re.compile(
     r"deep research|researching|finding (out|information))",
     re.I,
 )
+# The section headings our research prompt asks for, in capitals; a lowercase "evidence" is just a word.
+GLUED_HEADING_RE = re.compile(
+    r"(\S)(DIRECT ANSWER|KEY CLAIMS|EVIDENCE|SOURCE LINKS|SOURCE DATES|UNCERTAINTIES|CONTRADICTORY EVIDENCE|WHAT I MAY BE WRONG ABOUT)(?=[ \t]*(?:\n|$))"
+)
 STALE_UI_NOISE = re.compile(
     r"^\s*(copied!?|copy|regenerate|good response|bad response|share|more|show more|"
-    r"voice input|try again|retry|feedback|was this helpful\??)\s*$",
+    r"voice input|try again|retry|feedback|was this helpful\??|(chatgpt|gemini|copilot|you) said:?|#{1,6}\s*:?)\s*$",
     re.I,
 )
 
@@ -289,6 +294,9 @@ class ChatAdapter:
                 return self._finish(response)
             if response.status == ProviderStatus.RATE_LIMITED:
                 # Never retry straight into a rate limit; the runner backs this site off.
+                return self._finish(response)
+            if (response.error or "").startswith(("readiness=login_wall", "readiness=blocked")):
+                # A login wall, captcha or age gate does not go away by asking again; report it and move on.
                 return self._finish(response)
             if attempt + 1 >= attempts:
                 # Out of attempts: keep the terminal status the last attempt set
@@ -637,6 +645,8 @@ class ChatAdapter:
                 continue
             lines.append(line.rstrip())
         out = "\n".join(lines).strip()
+        # Live Gemini output glued the next heading onto the previous line ("...984 feet).EVIDENCE").
+        out = GLUED_HEADING_RE.sub(r"\1\n\2", out)
         out = re.sub(r"\n{3,}", "\n\n", out)
         # Sites echo the prompt back as the first line of the answer, or as a
         # "Conversation so far" preamble in debate-style threads. Capturing that

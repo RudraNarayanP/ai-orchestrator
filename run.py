@@ -93,13 +93,20 @@ def cmd_doctor(_: argparse.Namespace) -> int:
             continue
         from backend.browser.engine import profile_dir
 
-        # a provider that needs no account (Google Search) is never "not signed in"
-        signed = not cfg.requires_login or (profile_dir(f"omnibrain_{name}") / "Preferences").exists()
-        print(f"  {'●' if signed else '○'} {cfg.label:<18} {cfg.url}" + ("" if signed else "   (not signed in yet)"))
+        # Providers that answer logged out say nothing here. A Preferences file in the profile proves nothing
+        # about a login (probing creates one), so the note is about what the site demands, not what we saw.
+        print(f"  - {cfg.label:<18} {cfg.url}" + provider_login_note(cfg))
     print()
     print("note: automation is not hidden from these sites -- navigator.webdriver stays true.")
     print("If a site objects, OmniBrain reports the provider as blocked instead of working around it.")
     return 0
+
+
+def provider_login_note(cfg) -> str:
+    """Doctor's per-provider suffix: only providers that wall off anonymous use get one."""
+    if not cfg.requires_login:
+        return ""
+    return "   (answers only after you sign in: run.py login <provider>; skipped as blocked until then)"
 
 
 def setup_file_logging(args: argparse.Namespace, settings) -> Path:

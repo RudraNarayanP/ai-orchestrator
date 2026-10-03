@@ -240,6 +240,10 @@ DOM_LIBRARY_JS = r"""
           if (n.closest('aside') || n.closest('[role="complementary"]')) continue;
           if (isUserNode(n)) continue;
           if (n.querySelector('[data-message-author-role="user"]') && (n.innerText || '').length < 400) continue;
+          // Selectors are tried in priority order and often match nested wrappers of the SAME message
+          // (Gemini: message-content .markdown, message-content, model-response). Keep the first, skip
+          // anything that contains it or sits inside it, or the answer is captured two or three times.
+          if (blocks.some(b => b.contains(n) || n.contains(b))) continue;
           seen.add(n);
           blocks.push(n);
         }
@@ -312,7 +316,7 @@ DOM_LIBRARY_JS = r"""
       const loginCfg = (cfg.login_wall || []).some(s => queryAll(s).some(visible));
       const loginWords = /sign in|log in|create (a |an )?account|continue with (google|facebook|apple|microsoft)|get started/i.test(body.slice(0, 2500));
       const rateWords = /(rate limit|too many requests|slow down|you'?ve reached .{0,30}(limit|cap)|try again in|upgrade to|daily (limit|cap)|out of (free )?credits|please wait)/i.test(body);
-      const blockedWords = /(access denied|are you a robot|unusual traffic|verify you are a human|enable javascript|are you a human)/i.test(body);
+      const blockedWords = /(access denied|are you a robot|unusual traffic|verify you are a human|enable javascript|are you a human|confirm your age|what year were you born|date of birth|verify your age|what should i call you|preferred name)/i.test(body);
       const inputHere = candidates(cfg.input || {}, cfg.input || {}, {kind: 'input'}).length > 0;
       const credentialForm = [...document.querySelectorAll('input, textarea, [contenteditable="true"]')]
         .some(el => isCredential(el) && visible(el));

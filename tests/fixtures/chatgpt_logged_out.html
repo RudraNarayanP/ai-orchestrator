@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ChatGPT (logged-out transcript DOM fixture)</title>
+<!-- Mirrors what chatgpt.com served to a logged-out visitor on 2026-10-03: a visible
+     textarea#mobile-composer-prompt, and a transcript that is ol[data-conversation-transcript]
+     of li[data-message-role=user|assistant], each starting with an h4 "You said:" / "ChatGPT said:".
+     There is no [data-message-author-role], no role=log, no <main>, no <article> with the answer. -->
+<style>body{font-family:system-ui;background:#111;color:#eee} .c{position:fixed;bottom:12px;left:12px;right:12px;display:flex;gap:8px} textarea{flex:1;height:48px}</style>
+</head>
+<body>
+<div id="t"><ol data-conversation-transcript></ol></div>
+<div class="c">
+  <textarea id="mobile-composer-prompt" aria-label="Chat with ChatGPT" placeholder="Ask ChatGPT"></textarea>
+  <button aria-label="Send message" id="send">Send</button>
+</div>
+<script>
+const ol = document.querySelector('ol');
+const input = document.getElementById('mobile-composer-prompt');
+function turn(role, label, html, extra) {
+  const li = document.createElement('li');
+  li.id = crypto.randomUUID();
+  li.setAttribute('data-message-role', role);
+  if (extra) li.setAttribute(extra, '');
+  li.innerHTML = '<h4 data-message-attribution>' + label + '</h4><div>' + html + '</div>';
+  ol.appendChild(li);
+  return li;
+}
+function go() {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  const u = turn('user', 'You said:', '');
+  u.lastChild.textContent = text;
+  setTimeout(() => turn('assistant', 'ChatGPT said:', '<p>The Eiffel Tower was completed on March 31, 1889 and is about 330 metres tall.</p>', 'data-message-complete'), 700);
+}
+document.getElementById('send').onclick = go;
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+</script>
+</body>
+</html>

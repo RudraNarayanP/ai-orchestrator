@@ -122,6 +122,9 @@ def is_assertive(sentence: str) -> bool:
         return False
     if HEADING_ONLY_RE.match(text) or NO_WEB_RE_LINE.match(text):
         return False
+    # A bare date ("April 01, 2020") is a source-date line, not a claim about the world.
+    if len(re.sub(r"(?i)\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|[\d\s,./\-]|\b(?:st|nd|rd|th)\b", "", text)) < 3:
+        return False
     if link_like(text):
         return False
     # A sentence-split can weld a section heading onto the start of a fragment

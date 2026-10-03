@@ -212,3 +212,20 @@ async def test_other_failures_still_get_their_retries():
     adapter._attempt = attempt
     await adapter.ask("j", "q", 1)
     assert len(attempts) == 3
+
+@pytest.mark.parametrize("readiness", ["login_wall", "blocked"])
+async def test_a_login_wall_or_block_is_not_retried(readiness):
+    """Live finding: Copilot/DeepSeek/Meta AI/Pi login walls were each re-opened and re-asked before giving up."""
+    settings = base_settings()
+    cfg = ProviderConfig(enabled=True, label="X", url="https://x.test/", max_retries=3)
+    adapter = ChatAdapter(Stub(), settings, "chatgpt", cfg)
+    attempts = []
+
+    async def attempt(**kwargs):
+        attempts.append(1)
+        kwargs["response"].note(ProviderStatus.LOGGED_OUT, error=f"readiness={readiness}")
+        return False
+
+    adapter._attempt = attempt
+    response = await adapter.ask("j", "q", 1)
+    assert len(attempts) == 1 and response.error == f"readiness={readiness}"

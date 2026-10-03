@@ -226,6 +226,22 @@ async def test_different_providers_still_run_in_parallel():
 # -------------------------------------------------------------------- requires_login
 
 
+def test_doctor_does_not_ask_anonymous_providers_to_sign_in():
+    """Live run: ChatGPT, Gemini and Google AI Mode answer logged out, yet doctor said '(not signed in yet)'."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("omnibrain_run_py", ROOT / "run.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    example = yaml.safe_load((ROOT / "config" / "settings.example.yaml").read_text(encoding="utf-8"))
+    loaded = Settings.model_validate({"providers": {k: v for k, v in example["providers"].items()}})
+    for name in ("chatgpt", "gemini", "google_ai", "search"):
+        assert loaded.providers[name].requires_login is False, name
+        assert module.provider_login_note(loaded.providers[name]) == ""
+    for name in ("pi", "qwen", "deepseek"):
+        assert "sign in" in module.provider_login_note(loaded.providers[name])
+
+
 def test_run_py_doctor_only_nags_about_sign_in_for_providers_that_need_one():
     source = (ROOT / "run.py").read_text(encoding="utf-8")
     assert "cfg.requires_login" in source

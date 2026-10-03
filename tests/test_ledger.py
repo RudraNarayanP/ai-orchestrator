@@ -73,6 +73,31 @@ async def test_majority_wrong_minority_evidenced_loses_the_vote(settings, net):
     assert verdicts[wrong_claim.id].verdict in {ClaimStatus.INSUFFICIENT_EVIDENCE, ClaimStatus.CONTESTED, ClaimStatus.REFUTED}
     assert "$549" in job.final.answer, f"answer followed the vote instead of the evidence: {job.final.answer}"
     assert "$499" not in job.final.answer
+    assert "score" not in (job.final.why or "").lower() and "ledger" not in (job.final.why or "").lower(), job.final.why
+
+
+def test_the_why_and_moderate_caveat_are_plain_and_truthful():
+    """Live run: the why read '6 confirmed source(s) ... ledger score 3.12' and the caveat claimed 'only one
+    solid source' although six independent sites were opened."""
+    from backend.models import ClaimVerdict
+
+    verifier = Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)
+
+    def ev(url, domain, tier):
+        return Evidence(job_id="j", url=url, domain=domain, tier=tier, check_status=SourceCheckStatus.CONFIRMED)
+
+    pages = [ev("https://a.example/1", "a.example", SourceTier.JOURNALISM), ev("https://b.example/1", "b.example", SourceTier.JOURNALISM)]
+    by_url = {e.url: e for e in pages}
+    verdict = ClaimVerdict(claim_id="c", claim="x", verdict=ClaimStatus.SUPPORTED, confidence=Confidence.MODERATE,
+                           reasoning="2 confirmed; ledger score 3.12.", strong_evidence=list(by_url))
+    why = verifier._plain_why(verdict, by_url)
+    assert "2 pages" in why and "2 independent sites" in why
+    assert "score" not in why.lower() and "ledger" not in why.lower()
+    caveat = verifier._moderate_caveat(verdict, by_url)
+    assert "only one" not in caveat.lower() and "primary" in caveat.lower(), caveat
+    single = ClaimVerdict(claim_id="c", claim="x", verdict=ClaimStatus.SUPPORTED, confidence=Confidence.MODERATE,
+                          reasoning="r", strong_evidence=["https://a.example/1"])
+    assert "only one" in verifier._moderate_caveat(single, by_url).lower()
 
 
 async def test_unanimous_unsourced_consensus_earns_nothing(settings, net):
@@ -188,6 +213,18 @@ def test_pasted_urls_are_not_claims():
     assert not any("http" in t for t in texts), f"a bare link became a claim: {texts}"
     assert claim_ops.link_like("[https://a.example/x](https://a.example/x)")
     assert not claim_ops.link_like("OpenAI launched the agent on 17 July 2025 in the US and Canada.")
+
+
+def test_bare_dates_and_glued_headings_are_not_claims():
+    """Live Gemini run: 'April 01, 2020' and 'September 25, 2026UNCERTAINTIES' became claims."""
+    for junk in ["April 01, 2020", "September 25, 2026", "1 March 1889.", "25/09/2026"]:
+        assert not claim_ops.is_assertive(junk), junk
+    assert claim_ops.is_assertive("The tower opened on March 31, 1889.")
+    body = "KEY CLAIMS\n- The Eiffel Tower is 330 metres tall including antennas.\n- April 01, 2020\nSOURCE DATES\n- September 25, 2026"
+    pairs = claim_ops.heuristic_claims(
+        ProviderResponse(job_id="j", provider="gemini", prompt="", answer_text=body, status=ProviderStatus.COMPLETED)
+    )
+    assert [t for t, _ in pairs] == ["The Eiffel Tower is 330 metres tall including antennas."], pairs
 
 
 def test_malformed_arithmetic_is_refused_not_evaluated():

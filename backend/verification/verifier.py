@@ -424,6 +424,32 @@ class Verifier:
             problems=sorted(set(problems)),
         )
 
+    @staticmethod
+    def _opened(verdict: ClaimVerdict, by_url: dict[str, Any]) -> list[Any]:
+        return [by_url[u] for u in verdict.strong_evidence if u in by_url]
+
+    def _plain_why(self, verdict: ClaimVerdict, by_url: dict[str, Any]) -> str:
+        """The `why` a reader sees: plain prose, no ledger scores or counts of checks.
+        The audit trail stays in ClaimVerdict.reasoning."""
+        opened = self._opened(verdict, by_url)
+        sites = len({e.domain for e in opened if e.domain})
+        if not opened:
+            return ""
+        pages = len(opened)
+        page_word = "page" if pages == 1 else "pages"
+        site_part = "an independent site" if sites == 1 else f"{sites} independent sites"
+        return f"{pages} {page_word} we opened, from {site_part}, state this."
+
+    def _moderate_caveat(self, verdict: ClaimVerdict, by_url: dict[str, Any]) -> str:
+        """Say why confidence is only moderate, truthfully for the evidence at hand."""
+        opened = self._opened(verdict, by_url)
+        sites = {e.domain for e in opened if e.domain}
+        if len(sites) < 2:
+            return "Only one independent site backs this."
+        if not any(TIER_WEIGHT.get(e.tier, 0) >= 0.9 for e in opened):
+            return "None of the pages we opened is a primary source, though several independent sites agree."
+        return "Confidence is limited because the strongest source is not fully conclusive."
+
     def _follow_ups(self, claims: list[Claim], verdicts: list[ClaimVerdict], disagreements: list[Disagreement], round_no: int) -> list[FollowUp]:
         out: list[FollowUp] = []
         by_id = {c.id: c for c in claims}
@@ -502,7 +528,7 @@ class Verifier:
                 (v.confidence for v in good),
                 key={Confidence.HIGH: 3, Confidence.MODERATE: 2, Confidence.LOW: 1, Confidence.NONE: 0}.get,  # type: ignore[arg-type]
             )
-            why = good[0].reasoning
+            why = self._plain_why(good[0], by_url)
             disagreement = None
             caveats = []
             if contested:
@@ -511,7 +537,7 @@ class Verifier:
                 # Repeated by providers, contradicted by a page we opened.
                 disagreement = f"Often repeated but contradicted by {self._refuter(refuted[0], evidence)}: {refuted[0].claim}"
             if confidence == Confidence.MODERATE:
-                caveats.append("Only one solid source, or the source is a step away from primary.")
+                caveats.append(self._moderate_caveat(good[0], by_url))
         elif refuted and not contested:
             top = refuted[0]
             who = self._refuter(top, evidence)
