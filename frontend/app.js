@@ -24,7 +24,10 @@ const safeUrl = (raw) => {
   }
 };
 
+const CONVERSATION_KEY = "omnibrain.conversationId";
+
 const state = {
+  conversationId: localStorage.getItem(CONVERSATION_KEY) || null,
   jobId: null,
   providers: new Map(),
   config: null,
@@ -48,6 +51,43 @@ async function boot() {
   $("#saveSettings").addEventListener("click", saveSettings);
   $("#testVerifier").addEventListener("click", checkDoctor);
   $("#cancel").addEventListener("click", cancelJob);
+  $("#newThread").addEventListener("click", newThread);
+  await restoreThread();
+  $("#question").focus();
+}
+
+function rememberThread(id) {
+  state.conversationId = id || null;
+  if (id) localStorage.setItem(CONVERSATION_KEY, id);
+  else localStorage.removeItem(CONVERSATION_KEY);
+}
+
+/** Redraw the earlier turns of this thread after a reload (answers only; open a job for its evidence). */
+async function restoreThread() {
+  if (!state.conversationId) return;
+  try {
+    const res = await fetch(`/api/conversations/${encodeURIComponent(state.conversationId)}`);
+    if (!res.ok) return;
+    const thread = await res.json();
+    for (const turn of thread.turns || []) {
+      const q = el("div", "msg user");
+      q.append(el("span", "q", turn.question));
+      const a = el("div", "msg ai past");
+      a.append(el("div", "answer", turn.answer));
+      $("#stream").append(q, a);
+    }
+    $("#stream").scrollTop = $("#stream").scrollHeight;
+  } catch {
+    /* a thread that cannot be restored just starts fresh visually; the server still has it */
+  }
+}
+
+function newThread() {
+  state.es?.close();
+  state.jobId = null;
+  rememberThread(null);
+  $("#stream").textContent = "";
+  $("#live").hidden = true;
   $("#question").focus();
 }
 
@@ -181,8 +221,14 @@ async function ask(event) {
   const res = await fetch("/api/jobs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, mode: $("#mode").value, max_rounds: Number($("#maxRounds").value) }),
+    body: JSON.stringify({
+      question,
+      mode: $("#mode").value,
+      max_rounds: Number($("#maxRounds").value),
+      conversation_id: state.conversationId,
+    }),
   }).then((r) => r.json());
+  if (res.conversation_id) rememberThread(res.conversation_id);
   state.jobId = res.job_id;
   listen(res.job_id, answerShell);
 }

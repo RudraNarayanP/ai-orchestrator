@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -34,6 +36,7 @@ from backend.storage.db import Store
 from backend.verification.llm import LLMClient
 
 FRONTEND = Path(__file__).resolve().parent.parent.parent / "frontend"
+CONVERSATION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
 class EventBroker:
@@ -106,7 +109,13 @@ class JobManager:
 
         return emit
 
-    async def start(self, question: str, mode: str | None, max_rounds: int | None) -> Job:
+    async def start(
+        self,
+        question: str,
+        mode: str | None,
+        max_rounds: int | None,
+        conversation_id: str | None = None,
+    ) -> Job:
         question = (question or "").strip()
         if not question:
             raise HTTPException(status_code=400, detail="question is required")
@@ -114,11 +123,17 @@ class JobManager:
             resolved_mode = ResearchMode((mode or self.settings.research.mode).upper())
         except ValueError:
             raise HTTPException(status_code=400, detail=f"unknown mode {mode!r}") from None
+        cid = (conversation_id or "").strip()
+        if cid and not CONVERSATION_ID_RE.fullmatch(cid):
+            raise HTTPException(status_code=400, detail="conversation_id must be 1-64 letters, digits, '_' or '-'")
         job = Job(
             question=question,
             mode=resolved_mode,
             max_rounds=int(max_rounds or self.settings.research.max_rounds),
+            conversation_id=cid or f"conv_{uuid.uuid4().hex[:12]}",
         )
+        # earlier finished turns of this thread; the runner decides whether this question leans on them
+        job.history = self.store.conversation_turns(job.conversation_id, exclude_job_id=job.id, limit=3)
         self.jobs[job.id] = job
         self.store.save_job(job)
         emit = self.emit_factory(job.id)
@@ -235,8 +250,17 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
             body.get("question", ""),
             body.get("mode"),
             body.get("max_rounds"),
+            body.get("conversation_id"),
         )
-        return JSONResponse({"job_id": job.id, "status": job.status.value})
+        return JSONResponse({"job_id": job.id, "status": job.status.value, "conversation_id": job.conversation_id})
+
+    @app.get("/api/conversations/{conversation_id}")
+    async def get_conversation(conversation_id: str) -> Any:
+        """The finished turns of a thread, oldest first, so the UI can redraw it after a reload."""
+        if not CONVERSATION_ID_RE.fullmatch(conversation_id):
+            raise HTTPException(status_code=400, detail="bad conversation_id")
+        turns = store.conversation_turns(conversation_id, limit=50)
+        return {"conversation_id": conversation_id, "turns": [t.model_dump(mode="json") for t in turns]}
 
     @app.get("/api/jobs")
     async def list_jobs(limit: int = 50) -> Any:

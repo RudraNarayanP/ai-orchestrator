@@ -16,7 +16,15 @@ import ast
 import re
 from typing import Any, Iterable
 
-from backend.models import EscalationLevel, ProviderResponse, QuestionAnalysis, ResearchMode, StakesDomain
+from backend.models import (
+    ConversationTurn,
+    EscalationLevel,
+    ProviderResponse,
+    QuestionAnalysis,
+    ResearchMode,
+    StakesDomain,
+)
+from backend.research import memory
 
 # ------------------------------------------------------------------ level 0
 
@@ -175,19 +183,28 @@ def classify(
     mode: ResearchMode = ResearchMode.STANDARD,
     enabled: Iterable[str] = (),
     llm_stable_answer: str | None = None,
+    history: Iterable[ConversationTurn] = (),
 ) -> QuestionAnalysis:
     enabled = list(enabled)
     text = (question or "").strip()
     low = text.lower()
 
+    # Conversation memory: a follow-up is routed on what it follows, not on its
+    # (usually tiny) own text -- "and how did they do it?" inherits the stakes and
+    # time-sensitivity of the question before it.
+    turns = list(history or [])
+    prior = turns[-1] if turns else None
+    follow_up = memory.is_follow_up(text, prior) and not CHITCHAT_RE.search(text)
+    signal_text = f"{prior.question} {text}" if follow_up and prior else text
+
     computed, expr = try_arithmetic(text)
     entities = re.findall(r"\b([A-Z][A-Za-z0-9.'-]{2,})\b", text)
     proper_nouns = [e for e in entities if e not in ("I",)]
-    time_sensitive = bool(CURRENT_RE.search(text)) and not bool(re.search(r"\b(20\d{2})\b", low) and re.search(r"\b(history|past|in 20\d{2})\b", low))
+    time_sensitive = bool(CURRENT_RE.search(signal_text)) and not bool(re.search(r"\b(20\d{2})\b", low) and re.search(r"\b(history|past|in 20\d{2})\b", low))
 
     stakes = StakesDomain.NONE
     for domain, pattern in HIGH_STAKES.items():
-        if pattern.search(text):
+        if pattern.search(signal_text):
             stakes = domain
             break
     high_stakes = stakes != StakesDomain.NONE
@@ -208,14 +225,14 @@ def classify(
     for name, pattern in intents:
         if name == "arithmetic":
             continue
-        if pattern.search(text):
+        if pattern.search(signal_text):
             intent = name
             break
     if computed is not None:
         intent = "arithmetic"
 
     chatty = bool(CHITCHAT_RE.search(text) or OPINION_ASK_RE.search(text))
-    stable_knowledge = bool(STABLE_KNOWLEDGE_RE.search(text)) and not time_sensitive
+    stable_knowledge = bool(STABLE_KNOWLEDGE_RE.search(text)) and not time_sensitive and not follow_up
 
     analysis = QuestionAnalysis(
         question=text,
@@ -227,7 +244,12 @@ def classify(
         difficulty="high" if (high_stakes or text.count("?") > 2 or len(text.split()) > 45) else ("low" if len(text.split()) < 8 else "medium"),
         classifier_source="heuristic",
     )
-    analysis.capabilities = [name for name, pattern in CAPABILITY_PATTERNS.items() if pattern.search(text)]
+    analysis.capabilities = [name for name, pattern in CAPABILITY_PATTERNS.items() if pattern.search(signal_text)]
+    if follow_up and prior is not None:
+        analysis.follow_up = True
+        analysis.inherited_entities = memory.inherited_entities(prior)
+        analysis.standalone_question = memory.standalone_question(text, prior)
+        analysis.key_entities = list(dict.fromkeys(analysis.key_entities + analysis.inherited_entities))[:10]
     analysis.stakes = stakes
     analysis.high_stakes = high_stakes
     analysis.sub_questions = _sub_questions(text)

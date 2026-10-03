@@ -40,6 +40,7 @@ from backend.models import (
 )
 from backend.research import claims as claim_ops
 from backend.research import router
+from backend.research import memory
 from backend.research.prompts import angle_for, escalation_prompt, follow_up_prompt, research_prompt
 from backend.research.style import style_prompt
 from backend.verification.llm import Endpoint, LLMClient
@@ -128,7 +129,7 @@ class ResearchRunner:
 
         job.status = JobStatus.ANALYZING
         await self._emit("status", "classifying question", job=job)
-        analysis = await self._analyze(job.question, job.mode, enabled)
+        analysis = await self._analyze(job.question, job.mode, enabled, history=job.history)
         job.analysis = analysis
         job.level = analysis.starting_level
 
@@ -157,7 +158,7 @@ class ResearchRunner:
             # banter with no model configured: one provider, no research framing.
             primary = router.select_primary(analysis, enabled, self.health)
             if primary:
-                response = await self._ask(primary, job.question, 1, role="primary", needs_web=False)
+                response = await self._ask(primary, self._banter_prompt(job, analysis), 1, role="primary", needs_web=False)
                 if response and response.status.value == "completed":
                     job.status = JobStatus.COMPLETED
                     job.final = FinalAnswer(
@@ -216,6 +217,7 @@ class ResearchRunner:
             analysis=analysis,
             round_no=round_no,
             needs_web=analysis.needs_web_research,
+            history=job.history if analysis.follow_up else None,
         )
         response = await self._ask(primary, prompt, round_no, role="primary")
         responses: list[ProviderResponse] = [r for r in [response] if r]
@@ -408,10 +410,37 @@ class ResearchRunner:
 
     # ------------------------------------------------------------ components
 
-    async def _analyze(self, question: str, mode: ResearchMode, enabled: list[str]) -> Any:
+    @staticmethod
+    def _q(job: Job) -> str:
+        """The question as research should see it: a follow-up with its references resolved."""
+        analysis = job.analysis
+        if analysis is not None and getattr(analysis, "follow_up", False) and analysis.standalone_question:
+            return analysis.standalone_question
+        return job.question
+
+    @staticmethod
+    def _banter_prompt(job: Job, analysis: Any) -> str:
+        if getattr(analysis, "follow_up", False) and job.history:
+            return f"{memory.history_block(job.history)}\n\n{job.question}"
+        return job.question
+
+    async def _rewrite_follow_up(self, question: str, prior: Any) -> str | None:
+        """Ask the analysis model to resolve "they"/"it"; the heuristic rewrite stands if it can't."""
+        endpoint = self.analysis_endpoint
+        if not (endpoint and endpoint.enabled):
+            return None
+        try:
+            parsed, _reply = await LLMClient(endpoint).complete_json(memory.rewrite_messages(question, prior), temperature=0.0)
+        except Exception:  # noqa: BLE001 -- the heuristic rewrite is a fine fallback
+            return None
+        return memory.accept_rewrite((parsed or {}).get("standalone"), question)
+
+    async def _analyze(self, question: str, mode: ResearchMode, enabled: list[str], history: list[Any] | None = None) -> Any:
         hint: str | None = None
         endpoint = self.analysis_endpoint
-        if endpoint and endpoint.enabled and not _obviously_arithmetic(question):
+        prior = history[-1] if history else None
+        follow_up = memory.is_follow_up(question, prior)
+        if endpoint and endpoint.enabled and not follow_up and not _obviously_arithmetic(question):
             client = LLMClient(endpoint)
             parsed, reply = await client.complete_json(
                 [
@@ -422,7 +451,11 @@ class ResearchRunner:
             )
             if parsed and parsed.get("can_answer") and str(parsed.get("answer") or "").strip():
                 hint = str(parsed["answer"]).strip()
-        analysis = router.classify(question, mode=mode, enabled=enabled, llm_stable_answer=hint)
+        analysis = router.classify(question, mode=mode, enabled=enabled, llm_stable_answer=hint, history=history or ())
+        if analysis.follow_up and prior is not None:
+            rewritten = await self._rewrite_follow_up(question, prior)
+            if rewritten:
+                analysis.standalone_question = rewritten
         if hint:
             analysis.classifier_source = "llm"
         computed = analysis.starting_level == EscalationLevel.DIRECT and analysis.trivial and analysis.classifier_source == "heuristic"
@@ -484,7 +517,7 @@ class ResearchRunner:
         tasks = []
         for index, provider in enumerate(providers):
             prompt = escalation_prompt(
-                job.question,
+                self._q(job),
                 provider=provider,
                 primary=context["primary"],
                 established=context["established"],
@@ -524,7 +557,7 @@ class ResearchRunner:
             if not pool:
                 break
             provider = pool[index % len(pool)]
-            prompt = follow_up_prompt(job.question, follow_up)
+            prompt = follow_up_prompt(self._q(job), follow_up)
             tasks.append(self._ask(provider, prompt, round_no, role="targeted", escalation_reason=follow_up.reason))
         done = await asyncio.gather(*tasks, return_exceptions=True)
         return [item for item in done if isinstance(item, ProviderResponse)]
@@ -546,7 +579,7 @@ class ResearchRunner:
         search_adapter = self.adapters.get("search") if self.settings.providers.get("search") and self.settings.providers["search"].enabled else None
         evidence, trace = await build_pool(
             job_id=job.id,
-            question=job.question,
+            question=self._q(job),
             claims=claims,
             responses=responses,
             mode=job.mode,
@@ -862,7 +895,7 @@ class ResearchRunner:
         await self._emit("status", "adversarial verification (evidence, not votes)", round_no=round_no, job=job)
         return await self.verifier.verify(
             job_id=job.id,
-            question=job.question,
+            question=self._q(job),
             round_no=round_no,
             claims=claims,
             evidence=evidence,
@@ -884,7 +917,7 @@ class ResearchRunner:
         verifier = self.verifier or Verifier(endpoint, min_independent_sources=self.settings.research.min_independent_sources)
         report = verifier.deterministic(
             job_id=job.id,
-            question=job.question,
+            question=self._q(job),
             round_no=round_no,
             claims=claims,
             evidence=evidence,

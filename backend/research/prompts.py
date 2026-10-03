@@ -17,6 +17,8 @@ from __future__ import annotations
 import textwrap
 from typing import Any, Iterable
 
+from backend.research import memory
+
 RESPONSE_SCHEMA = """Answer using exactly these headings:
 
 DIRECT ANSWER
@@ -101,10 +103,14 @@ def research_prompt(
     focus: str | None = None,
     angle: str | None = None,
     needs_web: bool = True,
+    history: Any | None = None,
 ) -> str:
     """The prompt actually typed into a provider's own website."""
     parts: list[str] = []
     label = (provider or "").replace("_", " ").strip()
+
+    if history:
+        parts.append(memory.history_block(history))
 
     if focus:
         parts.append(

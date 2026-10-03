@@ -13,7 +13,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from backend.models import Job, JobEvent, ProviderStatus
+from backend.models import ConversationTurn, Job, JobEvent, ProviderStatus
+from backend.research import memory
 from backend.settings import Settings
 
 SCHEMA = """
@@ -72,7 +73,16 @@ class Store:
         self._conn = sqlite3.connect(str(self.path), check_same_thread=False, timeout=30)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Additive migrations for databases created by an older build."""
+        have = {row["name"] for row in self._conn.execute("PRAGMA table_info(jobs)").fetchall()}
+        for column, ddl in (("conversation_id", "TEXT"), ("confirmed_json", "TEXT")):
+            if column not in have:
+                self._conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} {ddl}")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS jobs_conversation ON jobs(conversation_id, created_at)")
 
     def close(self) -> None:
         self._conn.close()
@@ -84,14 +94,16 @@ class Store:
         self._conn.execute(
             """INSERT INTO jobs (id, question, mode, status, created_at, updated_at, finished_at, level,
                                  rounds_run, max_rounds, stop_reason, browser_sessions, verifier_calls,
-                                 final_json, analysis_json, plan_json, error, answer_text, confidence)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                 final_json, analysis_json, plan_json, error, answer_text, confidence,
+                                 conversation_id, confirmed_json)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(id) DO UPDATE SET status=excluded.status, updated_at=excluded.updated_at,
                  finished_at=excluded.finished_at, level=excluded.level, rounds_run=excluded.rounds_run,
                  stop_reason=excluded.stop_reason, browser_sessions=excluded.browser_sessions,
                  verifier_calls=excluded.verifier_calls, final_json=excluded.final_json,
                  analysis_json=excluded.analysis_json, plan_json=excluded.plan_json,
-                 error=excluded.error, answer_text=excluded.answer_text, confidence=excluded.confidence""",
+                 error=excluded.error, answer_text=excluded.answer_text, confidence=excluded.confidence,
+                  conversation_id=excluded.conversation_id, confirmed_json=excluded.confirmed_json""",
             (
                 job.id,
                 job.question,
@@ -112,6 +124,8 @@ class Store:
                 job.error,
                 (job.final.answer if job.final else None),
                 (job.final.confidence.value if job.final else None),
+                job.conversation_id,
+                json.dumps(turn.confirmed_claims, ensure_ascii=False) if (turn := memory.turn_from_job(job)) else None,
             ),
         )
         self._conn.commit()
@@ -162,7 +176,7 @@ class Store:
                 """INSERT INTO evidence (id, job_id, round, claim_id, url, title, domain, snippet, published,
                        tier, polarity, check_status, check_notes, origin, verbatim_excerpt, retrieved_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                   ON CONFLICT(id) DO UPDATE SET check_status=excluded.check_status,
+                   ON CONFLICT(id) DO UPDATE SET check_status=excluded.check_status, polarity=excluded.polarity,
                      check_notes=excluded.check_notes, verbatim_excerpt=excluded.verbatim_excerpt""",
                 (
                     ev.id, job.id, ev.round, ev.claim_id, ev.url, ev.title, ev.domain, ev.snippet, ev.published,
@@ -181,6 +195,8 @@ class Store:
                     json.dumps(dis.claim_ids, ensure_ascii=False), dis.resolution,
                 ),
             )
+        # reports have no natural key; rewrite them so repeated saves don't duplicate rows
+        self._conn.execute("DELETE FROM reports WHERE job_id=?", (job.id,))
         for report in job.reports:
             self._conn.execute(
                 "INSERT INTO reports (job_id, round, verdicts_json, report_json, raw_output) VALUES (?,?,?,?,?)",
@@ -218,11 +234,33 @@ class Store:
     def list_jobs(self, limit: int = 50) -> list[dict[str, Any]]:
         rows = self._conn.execute(
             "SELECT id, question, mode, status, created_at, finished_at, level, rounds_run, "
-            "browser_sessions, verifier_calls, answer_text, confidence, stop_reason "
+            "browser_sessions, verifier_calls, answer_text, confidence, stop_reason, conversation_id "
             "FROM jobs ORDER BY created_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def conversation_turns(self, conversation_id: str, *, exclude_job_id: str = "", limit: int = 3) -> list[ConversationTurn]:
+        """The most recent finished turns of a thread, oldest first."""
+        if not conversation_id:
+            return []
+        rows = self._conn.execute(
+            "SELECT id, question, answer_text, confidence, confirmed_json, finished_at, updated_at FROM jobs "
+            "WHERE conversation_id=? AND id<>? AND final_json IS NOT NULL ORDER BY created_at DESC LIMIT ?",
+            (conversation_id, exclude_job_id, limit),
+        ).fetchall()
+        turns = [
+            ConversationTurn(
+                job_id=row["id"],
+                question=row["question"] or "",
+                answer=row["answer_text"] or "",
+                confirmed_claims=json.loads(row["confirmed_json"] or "[]"),
+                confidence=row["confidence"] or "",
+                at=row["finished_at"] or row["updated_at"] or 0.0,
+            )
+            for row in rows
+        ]
+        return list(reversed(turns))
 
     def events_since(self, job_id: str, after: int = 0, limit: int = 2000) -> list[dict[str, Any]]:
         rows = self._conn.execute(

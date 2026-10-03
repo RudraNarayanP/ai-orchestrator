@@ -344,6 +344,18 @@ class VerifierReport(BaseModel):
     verifier_model: str | None = None
 
 
+class ConversationTurn(BaseModel):
+    """One earlier question in the same thread: what was asked, what we answered,
+    and the claims our own ledger confirmed -- never what the providers merely said."""
+
+    job_id: str
+    question: str
+    answer: str = ""
+    confirmed_claims: list[str] = Field(default_factory=list)
+    confidence: str = ""
+    at: float = 0.0
+
+
 class QuestionAnalysis(BaseModel):
     question: str
     intent: str = "factual"
@@ -374,6 +386,15 @@ class QuestionAnalysis(BaseModel):
 
     classifier_source: str = "heuristic"
     """heuristic | llm | user -- records how the routing decision was made"""
+
+    follow_up: bool = False
+    """True when the question only makes sense against an earlier turn of the thread"""
+
+    standalone_question: str | None = None
+    """The follow-up rewritten so it can be researched without the thread"""
+
+    inherited_entities: list[str] = Field(default_factory=list)
+    """Names carried over from the earlier turn that this question refers to"""
 
 
 class SufficiencyAssessment(BaseModel):
@@ -459,6 +480,10 @@ class FinalAnswer(BaseModel):
 class Job(BaseModel):
     id: str = Field(default_factory=lambda: new_id("job"))
     question: str
+    conversation_id: str | None = None
+    history: list[ConversationTurn] = Field(default_factory=list)
+    """Earlier turns of this conversation (oldest first), loaded when the job starts."""
+
     mode: ResearchMode = ResearchMode.STANDARD
     status: JobStatus = JobStatus.PENDING
     created_at: float = Field(default_factory=time.time)
