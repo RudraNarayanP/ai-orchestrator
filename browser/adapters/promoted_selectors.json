@@ -1,0 +1,81 @@
+{
+  "chatgpt": {
+    "input": {
+      "aria": [
+        "Chat with ChatGPT"
+      ],
+      "css": [
+        "#mobile-composer-prompt"
+      ],
+      "placeholders": [
+        "Ask ChatGPT"
+      ],
+      "verified": "probe",
+      "verified_at": "2026-10-03 07:13:36 (promoted from chatgpt_1790991824.json)"
+    },
+    "send": {
+      "aria": [
+        "Send message"
+      ],
+      "css": [],
+      "verified": "probe",
+      "verified_at": "2026-10-03 07:13:36 (promoted from chatgpt_1790991824.json)"
+    }
+  },
+  "gemini": {
+    "input": {
+      "aria": [
+        "Enter a prompt for Gemini"
+      ],
+      "css": [
+        "div[contenteditable=\"true\"][role=\"textbox\"]"
+      ],
+      "verified": "probe",
+      "verified_at": "2026-10-03 07:13:44 (promoted from gemini_1790991833.json)"
+    }
+  },
+  "google_ai": {
+    "input": {
+      "aria": [
+        "Ask anything"
+      ],
+      "css": [],
+      "placeholders": [
+        "Ask anything"
+      ],
+      "verified": "probe",
+      "verified_at": "2026-10-03 07:13:53 (promoted from google_ai_1790991842.json)"
+    }
+  },
+  "meta_ai": {
+    "input": {
+      "aria": [
+        "Ask Meta AI"
+      ],
+      "css": [],
+      "placeholders": [
+        "Ask Meta AI..."
+      ],
+      "verified": "probe",
+      "verified_at": "2026-10-03 07:14:16 (promoted from meta_ai_1790991864.json)"
+    },
+    "send": {
+      "aria": [
+        "Send"
+      ],
+      "css": [],
+      "verified": "probe",
+      "verified_at": "2026-10-03 07:14:16 (promoted from meta_ai_1790991864.json)"
+    }
+  },
+  "qwen": {
+    "input": {
+      "css": [],
+      "placeholders": [
+        "Ask Qwen"
+      ],
+      "verified": "probe",
+      "verified_at": "2026-10-03 07:14:44 (promoted from qwen_1790991894.json)"
+    }
+  }
+}

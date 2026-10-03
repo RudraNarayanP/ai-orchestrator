@@ -39,6 +39,8 @@ DENY_RE = re.compile(
 )
 BLOCK_BANNER_RE = re.compile(r"(are you a robot|unusual traffic|verify you are a human|captcha|access denied)", re.I)
 GENERATED_ID_RE = re.compile(r"(\d{5,}|[0-9a-f]{10,}|^:r\w+:?$|^radix-|^headlessui-)", re.I)
+LOGIN_PATH_RE = re.compile(r"/(sign[_-]?in|log[_-]?in|sign[_-]?up|register|auth|sso|oauth|accounts?/login)(/|$|\?)", re.I)
+CREDENTIAL_FIELD_RE = re.compile(r"e-?mail|phone|mobile number|password|passcode|username|user name|verification code|one-time|otp\b", re.I)
 COMPOSER_TAGS = {"textarea": 3, "div": 3, "p": 3, "span": 2, "input": 1}
 
 
@@ -80,6 +82,8 @@ def check_probe(probe: dict[str, Any], provider_url: str) -> list[str]:
     seen = observed.get("url_seen") or ""
     if provider_url and _host(seen) != _host(provider_url):
         problems.append(f"the probe landed on {_host(seen) or 'nothing'} but this provider is {_host(provider_url)}")
+    if LOGIN_PATH_RE.search(urlparse(seen).path or ""):
+        problems.append(f"the probe landed on a sign-in page ({urlparse(seen).path}) -- this provider does not answer anonymously right now; nothing to promote")
     banners = " ".join(str(b.get("text") or "") for b in observed.get("banners", []) or [])
     if BLOCK_BANNER_RE.search(banners + " " + str(observed.get("title") or "")):
         problems.append("the page showed a robot/access check -- complete it yourself in the window, then probe again")
@@ -123,6 +127,10 @@ def fieldsets_from_probe(observed: dict[str, Any]) -> tuple[dict[str, dict[str, 
     skipped: list[str] = []
 
     inputs = [i for i in observed.get("inputs", []) or [] if i.get("visible")]
+    credential = [i for i in inputs if i.get("type") == "password" or CREDENTIAL_FIELD_RE.search(" ".join(str(i.get(k) or "") for k in ("placeholder", "aria", "id", "name", "label")))]
+    if credential and len(credential) == len(inputs):
+        raise PromotionError("the only visible inputs are login fields (email/phone/password) -- never promoted as a composer")
+    inputs = [i for i in inputs if i not in credential]
     if not inputs:
         raise PromotionError(
             "the probe saw no visible composer -- you probably were not signed in. "

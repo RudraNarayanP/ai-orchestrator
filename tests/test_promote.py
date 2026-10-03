@@ -63,6 +63,30 @@ def test_composer_and_send_are_promoted_with_provenance(tmp_path):
     assert saved["chatgpt"]["input"]["verified"] == "probe" and result.written
 
 
+def test_a_sign_in_page_is_never_promoted(tmp_path):
+    """Regression: a live DeepSeek probe landed on /sign_in and its phone/email field was about to become the 'composer'."""
+    data = probe(observed={
+        "url_seen": "https://chatgpt.com/sign_in",
+        "inputs": [{"tag": "input", "placeholder": "Phone number / email address", "visible": True, "rect": {"w": 298, "h": 25}}],
+    })
+    with pytest.raises(PromotionError, match="sign-in page"):
+        run(tmp_path, data)
+
+
+def test_credential_fields_are_never_the_composer(tmp_path):
+    only_login = probe(observed={"inputs": [
+        {"tag": "input", "placeholder": "Email address", "visible": True, "rect": {"w": 300, "h": 30}},
+        {"tag": "input", "type": "password", "visible": True, "rect": {"w": 300, "h": 30}},
+    ]})
+    with pytest.raises(PromotionError, match="login fields"):
+        run(tmp_path, only_login)
+    mixed = probe(observed={"inputs": [
+        {"tag": "input", "placeholder": "Email address", "visible": True, "rect": {"w": 900, "h": 90}},
+        {"tag": "textarea", "id": "prompt-textarea", "placeholder": "Ask anything", "visible": True, "rect": {"w": 100, "h": 20}},
+    ]})
+    assert run(tmp_path, mixed, dry_run=True).promoted["input"]["css"] == ["#prompt-textarea"], "the bigger email field must lose to the real composer"
+
+
 def test_dry_run_writes_nothing(tmp_path):
     result = run(tmp_path, dry_run=True)
     assert result.promoted and not result.written and not (tmp_path / "promoted.json").exists()
