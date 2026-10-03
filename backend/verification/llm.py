@@ -191,6 +191,8 @@ def extract_json(text: str) -> dict[str, Any] | None:
     if not text:
         return None
     candidates: list[str] = []
+    # Reasoning models put their scratch work in <think> blocks, which may contain braces.
+    text = re.sub(r"<think>.*?</think>", " ", text, flags=re.S | re.I)
     stripped = text.strip()
     candidates.append(stripped)
     for fence in re.findall(r"```(?:json)?\s*(.+?)```", text, re.S | re.I):
@@ -199,6 +201,9 @@ def extract_json(text: str) -> dict[str, Any] | None:
     if obj:
         candidates.append(obj)
     arr = _balanced(stripped, "[", "]")
+    first_obj, first_arr = stripped.find("{"), stripped.find("[")
+    if arr and first_obj != -1 and first_obj < first_arr:
+        arr = None  # an array inside an (unparsable) object is a rescue case, not a bare list
     if arr:
         candidates.append(arr)
     for cand in candidates:
@@ -211,7 +216,10 @@ def extract_json(text: str) -> dict[str, Any] | None:
                 return parsed
             if isinstance(parsed, list):
                 return {"items": parsed}
-        # single-key rescue: {"claims": [ ... ]} with a broken tail
+    # Single-key rescue, only after every whole-object candidate has failed:
+    # {"claims": [ ... ]} with a broken tail. Doing it per candidate used to let a
+    # fenced reply be "rescued" down to its first array, dropping answer/confidence.
+    for cand in candidates:
         match = re.search(r'"([a-z_]+)"\s*:\s*(\[[\s\S]*\])', cand)
         if match:
             try:
