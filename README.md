@@ -4,13 +4,23 @@ Personal research system that asks the same question to several consumer AIs
 **through their real websites, in real browser windows**, then treats their answers
 as claims to be checked rather than votes to be counted.
 
-Internally it goes: classify → one primary researcher → open and read the sources →
-extract atomic claims → detect conflicts → escalate to parallel researchers only if
-that failed → adversarial verification → targeted follow-up on exactly the unresolved
-point → short answer.
+**The consumer AI chat sites are the researchers.** ChatGPT, Gemini, Google AI Mode,
+Copilot, Meta AI, Le Chat, Pi, Qwen and DeepSeek (Claude is left out by default; providers
+are pluggable in `browser/adapters/` and `config/settings.yaml`) each do their *own* web
+research when asked, and the prompt tells them to: use your own search, find the sources
+yourself, prefer primary ones, open them, and say which you actually opened. OmniBrain is
+the research director. A free OpenRouter model (or a local one) is only the curator: it
+reads the full transcripts and decides what is established, and never searches the web itself.
 
-Externally it says: **"Yes."** / **"No."** / **"I'm not sure, the sources disagree."** /
-**"I couldn't verify that reliably."** / **"I don't know."**
+Internally it goes: classify, then (trivial: answer locally, no browser, no model) the primary
+AI, a sufficiency check, a **same-conversation follow-up** with that same AI, and only if that
+leaves it unresolved, 2-3 independent AIs in parallel (each in its own conversation), then the
+curator over the full transcripts, which can send `RESEARCH_NEEDED` requests back to a named AI
+(in its existing conversation) until the answer is sufficient or a stop limit is reached.
+
+Externally it says: **"Yes — … ✅"** / **"No — … ❌"** / **"I'm not sure — the sources
+disagree."** / **"I couldn't verify that reliably."** / **"I don't know."** An emoji appears
+only at the very end of a confident answer, never on "I don't know", "I'm not sure" or "I couldn't verify".
 
 ---
 
@@ -228,21 +238,47 @@ shows evidence attachment is weak when providers return no links.
 ## How a question flows
 
 ```
-question
-  ↓  router.classify            arithmetic computed here, never asked; banter/creative
-  ↓                             answered as-is; legal/medical/financial/visa flagged high-stakes
-  ├─ level 0 DIRECT ──────────── answer. no browser, no verifier.
-  ↓
-  ├─ level 1 PRIMARY ─────────── one provider, tailored prompt, its own window
-  ↓                             claims → open every cited page → does it say that?
-  ↓                             independent search via HTTP → read those too
-  ├─ sufficient & uncontested ── answer. verifier skipped: it would add cost, not certainty.
-  ↓
-  ├─ partial success ─────────── research ONLY the open claims (level 2, targeted)
-  ├─ nothing established ─────── 2-5 independent researchers, each given the failure
-  ↓                             context, not a fresh copy of the question
-  ├─ level 3 DEEP ────────────── adversarial verifier → follow-ups → re-verify → stop
+question  (research id = job id; one conversation per AI per research id)
+  |  router.classify            arithmetic computed here, never asked; law/medicine/visa/
+  |                             admissions/finance/regulation flagged high-stakes
+  +- level 0 DIRECT ----------- answer. zero browser sessions, zero verifier calls.
+  |
+  +- PRIMARY AI --------------- NEW chat on that site; prompt: use your own web search, find
+  |                             and open primary sources, report OPENED vs MENTIONED ONLY
+  |                             claims -> audit the URLs the AI cited (OmniBrain opens them to
+  |                             check; it does not go looking for others)
+  +- sufficient, uncontested -- curate and answer. nothing else is asked.
+  |
+  +- FIRST ESCALATION --------- same AI, SAME conversation: re-investigate the specific
+  |                             claim, open the exact primary source, say whether the first
+  |                             answer was right, or "I CANNOT ESTABLISH THIS".
+  |                             A correction X -> Y is recorded (initial claim, follow-up
+  |                             result, reason, final position); it is not a failure.
+  +- SECOND ESCALATION -------- only if still unresolved: 2-3 other AIs in parallel, each in
+  |                             its own conversation, told to verify independently with
+  |                             their own search and not to agree for the sake of it
+  +- CURATOR (OpenRouter) ----- sees every prompt, follow-up, answer, correction and URL;
+                                emits RESEARCH_NEEDED {claim, reason, preferred researcher,
+                                instruction}; OmniBrain sends it (continuing that AI's thread)
+                                and loops until sufficient or the round limit
 ```
+
+Evidence convergence, not majority vote: are the sources independent, primary, do they
+support the exact claim, are they outdated, were they copied from one source, is a dissent
+a real contradiction or a misunderstanding. A citation keeps its link claim - evidence -
+source all the way into the final answer, together with whether the AI said it opened the
+page or only mentioned it.
+
+OmniBrain's own HTTP search / review-site discovery still exists but is **off by default**
+(`search.own_discovery: false`): leaving it on makes OmniBrain do the research itself.
+
+**Status of this architecture (2026-10-03):** the escalation order, thread isolation,
+self-correction records, RESEARCH_NEEDED loop and citation linkage are covered by offline
+tests with fake providers (`tests/test_architecture.py`, `tests/test_threads.py`) and the
+fixture-page browser tests. Not verified live: that every real site's URL changes to a
+per-conversation URL (a follow-up relies on staying in, or returning to, the same chat),
+and that every site follows the OPENED / MENTIONED ONLY labelling instruction. A site that
+does not label leaves the citation as "opening not confirmed".
 
 Stopping condition is *remaining uncertainty is no longer material* -- never "a model
 sounded confident", never "two models agreed", never "we ran out of tokens".
