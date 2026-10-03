@@ -47,6 +47,29 @@
       "verified_at": "2026-10-03 07:13:53 (promoted from google_ai_1790991842.json)"
     }
   },
+  "grok": {
+    "input": {
+      "aria": [
+        "Ask Grok anything"
+      ],
+      "css": [],
+      "verified": "probe",
+      "verified_at": "2026-10-03 07:50:11 (promoted from grok_1790994022.json)"
+    },
+    "send": {
+      "aria": [
+        "Submit"
+      ],
+      "css": [
+        "button[data-testid=\"chat-submit\"]"
+      ],
+      "testids": [
+        "chat-submit"
+      ],
+      "verified": "probe",
+      "verified_at": "2026-10-03 07:50:11 (promoted from grok_1790994022.json)"
+    }
+  },
   "meta_ai": {
     "input": {
       "aria": [
