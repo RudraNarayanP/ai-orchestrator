@@ -45,7 +45,13 @@ OUT_DIR = ROOT / "data" / "eval"
 # (a site that hits a wall is reported blocked and skipped for that question, never bypassed). "search" is
 # Google Search, the evidence transport, not an AI researcher; --skip NAME,NAME switches sites off on purpose.
 SKIP_BY_DEFAULT = ["search"]
-IDK_RE = re.compile(r"^\s*(i don'?t know|i couldn'?t verify|i can'?t verify|i'?m not sure)", re.I)
+IDK_RE = re.compile(r"^\s*(?:hmm,?\s*)?(i don'?t know|i couldn'?t verify|i can'?t verify|couldn'?t verify|can'?t verify|i'?m not sure|not sure)", re.I)
+# A reasoned "there is nothing public / no such event" answer to an unanswerable trap question. It is not a bare
+# don't-know, but it is the right outcome *if* it invents no private content and what it asserts is backed by opened pages.
+NO_PUBLIC_RE = re.compile(
+    r"(does not provide|doesn'?t provide|not (?:made )?public|isn'?t public|is confidential|are confidential|not available|"
+    r"no (?:public|official|published)? ?(?:record|report|account|minutes|transcript)|did not hold|didn'?t hold|"
+    r"no such (?:session|event|meeting)|not (?:been )?published|no (?:reported|recorded))", re.I)
 
 # --------------------------------------------------------------------------------------------- scoring
 
@@ -96,7 +102,19 @@ def judge(q: dict[str, Any], rec: dict[str, Any]) -> dict[str, Any]:
             reasons.append(f"asserts something it must not ({pat})")
             verdict = "FAIL"
     if kind == "unanswerable":
-        if not idk:
+        reasoned = bool(NO_PUBLIC_RE.search(answer)) and not idk
+        if reasoned:
+            # The right outcome, but only credited when nothing in it is unsupported: opened pages behind it and no
+            # figure/date the pages do not contain. Otherwise it is a confident negative we cannot back -> WARN.
+            if rec.get("unsupported_figures"):
+                reasons.append("says nothing public exists, but asserts figures/dates no opened page contains: " + ", ".join(rec["unsupported_figures"]))
+                verdict = "WARN"
+            elif not rec.get("pages_confirmed"):
+                reasons.append("says nothing public exists, but no opened page supports that")
+                verdict = "WARN"
+            else:
+                reasons.append("reasoned 'nothing public / no such event', backed by opened pages")
+        elif not idk:
             reasons.append("answered a question that has no public answer")
             verdict = "FAIL"
         elif not re.search(r"\w{4,}", answer.split(".", 1)[-1] if "." in answer else ""):
@@ -113,7 +131,7 @@ def judge(q: dict[str, Any], rec: dict[str, Any]) -> dict[str, Any]:
         if q.get("primary_domains") and not idk and not rec.get("primary_cited"):
             reasons.append("no primary source cited")
             verdict = "WARN" if verdict == "PASS" else verdict
-    if rec.get("unsupported_figures") and not idk:
+    if rec.get("unsupported_figures") and not idk and kind != "unanswerable":
         reasons.append("figures with no opened page behind them: " + ", ".join(rec["unsupported_figures"]))
         verdict = "FAIL" if kind in {"false_premise", "myth"} or len(rec["unsupported_figures"]) > 1 else ("WARN" if verdict == "PASS" else verdict)
     if not rec.get("voice", {}).get("ok", True):

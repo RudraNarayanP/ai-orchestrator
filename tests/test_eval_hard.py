@@ -109,3 +109,21 @@ def test_a_computed_level_zero_answer_is_not_flagged_for_having_no_pages():
     snap = {"final": {"answer": "4"}, "browser_sessions": 0, "verifier_calls": 0, "stop_reason": "question answered at level 0; no investigation earned", "evidence": []}
     rec = eval_hard.analyse(q, snap, 1.0)
     assert rec["unsupported_figures"] == [] and rec["judgement"]["verdict"] == "PASS" and rec["browser_sessions"] == 0
+
+# ---- the two "unanswerable" trap questions, judged on what the live answers actually were (eval_20261004_000036)
+def test_a_reasoned_nothing_public_answer_backed_by_pages_passes_but_a_confident_negative_with_unbacked_figures_only_warns():
+    uq = q(kind="unanswerable", primary_domains=["nature.com"], expect={"must_match": ["not public"]})
+    ev1 = ev("https://www.nature.com/articles/d41586-024-01463-0", "nature.com", "the reviewers reports are not published with the article")
+    good = eval_hard.analyse(uq, snapshot("The published Nature article does not provide the reviewers' reports.", evidence=[ev1], sources=[ev1["url"]]), 3)
+    assert good["judgement"]["verdict"] == "PASS", good["judgement"]
+    unbacked = eval_hard.analyse(uq, snapshot("The Rada did not hold a plenary session on 29 September 2026, and none of the committee days were closed.",
+                                              evidence=[ev("https://unn.ua/x", "unn.ua", "plenary sessions suspended until October 13")], sources=["https://unn.ua/x"]), 3)
+    assert unbacked["judgement"]["verdict"] == "WARN" and "29" in " ".join(unbacked["judgement"]["reasons"]), unbacked["judgement"]
+    nothing_opened = eval_hard.analyse(uq, snapshot("There is no public record of that."), 3)
+    assert nothing_opened["judgement"]["verdict"] == "WARN"
+
+
+def test_invented_private_content_still_fails_and_the_new_couldnt_verify_wording_counts_as_idk():
+    uq = q(kind="unanswerable", expect={"must_match": ["don't know"]})
+    assert eval_hard.analyse(uq, snapshot("Reviewer 2 wrote that the training data was leaked."), 2)["judgement"]["verdict"] == "FAIL"
+    assert eval_hard.analyse(uq, snapshot("Couldn't verify that one. Nothing published covers it."), 2)["judgement"]["verdict"] == "PASS"
