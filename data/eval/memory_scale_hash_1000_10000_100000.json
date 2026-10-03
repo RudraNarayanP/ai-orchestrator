@@ -1,0 +1,78 @@
+{
+ "embedder": "hash-v1",
+ "floor": 0.22,
+ "sizes": {
+  "1000": {
+   "cold_first_query_ms": 13.8,
+   "warm_p50_ms": 3.99,
+   "warm_p95_ms": 6.17,
+   "general_question_p50_ms": 0.08,
+   "avg_candidates": 68.9,
+   "avg_final_hits": 0.61,
+   "recall": 0.389,
+   "MRR": 0.375,
+   "precision_of_returned": 0.306,
+   "general_suppressed": 1.0,
+   "distractor_suppressed": 1.0,
+   "avg_injected_tokens": 5.0,
+   "stage_ms": {
+    "understand_ms": 0.14,
+    "vector_ms": 0.22,
+    "fts_ms": 0.28,
+    "hydrate_ms": 1.14,
+    "score_ms": 1.21
+   },
+   "db_MB": 2.5,
+   "ram_matrix_MB": 1.5,
+   "build_s": 0.1
+  },
+  "10000": {
+   "cold_first_query_ms": 88.0,
+   "warm_p50_ms": 5.19,
+   "warm_p95_ms": 12.88,
+   "general_question_p50_ms": 0.082,
+   "avg_candidates": 78.3,
+   "avg_final_hits": 0.67,
+   "recall": 0.389,
+   "MRR": 0.375,
+   "precision_of_returned": 0.278,
+   "general_suppressed": 1.0,
+   "distractor_suppressed": 0.875,
+   "avg_injected_tokens": 5.7,
+   "stage_ms": {
+    "understand_ms": 0.16,
+    "vector_ms": 0.76,
+    "fts_ms": 1.71,
+    "hydrate_ms": 1.76,
+    "score_ms": 1.38
+   },
+   "db_MB": 23.7,
+   "ram_matrix_MB": 15.4,
+   "build_s": 0.7
+  },
+  "100000": {
+   "cold_first_query_ms": 1688.2,
+   "warm_p50_ms": 17.63,
+   "warm_p95_ms": 214.03,
+   "general_question_p50_ms": 0.178,
+   "avg_candidates": 80.0,
+   "avg_final_hits": 0.72,
+   "recall": 0.389,
+   "MRR": 0.375,
+   "precision_of_returned": 0.278,
+   "general_suppressed": 1.0,
+   "distractor_suppressed": 0.875,
+   "avg_injected_tokens": 6.6,
+   "stage_ms": {
+    "understand_ms": 0.28,
+    "vector_ms": 7.65,
+    "fts_ms": 51.52,
+    "hydrate_ms": 5.1,
+    "score_ms": 2.96
+   },
+   "db_MB": 237.9,
+   "ram_matrix_MB": 153.6,
+   "build_s": 17.4
+  }
+ }
+}
