@@ -31,6 +31,7 @@ from backend.models import (
     VerifierReport,
     WebResearchStatus,
 )
+from backend.research.router import addresses_question
 from backend.research.style import (
     ANSWER_CONTRACT,
     BANNED_PHRASES,
@@ -301,7 +302,7 @@ class Verifier:
         report.unresolved = [
             f"verifier model unavailable ({reason}); verdicts come from the evidence ledger, not from a language model"
         ]
-        best = self._best_supported(claims, verdicts, evidence)
+        best = self._best_supported(claims, verdicts, evidence, question)
         report.confidence = best["confidence"]
         report.answer = best["answer"]
         report.why = best["why"]
@@ -504,7 +505,7 @@ class Verifier:
             )
         return out[:6]
 
-    def _best_supported(self, claims: list[Claim], verdicts: list[ClaimVerdict], evidence: list[Evidence]) -> dict[str, Any]:
+    def _best_supported(self, claims: list[Claim], verdicts: list[ClaimVerdict], evidence: list[Evidence], question: str = "") -> dict[str, Any]:
         ranked = sorted(
             verdicts,
             key=lambda v: (
@@ -514,6 +515,11 @@ class Verifier:
             reverse=True,
         )
         good = [v for v in ranked if v.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED}]
+        if question and good and not any(addresses_question(question, v.claim) for v in good):
+            off_point = True
+            good = []
+        else:
+            off_point = False
         contested = [v for v in ranked if v.verdict == ClaimStatus.CONTESTED]
         refuted = [v for v in ranked if v.verdict == ClaimStatus.REFUTED]
         urls = [u for v in good for u in v.strong_evidence]
@@ -567,11 +573,15 @@ class Verifier:
             caveats = ["Independent sources disagree and neither side is clearly better documented."]
             sources = [Citation(url=u, title=by_url[u].title, published=by_url[u].published) for u in list(dict.fromkeys(urls)) if u in by_url][:6]
         else:
-            answer = "I don't know."
+            answer = (
+                "I don't know. The pages I opened don't answer this question directly, so I won't guess."
+                if off_point
+                else "I don't know. I couldn't confirm an answer from any page I opened, so I won't guess."
+            )
             confidence = Confidence.NONE
             why = ""
             disagreement = None
-            caveats = ["Nothing we could independently confirm supports any of the claims put forward."]
+            caveats = []
         return {"answer": answer, "why": why, "disagreement": disagreement, "confidence": confidence, "sources": sources, "caveats": caveats}
 
     # ---------------------------------------------------------------- helpers

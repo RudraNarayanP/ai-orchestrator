@@ -337,6 +337,34 @@ def off_topic(question: str, answer: str) -> bool:
     return len(content) >= 4 and not any(w in a for w in content)
 
 
+_ASK_STOP = _TOPIC_STOP | {"university", "people", "number", "being", "explain", "describe", "define", "defines", "guidance", "students", "please", "known", "using", "regarding", "current", "currently", "year", "years"}
+
+
+def addresses_question(question: str, claim: str) -> bool:
+    """Does this claim speak to what was asked, not merely to the same subject?
+
+    Live eval defect: asked for the share of Manchester PhD vivas that failed, the
+    model-free path stated, with high confidence, that the regulations were last
+    modified on a given date. It was well sourced and beside the point. A claim is on
+    point if it shares a number or an asked-for content word (not a proper name) with
+    the question; a question with no such words accepts everything.
+    """
+    q = question or ""
+    c = (claim or "").lower()
+    words = re.findall(r"[A-Za-z][A-Za-z'-]+", q)
+    asked = [
+        w.lower()
+        for i, w in enumerate(words)
+        if len(w) >= 5 and w.lower() not in _ASK_STOP and not (i > 0 and w[0].isupper())
+    ]
+    figures = set(re.findall(r"\b\d{2,}\b", q))
+    if not asked and not figures:
+        return True
+    if any(f in c for f in figures):
+        return True
+    return any(w[:5] in c for w in asked)
+
+
 def is_failure_phrase(text: str) -> list[str]:
     """Section 4: an admitted inability is a routing signal, not a shrug."""
     patterns = [

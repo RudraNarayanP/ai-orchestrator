@@ -41,3 +41,29 @@ async def test_a_stale_reply_is_dropped_before_it_reaches_the_ledger(settings, n
     assert gem and all(r.status == ProviderStatus.FAILED and (r.error or "").startswith("off_topic") for r in gem)
     assert all(not r.answer_text for r in gem)
     assert not any("Employment Rights" in c.claim for c in job.claims)
+
+def test_addresses_question_wants_the_asked_attribute_not_just_the_same_subject():
+    from backend.research.router import addresses_question
+
+    q = "What percentage of PhD vivas at the University of Manchester ended in outright failure last year?"
+    assert not addresses_question(q, "The University of Manchester's current PhD regulations were last modified on 5 August 2026.")
+    assert addresses_question(q, "In 2025, 3 percent of Manchester PhD vivas ended in outright failure.")
+    assert addresses_question("When was the Eiffel Tower completed and how tall is it?", "The tower was completed on 31 March 1889.")
+
+
+def test_model_free_answer_says_dont_know_when_the_only_supported_claims_are_beside_the_point():
+    from backend.models import ClaimStatus, ClaimVerdict, Confidence, Evidence, SourceCheckStatus, SourceTier
+    from backend.verification.llm import Endpoint
+    from backend.verification.verifier import Verifier
+
+    verifier = Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)
+    url = "https://www.manchester.ac.uk/regs"
+    ev = Evidence(job_id="j", claim_id="c1", url=url, domain="www.manchester.ac.uk", tier=SourceTier.GOVERNMENT, check_status=SourceCheckStatus.CONFIRMED)
+    verdict = ClaimVerdict(claim_id="c1", claim="The University of Manchester's PhD regulations were last modified on 5 August 2026.",
+                           verdict=ClaimStatus.SUPPORTED, confidence=Confidence.HIGH, reasoning="r", strong_evidence=[url])
+    q = "What percentage of PhD vivas at the University of Manchester ended in outright failure last year?"
+    best = verifier._best_supported([], [verdict], [ev], q)
+    assert best["answer"].startswith("I don't know.") and "won't guess" in best["answer"]
+    assert best["confidence"] == Confidence.NONE and not best["sources"]
+    # without the question the old behaviour is unchanged
+    assert verifier._best_supported([], [verdict], [ev])["answer"].startswith("The University of Manchester")

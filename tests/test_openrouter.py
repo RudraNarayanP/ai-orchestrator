@@ -175,3 +175,18 @@ def test_omnibrain_config_points_the_loader_at_another_file(tmp_path, monkeypatc
     alt.write_text("research:\n  max_rounds: 1\n", encoding="utf-8")
     monkeypatch.setenv("OMNIBRAIN_CONFIG", str(alt))
     assert settings_module.load_settings().research.max_rounds == 1
+
+
+async def test_json_cut_off_by_the_token_limit_is_retried_with_more_room(fake_openai):
+    cut = {"status": 200, "body": {"choices": [{"finish_reason": "length", "message": {"content": '{"verdicts": [{"claim_id": "a", "verdict": "sup'}}]}}
+    fake_openai.script(cut, '{"verdicts": [], "answer": "ok"}')
+    parsed, reply = await LLMClient(endpoint(fake_openai)).complete_json(MSG)
+    assert parsed == {"verdicts": [], "answer": "ok"}
+    first, second = fake_openai.requests[0], fake_openai.requests[1]
+    assert second["max_tokens"] > first["max_tokens"], "the retry must allow a longer reply"
+
+
+async def test_complete_json_does_not_retry_when_the_reply_was_not_truncated(fake_openai):
+    fake_openai.script("not json at all")
+    parsed, _reply = await LLMClient(endpoint(fake_openai)).complete_json(MSG)
+    assert parsed is None and len(fake_openai.requests) == 1

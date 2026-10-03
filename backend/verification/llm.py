@@ -37,6 +37,8 @@ class LLMReply:
     status: int = 0
     fatal: bool = False
     """True when no other model can help (bad key, forbidden, server unreachable)."""
+    truncated: bool = False
+    """The model stopped because it hit the token limit, so its text is cut off."""
 
 
 class LLMUnavailable(RuntimeError):
@@ -179,6 +181,7 @@ class LLMClient:
                         model=model,
                         usage=data.get("usage"),
                         status=200,
+                        truncated=bool(text.strip()) and choice.get("finish_reason") == "length",
                     )
             except httpx.TimeoutException:
                 last_error = f"timeout after {self.endpoint.timeout_s}s"
@@ -195,7 +198,15 @@ class LLMClient:
         reply = await self.complete(messages, temperature=temperature)
         if not reply.ok:
             return None, reply
-        return extract_json(reply.text), reply
+        parsed = extract_json(reply.text)
+        if parsed is None and reply.truncated:
+            # Live: a verdict list for ~25 claims ran past max_tokens, the JSON was cut off, and the run
+            # fell back to the model-free path. Ask once more with room to finish.
+            bigger = min(8192, max(self.endpoint.max_tokens * 2, 4096))
+            again = await self.complete(messages, temperature=temperature, max_tokens=bigger)
+            if again.ok:
+                return extract_json(again.text), again
+        return parsed, reply
 
     async def list_models(self) -> list[str]:
         if not self.endpoint.base_url:
