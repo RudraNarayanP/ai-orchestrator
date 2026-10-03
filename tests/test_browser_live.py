@@ -166,7 +166,7 @@ async def test_second_turn_does_not_reread_the_previous_answer(adapter):
     first = await adapter.ask("job3", "question one", 1)
     assert "announced on 14 May 2026" in first.answer_text
 
-    second = await adapter.ask("job3", "question two", 2)
+    second = await adapter.ask("job3", "question two", 2, continue_thread=True)  # same research, same conversation
     # the fixture's second answer is a correction; the first must not bleed through
     assert "549" in second.answer_text
     assert "announced on 14 May 2026 at a price" not in second.answer_text, "captured the previous turn"
