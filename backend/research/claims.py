@@ -479,6 +479,41 @@ def dedupe(claims: list[Claim]) -> list[Claim]:
     return merged
 
 
+def reconcile_with_prior(new: list[Claim], prior: list[Claim]) -> list[Claim]:
+    """Keep a claim's identity across rounds even when a model rewords it.
+
+    Ids are content-addressed, which only holds for the deterministic extractor. A model re-extracting the same
+    answer in round 2 phrases the same fact differently, gets a new id, and the evidence gathered in round 1
+    silently detaches (live run: 12 evidence rows, 7 claims, zero matches -> "No claim survived the ledger").
+    A new claim that says the same thing as a prior one (same figures, years and polarity, similar words)
+    adopts the prior id and wording; genuinely different figures never merge.
+    """
+    prior_ids = {p.id for p in prior}
+    out: list[Claim] = []
+    for claim in new:
+        if claim.id in prior_ids:
+            out.append(claim)
+            continue
+        sig = signature(claim.claim)
+        match = None
+        best = 0.0
+        for p in prior:
+            psig = signature(p.claim)
+            if sig["polarity"] != psig["polarity"] or sig["numbers"] != psig["numbers"] or sig["years"] != psig["years"] or sig["dates"] != psig["dates"]:
+                continue
+            score = similarity(sig, psig)
+            if score >= 0.5 and score > best:
+                match, best = p, score
+        if match is not None:
+            adopted = claim.model_copy(deep=True)
+            adopted.id, adopted.claim, adopted.round = match.id, match.claim, match.round
+            adopted.topic = match.topic or adopted.topic
+            out.append(adopted)
+        else:
+            out.append(claim)
+    return dedupe(out)
+
+
 CONTRADICTION_KIND = "contradiction"
 
 

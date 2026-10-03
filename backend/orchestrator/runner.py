@@ -644,6 +644,7 @@ class ResearchRunner:
             batch_size=self.settings.research.claim_batch_size,
             question=job.question,
         )
+        extracted = claim_ops.reconcile_with_prior(extracted, list(job.claims or []))
         job.claims = extracted
         return extracted
 

@@ -244,6 +244,27 @@ def test_self_narration_and_subjectless_claims_are_dropped_for_a_named_product()
     assert claim_ops.keep_anchored(pairs, []) == pairs
 
 
+def test_a_reworded_claim_keeps_its_id_so_earlier_evidence_stays_attached():
+    """Live run with a model extractor: round 2 re-extracted the same facts in other words, every claim got a new
+    id, and 12 confirmed pages were orphaned -- the answer fell to 'No claim survived the evidence ledger'."""
+    prior = [
+        Claim(id="clm_old1", job_id="j", claim="The Eiffel Tower's construction was completed on March 31, 1889.", provider_sources=["chatgpt"]),
+        Claim(id="clm_old2", job_id="j", claim="The Eiffel Tower's current height is 330 metres including antennas.", provider_sources=["chatgpt"]),
+    ]
+    new = [
+        Claim(id="clm_new1", job_id="j", claim="Construction of the Eiffel Tower was completed on March 31, 1889.", provider_sources=["gemini"]),
+        Claim(id="clm_new2", job_id="j", claim="The Eiffel Tower's height today is 330 metres including its antennas.", provider_sources=["gemini"]),
+        Claim(id="clm_new3", job_id="j", claim="The Eiffel Tower's construction was completed on March 30, 1889.", provider_sources=["gemini"]),
+    ]
+    out = claim_ops.reconcile_with_prior(new, prior)
+    ids = {c.claim: c.id for c in out}
+    assert ids["The Eiffel Tower's construction was completed on March 31, 1889."] == "clm_old1"
+    assert ids["The Eiffel Tower's current height is 330 metres including antennas."] == "clm_old2"
+    assert ids["The Eiffel Tower's construction was completed on March 30, 1889."] == "clm_new3", "different figures never merge"
+    merged = next(c for c in out if c.id == "clm_old1")
+    assert set(merged.provider_sources) == {"gemini"} or set(merged.provider_sources) >= {"gemini"}
+
+
 def test_malformed_arithmetic_is_refused_not_evaluated():
     for evil in ["__import__('os').system('calc')", "1; import socket", "open('C:/Windows/win.ini').read()"]:
         computed, _ = router.try_arithmetic(evil)
