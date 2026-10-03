@@ -132,6 +132,7 @@ class SearchAdapter(ChatAdapter):
         stable = 0
         last_count = -1
         while time.time() < deadline:
+            self._check_cancel()
             try:
                 got = await self._call(page, "harvestResults", self._sel_dict, self.settings.search.max_results * 2)
             except DOMUnavailable:
@@ -151,7 +152,7 @@ class SearchAdapter(ChatAdapter):
                 got = got or {}
                 got["items"] = []
                 return got
-            await asyncio.sleep(0.5)
+            await self._sleep(0.5)
         return best
 
     @staticmethod

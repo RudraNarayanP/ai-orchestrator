@@ -40,6 +40,7 @@ from backend.models import (
 )
 from backend.research import claims as claim_ops
 from backend.research import router
+from backend.cancel import CancelToken
 from backend.evidence.pool import browser_fetch_factory
 from backend.evidence.reviews import caveat_lines as review_caveats
 from backend.evidence.reviews import gather_reviews, subject_for
@@ -96,6 +97,7 @@ class ResearchRunner:
         verifier: Verifier | None = None,
         analysis_endpoint: Endpoint | None = None,
         store: Any = None,
+        cancel: CancelToken | None = None,
     ) -> None:
         self.settings = settings
         self.adapters = adapters
@@ -106,6 +108,10 @@ class ResearchRunner:
         self.analysis_endpoint = analysis_endpoint
         self.store = store
         self._sem = asyncio.Semaphore(max(1, settings.research.max_workers))
+        self.cancel = cancel or CancelToken()
+        for adapter in adapters.values():
+            if hasattr(adapter, "cancel_token"):
+                adapter.cancel_token = self.cancel
 
     # ------------------------------------------------------------------ entry
 
@@ -424,6 +430,7 @@ class ResearchRunner:
 
     async def _gather_reviews(self, job: Job, analysis: Any) -> None:
         """Product/service questions: what owners say, kept apart from the fact ledger (spec 8)."""
+        self.cancel.raise_if_cancelled()
         if (
             job.reviews is not None
             or getattr(analysis, "intent", "") != "product"
@@ -499,11 +506,13 @@ class ResearchRunner:
         adapter = self.adapters.get(provider)
         if adapter is None:
             return None
+        self.cancel.raise_if_cancelled()
         async with self._sem:
             await self._emit("provider", f"{provider}: opening dedicated window ({role})", provider=provider, round_no=round_no)
             try:
                 response = await adapter.ask("job", prompt, round_no, emit=self._adapter_emit)
             except Exception as exc:  # noqa: BLE001
+                self.cancel.raise_if_cancelled()
                 response = ProviderResponse(id=f"resp_err_{provider}_{round_no}", job_id="", round=round_no, provider=provider, prompt=prompt)
                 response.status = ProviderStatus.FAILED
                 response.error = f"{type(exc).__name__}: {exc}"
@@ -586,6 +595,7 @@ class ResearchRunner:
         return [item for item in done if isinstance(item, ProviderResponse)]
 
     async def _extract(self, responses: list[ProviderResponse], job: Job) -> list[Claim]:
+        self.cancel.raise_if_cancelled()
         job.status = JobStatus.EXTRACTING
         await self._emit("status", "extracting atomic claims", round_no=job.active_round, job=job)
         extracted = await claim_ops.extract_claims(
@@ -598,6 +608,7 @@ class ResearchRunner:
         return extracted
 
     async def _pool(self, job: Job, claims: list[Claim], responses: list[ProviderResponse], round_no: int) -> tuple[list[Evidence], dict[str, Any]]:
+        self.cancel.raise_if_cancelled()
         await self._emit("status", "opening cited sources and gathering independent evidence", round_no=round_no, job=job)
         search_adapter = self.adapters.get("search") if self.settings.providers.get("search") and self.settings.providers["search"].enabled else None
         evidence, trace = await build_pool(
@@ -617,6 +628,7 @@ class ResearchRunner:
         return evidence, trace
 
     async def _disagreements(self, job: Job, claims: list[Claim], round_no: int) -> list[Disagreement]:
+        self.cancel.raise_if_cancelled()
         conflicts = claim_ops.find_contradictions(claims)
         existing = {d.topic for d in job.disagreements}
         found: list[Disagreement] = []
@@ -911,6 +923,7 @@ class ResearchRunner:
         disagreements: list[Disagreement],
         round_no: int,
     ) -> VerifierReport:
+        self.cancel.raise_if_cancelled()
         if self.verifier is None:
             endpoint = Endpoint.from_config(self.settings.verifier)
             self.verifier = Verifier(endpoint, min_independent_sources=self.settings.research.min_independent_sources, deep=self.settings.verifier.deep_verification)

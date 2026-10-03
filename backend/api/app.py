@@ -22,6 +22,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from backend.browser.engine import BrowserEngine
+from backend.cancel import CancelToken
 from backend.models import (
     EscalationLevel,
     Job,
@@ -82,6 +83,7 @@ class JobManager:
         self.engine: BrowserEngine | None = None
         self.jobs: dict[str, Job] = {}
         self.tasks: dict[str, asyncio.Task] = {}
+        self.cancels: dict[str, CancelToken] = {}
         self._lock = asyncio.Lock()
         self._queue: asyncio.Semaphore = asyncio.Semaphore(1)
         self.health: dict[str, str] = {}
@@ -135,6 +137,7 @@ class JobManager:
         # earlier finished turns of this thread; the runner decides whether this question leans on them
         job.history = self.store.conversation_turns(job.conversation_id, exclude_job_id=job.id, limit=3)
         self.jobs[job.id] = job
+        self.cancels[job.id] = CancelToken()
         self.store.save_job(job)
         emit = self.emit_factory(job.id)
         await emit("status", f"queued: {question[:90]}")
@@ -154,6 +157,7 @@ class JobManager:
                     bus=_Bus(emit),
                     health=self.store.health() or None,
                     analysis_endpoint=endpoint_for(self.settings, "analysis"),
+                    cancel=self.cancels.setdefault(job.id, CancelToken()),
                 )
                 await emit("status", f"starting with {len(adapters)} enabled providers")
                 await runner.run(job)
@@ -177,6 +181,11 @@ class JobManager:
     async def cancel(self, job_id: str) -> bool:
         task = self.tasks.get(job_id)
         if task and not task.done():
+            # flag first: adapters and the runner stop at their next checkpoint and the
+            # adapter closes its tab; task.cancel() then interrupts whatever is awaiting
+            token = self.cancels.get(job_id)
+            if token is not None:
+                token.cancel()
             task.cancel()
             return True
         return False

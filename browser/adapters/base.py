@@ -25,6 +25,7 @@ from dataclasses import asdict
 from typing import Any, Awaitable, Callable
 
 from backend.browser.engine import BrowserEngine
+from backend.cancel import CancelToken, JobCancelled
 from backend.models import Citation, ProviderResponse, ProviderStatus, new_id
 from backend.settings import ProviderConfig, Settings
 from browser.adapters.dom_library import DOM_LIBRARY_JS
@@ -99,9 +100,27 @@ class ChatAdapter:
         self._sel_dict = asdict(self.sel)
         self._pages_with_library: set[int] = set()
         self._prompt_sent = False
+        self.cancel_token: CancelToken | None = None  # shared with the job; set by the runner
         self.vision_client = None  # tests inject a scripted client; otherwise built from settings.vision
 
     # ---------------------------------------------------------------- plumbing
+
+    def _check_cancel(self) -> None:
+        if self.cancel_token is not None:
+            self.cancel_token.raise_if_cancelled()
+
+    async def _sleep(self, seconds: float) -> None:
+        """Sleep that a cancelled job cuts short."""
+        if self.cancel_token is not None:
+            await self.cancel_token.sleep(seconds)
+        else:
+            await asyncio.sleep(seconds)
+
+    async def _close_tab_on_cancel(self) -> None:
+        try:
+            await self.engine.close_tab(self.provider)
+        except Exception:  # noqa: BLE001 -- cancelling must not raise anything new
+            pass
 
     async def _page(self, fresh: bool = False):
         url = self.cfg.new_chat_url or self.cfg.url
@@ -254,6 +273,7 @@ class ChatAdapter:
                 outcome = await self._attempt(page_setup=bool(attempt), response=response, prompt=prompt, round_no=round_no, emit=emit)
             except asyncio.CancelledError:
                 response.note(ProviderStatus.FAILED, error="cancelled")
+                await self._close_tab_on_cancel()
                 raise
             except DOMUnavailable as exc:
                 response.note(ProviderStatus.BROKEN, error=str(exc)[:400])
@@ -276,6 +296,7 @@ class ChatAdapter:
         return self._finish(response)
 
     async def _attempt(self, *, page_setup: bool, response: ProviderResponse, prompt: str, round_no: int, emit: EventHook) -> bool:
+        self._check_cancel()
         page = await self._page(fresh=page_setup)
         await self._settle(page)
         response.ui_url = page.url
@@ -503,6 +524,7 @@ class ChatAdapter:
         polls = 0
 
         while True:
+            self._check_cancel()
             now = _now()
             elapsed = now - started
             try:
@@ -511,7 +533,7 @@ class ChatAdapter:
                 return best, ProviderStatus.BROKEN, f"page detached mid-answer: {exc}"
             polls += 1
             if not isinstance(capture, dict):
-                await asyncio.sleep(poll_ms / 1000)
+                await self._sleep(poll_ms / 1000)
                 continue
 
             hidden = capture.get("visibility") == "hidden"
@@ -586,14 +608,14 @@ class ChatAdapter:
             if hidden and stalled and now - last_nudge > self.settings.browser.focus_nudge_after_s:
                 last_nudge = now
                 await self.engine.focus_tab(page)
-                await asyncio.sleep(0.25)
+                await self._sleep(0.25)
                 try:
                     await page.mouse.wheel(0, 1)
                     await page.mouse.wheel(0, -1)
                 except Exception:  # noqa: BLE001
                     pass
 
-            await asyncio.sleep(poll_ms / 1000)
+            await self._sleep(poll_ms / 1000)
 
     @staticmethod
     async def _safe_emit(emit: EventHook, *args: Any) -> None:

@@ -326,6 +326,26 @@ class BrowserEngine:
             except Exception as exc:  # noqa: BLE001
                 self._note(f"focus nudge failed: {exc}")
 
+    async def close_tab(self, provider: str, key: str | None = None) -> bool:
+        """Close this provider's tab (used when a job is cancelled mid-answer).
+
+        Only tabs in a window OmniBrain owns are closed; in CDP-attach mode the tabs
+        belong to the user's own Chrome and are left alone.
+        """
+        session = self._sessions.get(self._profile_key(provider))
+        if session is None or session.attached:
+            return False
+        page = session.pages.pop(key or provider, None)
+        if page is None or page.is_closed():
+            return False
+        try:
+            await page.close(run_before_unload=False)
+        except Exception as exc:  # noqa: BLE001
+            self._note(f"closing the {provider} tab failed: {exc}")
+            return False
+        self._note(f"closed the {provider} tab (job cancelled)")
+        return True
+
     async def close_provider(self, provider: str) -> None:
         session = self._sessions.pop(provider, None)
         if session:

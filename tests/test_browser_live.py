@@ -186,3 +186,20 @@ async def test_consensus_extract_claims_from_the_captured_text(adapter):
     assert kinds & {"date", "statistic", "product", "fact"}
     # headings are not claims
     assert all("Sources" != t.strip() for t, _ in pairs)
+
+
+async def test_cancel_mid_answer_stops_the_wait_and_closes_the_tab(adapter):
+    """Cooperative cancel against a real page: the flag ends the wait, the tab goes away."""
+    import asyncio
+    import time
+
+    from backend.cancel import CancelToken, JobCancelled
+
+    token = adapter.cancel_token = CancelToken()
+    asyncio.get_running_loop().call_later(2.5, token.cancel)
+    started = time.monotonic()
+    with pytest.raises(JobCancelled):
+        await adapter.ask("job-cancel", "When did Acme announce the Bolt and what does it cost?", 1)
+    assert time.monotonic() - started < 20
+    session = adapter.engine._sessions.get(adapter.engine._profile_key("fixture"))
+    assert session is None or "fixture" not in session.pages, "the provider tab must be closed on cancel"
