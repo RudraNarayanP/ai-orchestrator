@@ -168,3 +168,10 @@ def test_log_redaction_covers_openrouter_keys():
     line = f"calling openrouter with Authorization: Bearer {fake} and api_key=sk-or-" + "v1-" + "abcdefabcdefabcdef"
     out = redact(line)
     assert "sk-or-v1-0123" not in out and "abcdefabcdef" not in out
+
+def test_omnibrain_config_points_the_loader_at_another_file(tmp_path, monkeypatch):
+    """Lets the eval run with a trimmed provider list without touching config/settings.yaml."""
+    alt = tmp_path / "alt.yaml"
+    alt.write_text("research:\n  max_rounds: 1\n", encoding="utf-8")
+    monkeypatch.setenv("OMNIBRAIN_CONFIG", str(alt))
+    assert settings_module.load_settings().research.max_rounds == 1

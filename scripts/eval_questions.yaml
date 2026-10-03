@@ -1,0 +1,139 @@
+# Hard-question evaluation set for scripts/eval_hard.py.
+#
+# kind:
+#   answer         a real answer exists and is checkable on public pages
+#   false_premise  the question assumes something untrue; the right answer corrects it first
+#   myth           a popular claim that primary sources contradict
+#   unanswerable   not answerable from public pages; the right answer is an honest "I don't know." with a reason
+# expect.must_match      regexes (case-insensitive) that ALL must appear in the final answer
+# expect.must_not_match  regexes that must NOT appear as an assertion (hallucination tripwires)
+# primary_domains        domains whose pages count as primary for this question
+# Ground truths below were chosen because they are stable and well known; "notes" says what the check rests on.
+
+questions:
+  # ---------------------------------------------------------------- UK Acts of Parliament
+  - id: uk-dpa-age
+    category: uk-law
+    kind: answer
+    question: "Under the Data Protection Act 2018, what is the minimum age at which a child can consent to information society services in the UK?"
+    primary_domains: [legislation.gov.uk]
+    expect: {must_match: ["\\b13\\b"], must_not_match: ["\\b16\\b.{0,40}(uk|united kingdom)"]}
+    notes: "Section 9 DPA 2018 sets 13 (the GDPR default of 16 does not apply in the UK)."
+  - id: uk-theft-s1
+    category: uk-law
+    kind: answer
+    question: "How does section 1 of the Theft Act 1968 define theft?"
+    primary_domains: [legislation.gov.uk]
+    expect: {must_match: ["dishonest", "permanently depriv"]}
+    notes: "s.1(1): dishonestly appropriates property belonging to another with the intention of permanently depriving the other of it."
+  - id: uk-vpn-ban
+    category: uk-law
+    kind: false_premise
+    question: "Which section of the Online Safety Act 2023 bans the use of VPNs in the UK?"
+    primary_domains: [legislation.gov.uk]
+    expect: {must_match: ["\\b(no|not|doesn't|does not|isn't|aren't)\\b"], must_not_match: ["section \\d+[a-z]? (of the (online safety )?act )?(bans|prohibits|makes it illegal)"]}
+    notes: "The Act does not ban VPNs; the premise is false."
+  - id: uk-future-amendment
+    category: uk-law
+    kind: unanswerable
+    question: "Which amendments will Parliament make to the Employment Rights Act 1996 during 2028?"
+    primary_domains: [legislation.gov.uk]
+    expect: {must_match: ["(don't know|couldn't verify|can't know|cannot know)"]}
+    notes: "Future legislation; any specific list is invented."
+
+  # ---------------------------------------------------------------- Ukrainian laws
+  - id: ua-marriage-age
+    category: ua-law
+    kind: answer
+    question: "Under the Family Code of Ukraine, what is the minimum marriageable age and can a court allow it earlier?"
+    primary_domains: [zakon.rada.gov.ua]
+    expect: {must_match: ["\\b18\\b", "\\b16\\b"]}
+    notes: "Art. 22: 18; a court may permit marriage from 16 for a person who has reached 16."
+  - id: ua-constitution-year
+    category: ua-law
+    kind: answer
+    question: "When was the current Constitution of Ukraine adopted?"
+    primary_domains: [zakon.rada.gov.ua, constitution.rada.gov.ua]
+    expect: {must_match: ["1996"], must_not_match: ["\\b1991\\b.{0,30}(adopted|constitution)"]}
+    notes: "Adopted by the Verkhovna Rada on 28 June 1996."
+  - id: ua-russian-state-language
+    category: ua-law
+    kind: false_premise
+    question: "Which article of the Constitution of Ukraine makes Russian the second state language?"
+    primary_domains: [zakon.rada.gov.ua, constitution.rada.gov.ua]
+    expect: {must_match: ["(no|not|doesn't|does not|isn't)", "ukrainian"], must_not_match: ["article \\d+ (makes|establishes|declares) russian"]}
+    notes: "Art. 10: Ukrainian is the state language; Russian is not a second state language."
+  - id: ua-closed-session
+    category: ua-law
+    kind: unanswerable
+    question: "What exactly did the Verkhovna Rada discuss in the closed part of its session last Tuesday?"
+    primary_domains: [zakon.rada.gov.ua]
+    expect: {must_match: ["(don't know|couldn't verify|can't know|cannot know)"]}
+    notes: "Closed sessions are not public."
+
+  # ---------------------------------------------------------------- University regulations
+  - id: uni-oxford-plagiarism
+    category: university
+    kind: answer
+    question: "How does the University of Oxford define plagiarism in its guidance for students?"
+    primary_domains: [ox.ac.uk]
+    expect: {must_match: ["(someone else|another person|others?)", "(own|acknowledg)"]}
+    notes: "Oxford: presenting someone else's work or ideas as your own, with or without their consent, without full acknowledgement."
+  - id: uni-oxford-dphil-length
+    category: university
+    kind: answer
+    question: "What is the maximum thesis length for an Oxford DPhil, and does it differ by division?"
+    primary_domains: [ox.ac.uk]
+    expect: {must_match: ["\\d{2,3},?000"]}
+    notes: "Answers must come from an ox.ac.uk page; the figures vary by division, so every number is checked against opened pages."
+  - id: uni-ucl-appeal
+    category: university
+    kind: answer
+    question: "What are the grounds for appealing an academic misconduct decision at University College London?"
+    primary_domains: [ucl.ac.uk]
+    expect: {must_match: ["(appeal|ground|procedur)"]}
+    notes: "Checked for sourcing only: the grounds must come from a ucl.ac.uk page."
+  - id: uni-manchester-viva-pass-rate
+    category: university
+    kind: unanswerable
+    question: "What percentage of PhD vivas at the University of Manchester ended in outright failure last year?"
+    primary_domains: [manchester.ac.uk]
+    expect: {must_match: ["(don't know|couldn't verify|can't know|cannot know|not published|no public)"]}
+    notes: "Not published; any percentage would be invented."
+
+  # ---------------------------------------------------------------- PhD-level research
+  - id: res-ramsey-r55
+    category: research
+    kind: answer
+    question: "What are the best known lower and upper bounds for the Ramsey number R(5,5)?"
+    primary_domains: [arxiv.org]
+    expect: {must_match: ["\\b43\\b", "\\b46\\b"]}
+    notes: "43 <= R(5,5) <= 46 (upper bound lowered from 48 to 46 in 2024)."
+  - id: res-wiles-poincare
+    category: research
+    kind: false_premise
+    question: "Explain the main steps of Andrew Wiles's 1995 proof of the Poincare conjecture."
+    primary_domains: [arxiv.org]
+    expect: {must_match: ["(fermat|perelman)"], must_not_match: ["wiles('s)? (proof of|proved) the poincar"]}
+    notes: "Wiles proved Fermat's Last Theorem; Perelman proved Poincare (2002-03)."
+  - id: res-ten-percent-brain
+    category: research
+    kind: myth
+    question: "Is it true that humans only use 10 percent of their brains?"
+    primary_domains: [nih.gov, ncbi.nlm.nih.gov, pubmed.ncbi.nlm.nih.gov]
+    expect: {must_match: ["(no|myth|not true|false)"]}
+    notes: "Imaging shows virtually all of the brain is active over a day."
+  - id: res-recovery-dexamethasone
+    category: research
+    kind: answer
+    question: "What did the RECOVERY trial report in 2020 about dexamethasone and 28-day mortality in hospitalised COVID-19 patients on ventilation or oxygen?"
+    primary_domains: [nejm.org, ox.ac.uk, recoverytrial.net, pubmed.ncbi.nlm.nih.gov]
+    expect: {must_match: ["(reduc|lower|fewer)", "(ventilat)"]}
+    notes: "Reduced mortality: ventilated 29.3% vs 41.4%; oxygen only 23.3% vs 26.2%; no benefit without respiratory support."
+  - id: res-private-review
+    category: research
+    kind: unanswerable
+    question: "What did the anonymous reviewers privately write about the AlphaFold 3 paper during Nature's peer review?"
+    primary_domains: [nature.com]
+    expect: {must_match: ["(don't know|couldn't verify|can't know|cannot know|not public|confidential)"]}
+    notes: "Reviewer comments for that paper are not public here; anything specific is invented."

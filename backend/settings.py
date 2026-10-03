@@ -229,7 +229,7 @@ def _read_yaml(path: Path) -> dict[str, Any]:
 
 
 def load_settings(path: Path | None = None) -> Settings:
-    cfg_path = path or CONFIG_DIR / "settings.yaml"
+    cfg_path = path or (Path(os.environ["OMNIBRAIN_CONFIG"]) if os.environ.get("OMNIBRAIN_CONFIG") else CONFIG_DIR / "settings.yaml")
     if not cfg_path.exists():
         cfg_path = CONFIG_DIR / "settings.example.yaml"
     raw = _read_yaml(cfg_path)
