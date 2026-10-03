@@ -96,6 +96,7 @@ def main() -> int:
 
     # --- turns
     turn_lat, rot_lat = [], []
+    svc.ctx.limits["chatgpt"] = 6000  # small enough that the 60 turns below rotate a few times
     seg = store.open_segment(tid, "chatgpt", "bench")
     for k in range(60):
         c0 = time.perf_counter()

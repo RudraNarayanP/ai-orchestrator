@@ -434,6 +434,19 @@ Optional local memory of the user's own preferences, projects and decisions, so 
 
 Settings: `inject` (use memory as context), `capture` (learn from my messages), `sensitive` (allow sensitive memories). API `/api/memory*`; UI: the Memory panel, the "Memory used as context" expander under an answer, and the optional Project field. Embedder: `pip install -r requirements-memory.txt` for bge-small; without it a hash embedder is used (lower semantic recall). Results and benchmarks: `data/MEMORY_RESULTS.md`; design: `data/MEMORY_DESIGN.md`.
 
+## The unlimited thread
+
+The OmniBrain thread owns the conversation; the provider chats under it are replaceable context windows. The user sees one thread. Underneath it is a list of *segments*, each mapped to one provider conversation (ChatGPT A, ChatGPT B, Gemini A, ...). `backend/thread/`:
+
+- **Rotation.** `ContextManager` tracks approximate tokens per chat (chars / 4) against a per-provider limit (`threads.limits`, defaults in `service.py`) and rotates at `threads.rotate_at` (80%). Rotating closes the segment and opens a NEW chat in the same tab slot (a new `provider_key`) whose first message is a continuation packet. Switching provider mid-thread does the same.
+- **Hierarchical compression.** L1 recent turns verbatim; L2 a per-segment continuation summary (decisions, facts, arguments, open questions, preferences, key terms, project state, entities, corrections, conclusions, rejected things, current direction); L3 the thread state (segment summaries consolidated; a later correction retires the fact it corrects); L4 only durable user preferences are handed to long-term memory, whose own extractor decides what is kept. The curator model (analysis endpoint) writes L2 when it is up; every item it returns must be grounded in the segment's own words, and a deterministic extractor is the fallback and the safety net. Raw messages are never deleted, always indexed (FTS5 + vectors).
+- **Continuation packet** (`OMNIBRAIN CONTINUATION CONTEXT`): CURRENT USER (relevant memory only), PROJECT, CONVERSATION HISTORY, RECENT DISCUSSION, RELEVANT EARLIER DISCUSSION (only when asked), ESTABLISHED FACTS, DECISIONS, OPEN QUESTIONS, CORRECTIONS, IMPORTANT USER PREFERENCES, CURRENT TASK, plus instructions to continue naturally and not mention the transfer. It stays inside `threads.packet_budget_tokens`. Everything in it is conversation context, not evidence.
+- **Historical recall.** "Remember that thing about Germany 8 months ago" searches that thread's raw messages and segment summaries (keywords + meaning, fused, with a soft time boost that never filters) and injects about a dozen messages plus the relevant summary.
+- **Research jobs.** `POST /api/jobs {"thread_id": ...}` gives the job's fresh provider chats the thread context (like memory: prompt only, never claims, evidence, sources or the verifier); the question and final answer join the thread.
+- **API.** `POST/GET/DELETE /api/threads`, `GET /api/threads/{id}` (one thread), `/segments`, `POST /recall`, `POST /chat {text, provider}`. Local only; switch off with `threads.enabled: false`.
+
+Numbers: `data/THREAD_RESULTS.md`. Tests: `tests/test_thread.py`.
+
 ## Hard-question evaluation
 
 One command re-runs it (starts its own server on a free port, trimmed provider set):

@@ -159,7 +159,7 @@ class ThreadStore:
             if self.get_thread(tid) is None:
                 return False
             self.db.execute("delete from messages_fts where rowid in (select msg_id from messages where thread_id=?)", (tid,))
-            self.db.execute("delete from summaries_fts where tid=?", (tid,))
+            self.db.execute("delete from summaries_fts where rowid in (select rowid from segments where thread_id=?)", (tid,))
             for t in ("messages", "segments"):
                 self.db.execute(f"delete from {t} where thread_id=?", (tid,))
             self.db.execute("delete from threads where thread_id=?", (tid,))
@@ -181,6 +181,13 @@ class ThreadStore:
     def segment(self, sid: str) -> Segment | None:
         r = self.db.execute("select * from segments where segment_id=?", (sid,)).fetchone()
         return self._seg(r) if r else None
+
+    def has_segments(self, tid: str) -> bool:
+        return self.db.execute("select 1 from segments where thread_id=? limit 1", (tid,)).fetchone() is not None
+
+    def provider_ordinal(self, seg: Segment) -> int:
+        """Which chat this is among the thread's chats with the same provider (1 = A)."""
+        return self.db.execute("select count(*) from segments where thread_id=? and provider=? and idx<=?", (seg.thread_id, seg.provider, seg.idx)).fetchone()[0]
 
     def segments(self, tid: str) -> list[Segment]:
         return [self._seg(r) for r in self.db.execute("select * from segments where thread_id=? order by idx", (tid,))]
@@ -205,8 +212,9 @@ class ThreadStore:
         with self._lock:
             self.db.execute("update segments set closed_at=?, summary_json=?, method=? where segment_id=?", (time.time(), json.dumps(summary), method, sid))
             self.db.execute("update threads set active_segment=NULL where thread_id=? and active_segment=?", (seg.thread_id, sid))
-            self.db.execute("delete from summaries_fts where tid=? and segment=?", (seg.thread_id, str(seg.idx)))
-            self.db.execute("insert into summaries_fts(tid,segment,content) values(?,?,?)", (seg.thread_id, str(seg.idx), flat))
+            rid = self.db.execute("select rowid from segments where segment_id=?", (sid,)).fetchone()[0]
+            self.db.execute("delete from summaries_fts where rowid=?", (rid,))  # by rowid: a column predicate would scan the whole index
+            self.db.execute("insert into summaries_fts(rowid,tid,segment,content) values(?,?,?,?)", (rid, seg.thread_id, str(seg.idx), flat))
             self.db.commit()
 
     # ------------------------------------------------------------------ messages
@@ -273,7 +281,8 @@ class ThreadStore:
             self.db.commit()
 
     def count(self, tid: str) -> int:
-        return self.db.execute("select count(*) from messages where thread_id=?", (tid,)).fetchone()[0]
+        r = self.db.execute("select next_seq from threads where thread_id=?", (tid,)).fetchone()
+        return (r[0] - 1) if r else 0
 
     def get_by_ids(self, ids: list[int], tid: str) -> dict[int, Message]:
         out: dict[int, Message] = {}

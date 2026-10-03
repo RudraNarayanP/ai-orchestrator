@@ -86,8 +86,7 @@ class ThreadService:
         return self.store.create_thread(title, project)
 
     def label(self, seg: Segment) -> str:
-        same = [s for s in self.store.segments(seg.thread_id) if s.provider == seg.provider and s.idx <= seg.idx]
-        letter = chr(ord("A") + (len(same) - 1) % 26)
+        letter = chr(ord("A") + (self.store.provider_ordinal(seg) - 1) % 26)
         return f"{DISPLAY.get(seg.provider, seg.provider)} {letter}"
 
     def view(self, tid: str, last: int | None = None) -> list[dict[str, Any]]:
@@ -113,7 +112,7 @@ class ThreadService:
         """(segment to use, rotated?, reason). Closes the old segment when rotating."""
         seg = self.store.active_segment(tid)
         if seg is None:
-            reason = "resume" if self.store.segments(tid) else "start"
+            reason = "resume" if self.store.has_segments(tid) else "start"
             return self.store.open_segment(tid, provider, reason), reason != "start" or False, reason
         if seg.provider != provider:
             self.close_segment(seg, "provider_switch")
