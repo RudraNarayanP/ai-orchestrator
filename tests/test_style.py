@@ -75,7 +75,7 @@ def test_voice_report_flags_corporate_hedging_and_internal_vocabulary():
 def test_the_prompts_carry_the_tone_rules_and_a_before_after_example():
     prompt = style_prompt()
     assert "at most one emoji" in prompt and "very end" in prompt and "knowledgeable friend" in prompt
-    assert "Before and after" in prompt and 'NEVER put an emoji on "I don\'t know."' in prompt
+    assert "Before and after" in prompt and 'NEVER put an emoji on "I don\'t know."' in " ".join(prompt.split())
     assert "Warmth never softens" in style.VOICE
     assert "great question" in [p.lower() for p in style.BANNED_PHRASES]
 
