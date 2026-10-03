@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import time
+import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -110,6 +111,21 @@ def setup_file_logging(args: argparse.Namespace, settings) -> Path:
     return path
 
 
+def open_when_ready(url: str, host: str, port: int, *, opener=webbrowser.open, timeout_s: float = 30.0, interval_s: float = 0.25, clock=time.monotonic, sleep=time.sleep) -> bool:
+    """Open the UI once the server is accepting connections. Returns False if it never came up."""
+    import socket
+
+    deadline = clock() + timeout_s
+    while clock() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                opener(url)
+                return True
+        except OSError:
+            sleep(interval_s)
+    return False
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -121,6 +137,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
     print(f"  http://{args.host}:{args.port}")
     print(f"  log file: {log_path}")
     print("  sign in once per provider from the settings panel, then ask a question.")
+    if args.open:
+        import threading
+
+        shown = "127.0.0.1" if args.host in {"0.0.0.0", "::", ""} else args.host
+        threading.Thread(target=open_when_ready, args=(f"http://{shown}:{args.port}", shown, args.port), daemon=True).start()
     uvicorn.run(
         "backend.api.app:app",
         host=args.host,
@@ -355,6 +376,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8730)
     serve.add_argument("--verbose", action="store_true")
+    serve.add_argument("--open", action="store_true", help="open the UI in your default browser once the server is up (it is only the UI page; research still runs in OmniBrain's own windows)")
     serve.set_defaults(func=cmd_serve)
 
     ask = sub.add_parser("ask", help="run one research job in the terminal", parents=[logging_args])

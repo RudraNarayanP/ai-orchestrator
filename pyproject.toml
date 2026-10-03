@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Personal browser-based multi-AI research council with adversarial evidence verification"
 requires-python = ">=3.11"
 dependencies = [
-    "playwright==1.55.0",
+    "playwright==1.63.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic>=2.9",
