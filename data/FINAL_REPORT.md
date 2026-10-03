@@ -85,7 +85,7 @@ All raw messages intact. The 100k run found and fixed three scale bugs (build 94
 ## 6. Test counts
 - Offline gate (`pytest -q -m "not browser"`): **610 passed** (523 before the lint and thread work; +49 evidence-reporting, +38 thread).
 - Full `pytest -q` including the real-Chrome UI tests: **639 passed, 0 failed** (about 4.4 minutes). An earlier full run had one failure (the export-link collision) which was fixed and re-run.
-- Offline gate was re-run after the last source edit to the thread store (index hint); the full run followed it.
+- The 610 gate run predates the last thread-store edit (segment-read index hint); that edit was covered by `tests/test_thread.py` and by the 639-test full run, which ran after it.
 
 ## 7. Live checks done
 Early-stop eval (uk-dpa-age, triv-2plus2); memory live check (general and project cases); thread live check (rotation x2 and provider switch, ChatGPT and Gemini). Key-leak check on the repo and history: 0 hits; the OpenRouter key stays only in the gitignored `config/settings.yaml`.
