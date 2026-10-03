@@ -264,7 +264,7 @@ class ResearchRunner:
         verifier_enabled = self.verifier is not None and self.settings.verifier.provider != "disabled"
 
         # Enough already? Then stop. Do not spawn a swarm to feel thorough.
-        if assessment.sufficient and not analysis.high_stakes and not disagreements:
+        if self._settled(assessment, disagreements) and not analysis.high_stakes:
             report = await self._lightweight_report(job, analysis, claims, evidence, responses, round_no)
             return self._complete(job, report, responses, rounds=round_no, stop="evidence sufficient after the primary researcher; no escalation earned")
 
@@ -277,7 +277,7 @@ class ResearchRunner:
             )
             if len(job.responses) > before:
                 max_rounds += 1  # the follow-up is a step of its own, not a round taken from the budget
-            if assessment.sufficient and not analysis.high_stakes and not disagreements:
+            if self._settled(assessment, disagreements) and not analysis.high_stakes:
                 report = await self._lightweight_report(job, analysis, claims, evidence, responses, round_no)
                 return self._complete(job, report, responses, rounds=round_no, stop="settled by a same-conversation follow-up with the primary researcher")
 
@@ -353,7 +353,7 @@ class ResearchRunner:
                 return self._complete(job, report, responses, rounds=round_no, stop="sufficient evidence without needing the verifier")
 
         # Enough now, and nothing conflicts? Skip the expensive engine entirely.
-        if assessment.sufficient and not disagreements and not analysis.high_stakes:
+        if self._settled(assessment, disagreements) and not analysis.high_stakes:
             report = await self._lightweight_report(job, analysis, claims, evidence, responses, round_no)
             return self._complete(
                 job, report, responses, rounds=round_no,
@@ -384,7 +384,7 @@ class ResearchRunner:
             if not report.needs_more_research or not actionable or round_no >= max_rounds:
                 break
             # Stop rules: the curator may ask, but it does not get to keep asking.
-            if assessment.strong_primary and not disagreements:
+            if assessment.strong_primary:
                 job.stop_note = "the AI opened a primary source that supports every claim; the curator's request for more research was not followed"
                 break
             if stalled >= 2:
@@ -453,7 +453,7 @@ class ResearchRunner:
             stalled = stalled + 1 if (now[0] <= progress[0] and now[1] <= progress[1]) else 0
             progress = (max(progress[0], now[0]), max(progress[1], now[1]))
             round_no = next_round
-            if assessment.sufficient and not disagreements and not analysis.high_stakes:
+            if self._settled(assessment, disagreements) and not analysis.high_stakes:
                 report = await self._verify(job, analysis, claims, evidence, responses, disagreements, round_no)
                 job.reports.append(report)
                 job.verifier_calls += 1
@@ -933,7 +933,15 @@ class ResearchRunner:
             e.claim_id for e in attached
             if e.tier.value in {"primary_official", "original_research", "government"} and e.provenance == "CLAIM_SUPPORTED"
         }
-        strong_primary = bool(open_material) and all(c.id in strong for c in open_material) and contradictions == 0 and not unanswered
+        # "Every claim" would mean the side remarks too (a guidance page's update date) -- the test is the claims
+        # that answer the question that was asked, and only conflicts about THOSE can block it.
+        question = self._q(job)
+        on_point = [c for c in open_material if router.addresses_question(question, c.claim)] or open_material
+        best = max((router.asked_overlap(question, c.claim) for c in on_point), default=0)
+        key = [c for c in on_point if best >= 2 and router.asked_overlap(question, c.claim) >= max(2, best - 1)] or on_point
+        key_ids = {c.id for c in key}
+        key_conflicts = [d for d in disagreements if d.severity == "material" and (set(d.claim_ids) & key_ids)]
+        strong_primary = bool(key) and all(c.id in strong for c in key) and not key_conflicts and not unanswered
         ledger_ok = ledger_ok or (strong_primary and bool(claims))
         sufficient = ledger_ok
         if analysis.high_stakes:
@@ -1208,6 +1216,11 @@ class ResearchRunner:
         for record in job.rounds:
             record.finished_at = record.finished_at or time.time()
         return job
+
+    @staticmethod
+    def _settled(assessment: SufficiencyAssessment, disagreements: list[Disagreement]) -> bool:
+        """Sufficient, and nothing that matters conflicts. Strong primary evidence already accounts for conflicts that touch the asked claims."""
+        return assessment.sufficient and (assessment.strong_primary or not disagreements)
 
     def _stop_reason(self, assessment: SufficiencyAssessment, disagreements: list[Disagreement], analysis: Any, round_no: int, max_rounds: int, note: str = "") -> str:
         if note:

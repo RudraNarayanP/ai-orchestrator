@@ -156,3 +156,20 @@ async def test_final_sources_keep_the_chain_and_an_omnibrain_only_page_never_out
     assert top.ai_opened is True and top.omnibrain_opened is True and top.claim_ids
     ev = next(e for e in job.evidence if e.url == URL9)
     assert ev.provenance == "CLAIM_SUPPORTED" and ev.cited_by == ["chatgpt"]
+
+SIDE_REMARKS = {
+    "answer": OPENED_PRIMARY["answer"].replace(
+        "\n\nSOURCE LINKS",
+        "\n2. The ICO guidance page was last updated on 15 May 2026.\n3. The Data Protection Act 2018 received Royal Assent on 23 May 2018.\n\nSOURCE LINKS",
+    ),
+    "citations": [],
+}
+
+
+async def test_side_remarks_that_no_page_confirms_do_not_block_an_early_stop(net):
+    net.confirm(URL9, tier=SourceTier.PRIMARY_OFFICIAL)
+    settings = providers("chatgpt", "gemini", "qwen")
+    job, log, _ = await run(settings, {"chatgpt": SIDE_REMARKS, "gemini": {"answer": "never"}, "qwen": {"answer": "never"}}, LAW_Q)
+    assert [c["provider"] for c in log] == ["chatgpt"], "the asked claim is settled by a primary page the AI opened"
+    a = job.assessments[0]
+    assert a.strong_primary and a.unresolved, "the side remarks stay unresolved; they just do not decide the answer"

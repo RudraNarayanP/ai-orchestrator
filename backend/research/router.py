@@ -388,6 +388,18 @@ def addresses_question(question: str, claim: str) -> bool:
     return any(w[:5] in c for w in asked)
 
 
+def asked_overlap(question: str, claim: str) -> int:
+    """How many distinct content words of the question (not names, not figures) the claim shares."""
+    c = (claim or "").lower()
+    words = re.findall(r"[A-Za-z][A-Za-z'-]+", question or "")
+    asked = {
+        w.lower()[:5]
+        for i, w in enumerate(words)
+        if len(w) >= 5 and w.lower() not in _ASK_STOP and not (i > 0 and w[0].isupper())
+    }
+    return sum(1 for stem in asked if stem in c)
+
+
 def is_failure_phrase(text: str) -> list[str]:
     """Section 4: an admitted inability is a routing signal, not a shrug."""
     patterns = [
