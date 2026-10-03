@@ -97,6 +97,8 @@ storage:
   db_path: data/omnibrain.db
   artifacts_dir: data/artifacts
   keep_raw_responses: true
+  max_events_per_job: 4000      # routine events beyond this are dropped; final/done/error are always kept
+  log_path: data/omnibrain.log  # rotating, 2 MB x 3; run.py serve|ask --log-file overrides
 
 providers:
   chatgpt:

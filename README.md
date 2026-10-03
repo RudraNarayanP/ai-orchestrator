@@ -23,9 +23,24 @@ cd omnibrain
 .venv\Scripts\python.exe run.py serve       # http://127.0.0.1:8730
 ```
 
+**One click:** double-click `start.bat`. First run it builds `.venv` and installs
+`requirements.txt`; every run it starts the app and opens the UI page in your default
+browser (`serve --open`; that is only the UI -- research still runs in OmniBrain's own
+windows). Extra arguments pass through, e.g. `start.bat --port 9000`. Verified by
+launching it against the existing `.venv`; the first-run venv/pip path has not been
+exercised on a clean machine.
+
 Other commands: `ask "question"` (one-shot in the terminal), `probe chatgpt --login`
-(dump the real DOM of a page before trusting any selector), `jobs` (history),
-`close` (shut leftover OmniBrain windows).
+(dump the real DOM of a page before trusting any selector), `promote-selectors
+chatgpt [--dry-run]` (turn the newest probe into verified selectors, see below),
+`jobs` (history), `close` (shut leftover OmniBrain windows). `serve` and `ask` take
+`--log-file PATH` (default `data/omnibrain.log`, rotating 2 MB x 3, credentials redacted).
+
+In the UI: **history** lists every earlier question (newest first) and reopens its
+answer, evidence and raw research; each answer has **export** links (Markdown or JSON,
+for the audit trail; web text is escaped so it cannot inject markup). Keyboard: Enter
+sends, Shift+Enter is a new line, `/` focuses the question box, Esc closes a panel,
+arrow keys move through history. The layout was checked at 320 and 375 px wide.
 
 Dependencies are already installed in `.venv` (Playwright 1.63, FastAPI, pydantic,
 httpx). To rebuild: `uv venv .venv --python 3.12 && uv pip install --python .venv/Scripts/python.exe -r requirements.txt`.
@@ -78,7 +93,8 @@ Two consequences worth stating plainly:
 
 Honest status, because "it should work" is not a status:
 
-**Verified by automated tests (29 passing, no network needed):**
+**Verified by automated tests (285 passing: 262 offline + 23 that drive a real headless
+Chrome against local fixtures; none contacts a chat site or a real model):**
 - Escalation architecture, tests A–F from the spec: trivial questions answer at
   level 0 with **zero** browser sessions and zero verifier calls; a primary
   researcher with two confirmed independent sources stops without spawning a
@@ -112,12 +128,51 @@ Honest status, because "it should work" is not a status:
   no local verifier model was reachable. That is the correct result -- it did not
   invent one.
 
+Also covered offline since the first build (each has its own test file):
+- **Vision fallback** (`backend/browser/vision.py`): fires only when the DOM path is
+  BROKEN before anything is sent; a canvas-drawn chat fixture is answered, a captcha
+  fixture is reported `blocked`, and login/payment/human-check controls are never
+  clicked. Answers carry `detail="vision fallback"`. Off by default (`vision.provider: disabled`).
+- **Refutation**: a counter-query per material claim; a primary source that says the
+  opposite makes the popular claim `REFUTED` (`search.refutation_queries`, 0 = off).
+- **Conversation memory**: `conversation_id`, follow-ups resolved against the previous
+  turn, thread restored in the UI (`GET /api/conversations/{id}`).
+- **Product reviews**: owner complaints that recur across >=2 pages appear only as a
+  labelled caveat, never in the answer or the claim ledger (`search.review_queries`).
+- **Cooperative cancel**: stop interrupts a browser step and closes that provider tab.
+- **Rate-limit politeness**: per-site minimum spacing, exponential backoff after a
+  `rate_limited` result, no immediate retry into a limit; a long backoff skips that
+  site for the question instead of waiting (`research.min_provider_spacing_s`,
+  `rate_limit_backoff_s`, `rate_limit_backoff_max_s`, `rate_limit_max_wait_s`).
+- **LLM paths over real HTTP** to a fake OpenAI-compatible server (`tests/fake_openai.py`,
+  fixture `fake_openai`): client retries/errors, JSON rescue (fenced, prose-wrapped,
+  `<think>` blocks, broken tail), verifier parsing, the ledger overruling a model that
+  calls an unconfirmed claim "supported", `needs_more_research`, claim extraction,
+  analysis, and whole jobs with a live and a dead verifier.
+- **API** (`tests/test_api.py`), **logging**, **config wiring** (a guard test fails if a
+  setting is declared but never read), **selector promotion**, **history/export**, and
+  the UI in a real browser (`tests/test_ui_live.py`).
+
 **Not yet verified:**
 - Any provider actually answering, end to end, from your real account. Needs the
   one-time `run.py login <provider>` step.
-- The LLM verifier and model-assisted claim extraction. Needs Ollama / LM Studio /
-  an OpenRouter key. Without a model the deterministic evidence ledger still runs,
+- The LLM verifier and model-assisted claim extraction **against a real model**. Needs
+  Ollama / LM Studio / an OpenRouter key. The offline tests above prove our parsing,
+  fallback and overruling logic with scripted replies; they say nothing about how a
+  real model behaves. Without a model the deterministic evidence ledger still runs,
   and says so in the caveats.
+- The vision fallback against a real vision model or a real site; the refutation
+  detector's precision on real pages (it is heuristic); review mining and follow-up
+  detection on real review sites and real conversations (fixtures only).
+- Selector promotion: `promote-selectors` was dry-run against a real ChatGPT probe, but
+  `browser/adapters/promoted_selectors.json` has deliberately **not** been written --
+  promoting live selectors needs a signed-in probe and your say-so, and until then
+  nothing is `probe`-verified by this mechanism.
+- The cancel test against a real streaming site (offline stubs and one fixture test
+  cover the tab-close path; the live test may stop at an earlier checkpoint).
+- The CI workflow (`.github/workflows/ci.yml`) has never run: the repo has no remote.
+  The `browser` job is marked `continue-on-error` until it has been seen green.
+- `start.bat` first-run path (creating `.venv` and installing) on a clean machine.
 - Copilot, Meta AI, Le Chat, Pi, Qwen, DeepSeek selectors against today's builds of
   those pages. Marked `guess`/`prior` until probed; the candidate-scoring layer is
   what actually finds the composer when ids drift.
@@ -177,22 +232,34 @@ debate -- it is an answer.
 
 ```
 omnibrain/
-  run.py                     doctor / serve / ask / login / probe / jobs / close
+  run.py                     doctor / serve / ask / login / probe / promote-selectors / jobs / close
+  start.bat                  one-click launcher (venv on first run, then serve --open)
+  .github/workflows/ci.yml   offline gate on push (unexercised)
   backend/
     models.py                typed domain model (Job, Claim, Evidence, VerifierReport, ...)
     settings.py              config load/merge/env, secrets never serialised to the UI
     orchestrator/runner.py   adaptive escalation, sufficiency test, rounds
+    orchestrator/politeness.py  per-site spacing + rate-limit backoff, shared across jobs
+    cancel.py                cooperative cancel token
+    logs.py                  rotating file log, credential redaction
+    export.py                job -> Markdown (escaped) for the audit trail
     research/                router (classifier), claims (extraction + conflicts),
-                             prompts (per-provider + failure-context), style (voice)
-    evidence/                sources (fetch, tier, date, support check), pool, search_http
+                             prompts (per-provider + failure-context), style (voice),
+                             memory (follow-ups / conversation context)
+    evidence/                sources (fetch, tier, date, support check, refutation), pool,
+                             search_http, reviews (owner complaints, kept out of the ledger)
     verification/            llm (OpenAI-compatible), verifier (adversarial engine)
     storage/db.py            SQLite: jobs, raw responses, claims, evidence, events
     api/app.py               REST + SSE, config, doctor, per-provider sign-in
     browser/engine.py        one window, one tab per provider, reused; isolated profiles
+    browser/vision.py        screenshot fallback when the DOM path is BROKEN (off by default)
   browser/adapters/          base (capture mechanics), selectors.py (per-site ladders with
-                             provenance), dom_library.py (page-side JS), one file per provider
+                             provenance; hard timeouts live here), promote.py (probe -> selectors,
+                             overlay in promoted_selectors.json), dom_library.py (page-side JS),
+                             one file per provider
   frontend/                  answer-first chat UI, detail behind expanders
-  tests/                     escalation, resilience, ledger, real-browser
+  tests/                     escalation, resilience, ledger, API, LLM paths (fake OpenAI server),
+                             politeness, history/export, real-browser (fixtures + the UI)
   THIRD_PARTY_NOTICES.md     what was read, what was ported, under which licence
   data/                      omnibrain.db, probe dumps, screenshots
 ```
@@ -218,6 +285,25 @@ OMNIBRAIN_MAX_ROUNDS=3
 ```
 
 LM Studio is `http://localhost:1234/v1`; OpenRouter is `https://openrouter.ai/api/v1`.
+
+Other settings added since the first build (all in `config/settings.example.yaml`):
+`vision.*` (screenshot fallback endpoint), `search.refutation_queries`,
+`search.review_queries`, `search.fetch_body_chars`, `storage.log_path`,
+`storage.max_events_per_job`, `research.per_provider_concurrency`, and the four
+politeness settings under `research` (see above). Removed because nothing read them:
+`browser.user_agent_seed`, `search.http_fallback`, `providers.tab_role`,
+`providers.weight`, `providers.timeout_s`, `research.hard_response_timeout_s` -- hard
+per-site timeouts are `hard_timeout_ms` in `browser/adapters/selectors.py`. An old
+`config/settings.yaml` that still has those keys keeps working (unknown keys are ignored).
+
+### Promoting probed selectors
+
+`run.py probe chatgpt --login` dumps the real DOM; `run.py promote-selectors chatgpt
+--dry-run` shows the `input`/`send` locators it would promote, and without `--dry-run`
+writes them to `browser/adapters/promoted_selectors.json` (`verified="probe"` plus a
+timestamp), placed **in front of** the existing ladder with the old entries kept as
+fallbacks. It refuses a probe from the wrong host, a robot-check page, an error page,
+or one with no visible composer, and never promotes a login/consent button as "send".
 `run.py doctor` lists which models that server actually has.
 
 A small local model is enough to adjudicate the ledger, and better than nothing for
@@ -245,10 +331,13 @@ privacy. It will not match a frontier model on subtle reading of a primary docum
 ## Testing
 
 ```bash
-.venv\Scripts\python.exe -m pytest -q                       # everything
-.venv\Scripts\python.exe -m pytest -q -m "not browser"      # skip real Chrome
+.venv\Scripts\python.exe -m pytest -q                       # everything (285, ~2.5 min)
+.venv\Scripts\python.exe -m pytest -q -m "not browser"      # skip real Chrome (262, ~35 s)
 .venv\Scripts\python.exe -m pytest -q tests/test_browser_live.py
+.venv\Scripts\python.exe -m pytest -q tests/test_ui_live.py   # the UI in headless Chrome
 ```
 
 The non-browser suites need no network: adapters are scripted and the evidence
-ledger is stubbed with a per-URL "what happens when we open this page" table.
+ledger is stubbed with a per-URL "what happens when we open this page" table. LLM
+calls go over real HTTP to `tests/fake_openai.py` (scripted replies, an error
+status, or a callable that sees the request), so nothing needs Ollama.
