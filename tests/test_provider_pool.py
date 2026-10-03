@@ -45,3 +45,11 @@ def test_google_ai_targets_ai_mode_with_udm_50_and_reuses_the_dedicated_window()
     assert "google.com/search" in cfg["url"] and "udm=50" in cfg["url"]
     assert "udm=50" in cfg["new_chat_url"], "each new research opens AI Mode itself, not plain Search"
     assert raw["browser"].get("reuse_tabs", True) is True
+
+def test_a_site_whose_answers_come_back_empty_is_not_asked_again_in_the_same_job():
+    from backend.models import ProviderResponse, ProviderStatus
+    from backend.orchestrator.runner import ResearchRunner
+
+    empty = ProviderResponse(job_id="j", provider="le_chat", prompt="p", status=ProviderStatus.FAILED, error="answer captured but empty after cleaning")
+    ok = ProviderResponse(job_id="j", provider="gemini", prompt="p", status=ProviderStatus.COMPLETED)
+    assert ResearchRunner._unusable_this_job([empty, ok]) == {"le_chat"}

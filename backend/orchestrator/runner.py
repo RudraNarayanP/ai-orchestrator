@@ -764,7 +764,7 @@ class ResearchRunner:
         dead: set[str] = set()
         for provider, items in by_provider.items():
             if all(
-                r.status in dead_status or (r.status == ProviderStatus.FAILED and (r.error or "").startswith(("readiness=blocked", "off_topic")))
+                r.status in dead_status or (r.status == ProviderStatus.FAILED and (r.error or "").startswith(("readiness=blocked", "off_topic", "answer captured but empty")))
                 for r in items
             ):
                 dead.add(provider)
