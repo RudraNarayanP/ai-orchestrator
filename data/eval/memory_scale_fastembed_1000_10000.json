@@ -1,0 +1,54 @@
+{
+ "embedder": "BAAI/bge-small-en-v1.5",
+ "floor": 0.5,
+ "sizes": {
+  "1000": {
+   "cold_first_query_ms": 92.3,
+   "warm_p50_ms": 53.74,
+   "warm_p95_ms": 74.74,
+   "general_question_p50_ms": 0.197,
+   "avg_candidates": 75.2,
+   "avg_final_hits": 1.72,
+   "recall": 0.861,
+   "MRR": 0.819,
+   "precision_of_returned": 0.569,
+   "general_suppressed": 1.0,
+   "distractor_suppressed": 0.75,
+   "avg_injected_tokens": 16.2,
+   "stage_ms": {
+    "understand_ms": 0.22,
+    "vector_ms": 34.82,
+    "fts_ms": 1.66,
+    "hydrate_ms": 6.24,
+    "score_ms": 6.69
+   },
+   "db_MB": 2.5,
+   "ram_matrix_MB": 1.5,
+   "build_s": 6.6
+  },
+  "10000": {
+   "cold_first_query_ms": 403.7,
+   "warm_p50_ms": 66.15,
+   "warm_p95_ms": 99.59,
+   "general_question_p50_ms": 0.197,
+   "avg_candidates": 79.2,
+   "avg_final_hits": 1.81,
+   "recall": 0.861,
+   "MRR": 0.819,
+   "precision_of_returned": 0.528,
+   "general_suppressed": 1.0,
+   "distractor_suppressed": 0.75,
+   "avg_injected_tokens": 17.4,
+   "stage_ms": {
+    "understand_ms": 0.23,
+    "vector_ms": 38.61,
+    "fts_ms": 7.54,
+    "hydrate_ms": 9.04,
+    "score_ms": 7.31
+   },
+   "db_MB": 23.7,
+   "ram_matrix_MB": 15.4,
+   "build_s": 140.2
+  }
+ }
+}

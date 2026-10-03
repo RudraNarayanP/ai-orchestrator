@@ -88,7 +88,7 @@ class HashEmbedder:
 class FastEmbedder:
     """A small local ONNX embedding model through fastembed (optional dependency; model downloads once)."""
 
-    floor = 0.50
+    floor = 0.52  # calibrated by scripts/memory_eval.py (data/MEMORY_RESULTS.md): recall 0.81 with 88% of unrelated personal questions left alone
     dup = 0.93
 
     def __init__(self, model: str = "BAAI/bge-small-en-v1.5", floor: float | None = None) -> None:
