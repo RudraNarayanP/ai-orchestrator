@@ -115,6 +115,124 @@
      "no primary source cited"
     ]
    }
+  },
+  {
+   "id": "uni-ucl-appeal",
+   "category": "university",
+   "kind": "answer",
+   "question": "What are the grounds for appealing an academic misconduct decision at University College London?",
+   "answer": "I couldn't verify this reliably. None of the pages I opened confirms an answer, so I won't guess.",
+   "why": "",
+   "confidence": "Insufficient evidence",
+   "caveats": [
+    "One AI answer claimed: \"Based on the available evidence, the specific grounds for appealing an academic misconduct decision at University College London cannot be confirmed.\" I couldn't confirm that from any page I opened.",
+    "The UCL website may have been temporarily inaccessible or the specific section not retrieved during this search.",
+    "The exact grounds for appealing an academic misconduct decision at UCL as per the current Student Academic Misconduct Procedure."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "ucl.ac.uk"
+   ],
+   "primary_opened": [
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework/section-9-student-academic-misconduct-procedure"
+   ],
+   "primary_cited": [],
+   "pages_opened": 18,
+   "pages_confirmed": 0,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "gemini"
+   ],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 3082,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 341.6,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "said it could not answer an answerable question"
+    ]
+   }
+  },
+  {
+   "id": "res-ramsey-r55",
+   "category": "research",
+   "kind": "answer",
+   "question": "What are the best known lower and upper bounds for the Ramsey number R(5,5)?",
+   "answer": "The lower bound comes from a 2-colouring of K42 containing no monochromatic K5. ✅ The upper-bound proof uses linear programming and computer checking of a large number of cases. The exact value of R(5,5) remains unknown.",
+   "why": "3 pages we opened, from 3 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The AI reviewer wasn't available, so this rests only on the pages I could open and check."
+   ],
+   "sources": [
+    "https://arxiv.org/abs/2212.12630",
+    "https://ar5iv.labs.arxiv.org/html/2212.12630",
+    "https://leapsinbounds.org/constants/ramsey-5-5/",
+    "https://arxiv.org/abs/2409.15709",
+    "https://ar5iv.labs.arxiv.org/html/2409.15709"
+   ],
+   "primary_domains": [
+    "arxiv.org"
+   ],
+   "primary_opened": [
+    "https://arxiv.org/abs/2212.12630",
+    "https://arxiv.org/abs/2212.12630",
+    "https://arxiv.org/pdf/2212.12630",
+    "https://arxiv.org/pdf/2409.15709",
+    "https://ar5iv.labs.arxiv.org/html/2212.12630",
+    "https://ar5iv.labs.arxiv.org/html/2212.12630"
+   ],
+   "primary_cited": [
+    "https://arxiv.org/abs/2212.12630",
+    "https://ar5iv.labs.arxiv.org/html/2212.12630",
+    "https://arxiv.org/abs/2409.15709",
+    "https://ar5iv.labs.arxiv.org/html/2409.15709"
+   ],
+   "pages_opened": 24,
+   "pages_confirmed": 8,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "gemini"
+   ],
+   "rounds": 2,
+   "verifier_model": "nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 3864,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 409.6,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "missing expected content: \\b43\\b, \\b46\\b"
+    ]
+   }
   }
  ]
 }
