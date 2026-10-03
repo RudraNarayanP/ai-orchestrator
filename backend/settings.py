@@ -183,6 +183,11 @@ class SearchConfig(BaseModel):
 
     per_query_timeout_s: int = 40
 
+    own_discovery: bool = False
+    """False (default): the AIs do the web research and OmniBrain only opens the URLs they cited,
+    to audit them. True: OmniBrain also runs its own searches (DuckDuckGo/Bing, review sites) and
+    files what it finds as evidence -- off by default because that is OmniBrain doing the research."""
+
 
 class StorageConfig(BaseModel):
     db_path: str = str(DATA_DIR / "omnibrain.db")

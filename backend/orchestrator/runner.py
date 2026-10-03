@@ -46,6 +46,7 @@ from backend.orchestrator.politeness import PolitenessGate
 from backend.evidence.reviews import caveat_lines as review_caveats
 from backend.evidence.reviews import gather_reviews, subject_for
 from backend.research import memory
+from backend.research import citations as citation_ops
 from backend.research import corrections as correction_ops
 from backend.research.prompts import angle_for, escalation_prompt, follow_up_prompt, research_prompt, thread_follow_up_prompt
 from backend.research.style import style_prompt
@@ -548,6 +549,7 @@ class ResearchRunner:
         self.cancel.raise_if_cancelled()
         if (
             job.reviews is not None
+            or not self.settings.search.own_discovery
             or getattr(analysis, "intent", "") != "product"
             or job.mode == ResearchMode.QUICK
             or int(self.settings.search.review_queries) <= 0
@@ -657,7 +659,9 @@ class ResearchRunner:
             # a reused chat answered an earlier question: never let it into the ledger
             response.status = ProviderStatus.FAILED
             response.error = "off_topic: the reply does not address this question"
-            response.raw_text = response.answer_text or response.raw_text
+            # keep nothing of the stale text: it belongs to another question and must not sit in this research's record
+            response.detail = f"off-topic reply discarded ({len(response.answer_text or '')} characters)"
+            response.raw_text = ""
             response.answer_text = ""
             response.citations = []
         response.role = role
@@ -667,6 +671,7 @@ class ResearchRunner:
         if response.status.value in {"completed", "timeout"}:
             self._turns[thread_key] = turn
         response.escalation_reason = escalation_reason
+        citation_ops.mark_opened(response)
         response.pages_visited = [c.url for c in response.citations if c.url][:20]
         response.failure_signals = router.is_failure_phrase(response.answer_text or response.raw_text or "")
         if response.status.value == "completed":
@@ -750,7 +755,9 @@ class ResearchRunner:
         """Give each unresolved point to a specific agent. One agent, one point."""
         tasks = []
         for index, follow_up in enumerate(follow_ups):
-            pool = follow_up.target_providers or targets
+            # the curator's preferred researcher, if it is one we can actually reach; otherwise whoever is available
+            wanted = [p for p in follow_up.target_providers if p in self.adapters and p != "search" and self.health.get(p) not in {"logged_out", "broken", "rate_limited", "failed"}]
+            pool = wanted or targets
             if not pool:
                 break
             provider = pool[index % len(pool)]
@@ -1111,6 +1118,7 @@ class ResearchRunner:
             evidence=evidence,
             responses=responses,
             disagreements=disagreements,
+            corrections=list(job.corrections),
         )
 
     async def _lightweight_report(

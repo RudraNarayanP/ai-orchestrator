@@ -173,6 +173,7 @@ async def build_pool(
 ) -> tuple[list[Evidence], dict[str, Any]]:
     """Returns evidence records plus a small trace of what was attempted."""
     emit = emit or _noop
+    run_searches = bool(run_searches and settings.search.own_discovery)
     budget = max_pages or {ResearchMode.QUICK: 6, ResearchMode.STANDARD: 12, ResearchMode.DEEP_RESEARCH: 20}[mode]
     browser_fetch = browser_fetch_factory(engine, settings) if engine is not None else None
 
@@ -192,6 +193,7 @@ async def build_pool(
                     "polarity": "support",
                     "origin": "provider",
                     "cited_by": response.provider,
+                    "ai_opened": citation.ai_opened,
                 }
             )
 
@@ -296,6 +298,9 @@ async def build_pool(
             ev.origin = link["origin"]
         if link.get("cited_by") and ev.check_notes:
             ev.check_notes += f"; offered by {link['cited_by']}"
+        if link.get("origin", "provider") == "provider":
+            ev.ai_opened = link.get("ai_opened")
+            ev.cited_by = sorted({r.provider for r in responses if any(c.url == ev.url for c in r.citations)})
 
     trace = {
         "links_collected": len(raw_links),

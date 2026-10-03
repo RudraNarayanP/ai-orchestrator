@@ -165,6 +165,19 @@ class Citation(BaseModel):
     marker: str | None = None
     """The in-text marker it was attached to, e.g. '1' for [1]."""
 
+    ai_opened: bool | None = None
+    """True: the AI said it opened the page. False: it only saw it mentioned.
+    None: cited, opening not confirmed. Never promoted without the AI saying so."""
+
+    audited: bool | None = None
+    """OmniBrain opened this URL itself to check what the AI cited (not to find new sources)."""
+
+    claim_ids: list[str] = Field(default_factory=list)
+    """Claims this source supports (or refutes) in the ledger."""
+
+    cited_by: list[str] = Field(default_factory=list)
+    """Which AIs cited it."""
+
 
 class ProviderResponse(BaseModel):
     """One provider, one prompt, one round -- fully auditable (section 19)."""
@@ -312,6 +325,12 @@ class Evidence(BaseModel):
 
     verbatim_excerpt: str | None = None
     """Text actually found on the page, proving the source says what we claim."""
+
+    ai_opened: bool | None = None
+    """What the citing AI said about this URL: opened / mentioned only / not stated."""
+
+    cited_by: list[str] = Field(default_factory=list)
+    """AIs that cited this URL. Empty means OmniBrain found it itself (optional discovery)."""
 
 
 class Disagreement(BaseModel):
