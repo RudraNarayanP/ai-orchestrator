@@ -687,6 +687,18 @@ class Verifier:
             report.confidence = Confidence.LOW
             report.confidence_note = (report.confidence_note or "") + " No claim survived the evidence ledger."
             report.unresolved.append("verifier answer overruled to low confidence by the ledger")
+        standing = [v for v in report.verdicts if v.verdict in {ClaimStatus.REFUTED, ClaimStatus.CONTESTED}]
+        if not supported and not standing:
+            # Live run: with zero pages confirming anything, the model still wrote a confident answer and a `why`
+            # citing sources of its own. The ledger decides what may be said as fact; the draft is kept as a caveat.
+            draft = (report.answer or "").strip()
+            if draft and draft != "I couldn't verify this reliably.":
+                report.caveats = [f"Not confirmed by any page we opened: {draft[:260]}"] + list(report.caveats)
+            report.answer = "I couldn't verify this reliably."
+            report.why = ""
+            report.sources = []
+            report.important_disagreement = None
+            report.confidence = Confidence.LOW if report.confidence not in {Confidence.NONE} else Confidence.NONE
 
     @staticmethod
     def _strip_numbers(text: str) -> str:
