@@ -25,13 +25,14 @@ Match the amount of explanation to what the question actually needs.
 
 Sound like a knowledgeable friend who just looked it up: contractions, plain
 words, short sentences, a little warmth. Not a help-desk script, not a report.
-Use at most two emojis, and only ones that genuinely fit the topic (a tower, a
-battery, a court, a graduation cap, a thumbs-up for a settled fact). Never
-decorate for decoration's sake.
+Use at most one emoji, only on a confident answer, only at the very end, and only
+one that genuinely fits (a check mark for yes, a cross for no, or a tower, a
+battery, a court, a graduation cap). Never mid-sentence, never on a don't-know,
+never on "I'm not sure". Never decorate for decoration's sake.
 
 When the evidence is strong, answer directly and confidently.
 When the sources genuinely conflict, say so explicitly and name the conflict.
-When the available evidence is too weak to trust, say "I couldn't verify this reliably."
+When the available evidence is too weak to trust, say "I couldn't verify that reliably."
 When there is no adequate evidence at all, say "I don't know." and give the
 reason in one plain sentence. That line stays plain: no emoji, no cushioning, no
 apology. Warmth never softens an honest "I don't know."
@@ -143,7 +144,7 @@ BANNED_PHRASES = [
 # The plain-language equivalents, so the synthesiser has somewhere to go.
 REPLACEMENTS = {
     "insufficient evidence to determine": "I don't know.",
-    "i could not verify this reliably": "I couldn't verify this reliably.",
+    "i could not verify that reliably": "I couldn't verify that reliably.",
     "the available evidence is inconclusive": "The evidence doesn't settle it.",
     "further research is warranted": "Nobody has actually checked.",
     "sources conflict": "These sources disagree, and here's the split:",
@@ -236,17 +237,17 @@ would say it out loud.
 - Keep the register casual and human, like a person talking: contractions,
   everyday words, no padding, no preamble, no sign-off. Light humour only if
   it fits; never forced, never performing.
-- Add at most two emojis that really fit the subject, placed naturally (after
-  the first sentence or at the end), e.g. a tower for the Eiffel Tower, a
-  battery for battery life, scales for a law. Skip them when the topic is
-  grave. NEVER put an emoji on "I don't know." or "I couldn't verify this
-  reliably." -- those stay plain and say why.
+- A confident answer may end with ONE emoji that really fits ("Yes \u2014 ... \u2705",
+  "No \u2014 ... \u274C", or a tower, a battery, scales for a law). It goes at the very end,
+  never mid-sentence. Skip it when the topic is grave. NEVER put an emoji on
+  "I don't know.", "I couldn't verify that reliably." or "I'm not sure \u2014 the sources
+  disagree." -- those stay plain and say why.
 
 Before and after (same facts):
   stiff:  "Based on the available evidence, the construction of the Eiffel
            Tower appears to have been completed on 31 March 1889."
   human:  "It was finished on 31 March 1889 -- and it's 330 m tall today with
-           the antenna. \U0001F5FC"
+           the antenna. \U0001F5FC"  (the emoji closes the answer)
   stiff:  "It is important to note that the claim cannot be substantiated."
   human:  "No -- that's a myth. The Act says the opposite (s.12). \u2696\uFE0F"
 - Explain only as much as the question needs.
@@ -323,7 +324,7 @@ TOPIC_EMOJI = [
     (r"\b(launch(?:ed)?|released?|announced)\b", "\U0001F680"),
 ]
 
-_PLAIN_STARTS = ("i don't know", "i couldn't verify", "i could not verify", "i can't verify")
+_PLAIN_STARTS = ("i don't know", "i couldn't verify", "i could not verify", "i can't verify", "i'm not sure", "i am not sure")
 
 
 def count_emojis(text: str) -> int:
@@ -331,27 +332,40 @@ def count_emojis(text: str) -> int:
 
 
 def humanize(answer: str, confidence: str = "moderate") -> str:
-    """Add one fitting emoji to a settled answer. Never touches an honest 'I don't know'.
+    """One fitting emoji, at the very end, on a confident answer only.
 
+    Yes -> check mark, No -> cross, otherwise a topic emoji (or a check/thumbs-up). An honest
+    "I don't know", "I couldn't verify that reliably" or "I'm not sure" stays plain, and so does any
+    answer that is not confident; an emoji the model put mid-sentence is moved to the end (or dropped).
     `confidence` is the plain band name (high / moderate / low / insufficient_evidence).
     """
     text = (answer or "").strip()
+    if not text:
+        return text
     low = text.lower()
-    if not text or low.startswith(_PLAIN_STARTS) or count_emojis(text):
+    conf = str(confidence).lower()
+    existing = EMOJI_RE.findall(text)
+    if low.startswith(_PLAIN_STARTS) or conf not in {"high", "moderate"}:
+        return _tidy(EMOJI_RE.sub("", text)) if existing else text
+    if len(existing) == 1 and text.endswith(existing[0]):
         return text
-    if str(confidence).lower() in {"none", "insufficient_evidence"}:
-        return text
-    if low.startswith("no - ") or low.startswith("no, "):
-        mark = "\U0001F6AB" if not re.search(TOPIC_EMOJI[2][0], low) else "\u2696\uFE0F"
-    elif low.startswith("the sources genuinely conflict") or str(confidence).lower() == "low":
-        mark = "\U0001F914"
+    body = _tidy(EMOJI_RE.sub("", text))
+    low = body.lower()
+    if existing:
+        mark = existing[0]
+    elif low.startswith(("yes ", "yes,", "yes.", "yes\u2014", "yes \u2014")):
+        mark = "\u2705"
+    elif low.startswith(("no ", "no,", "no.", "no\u2014", "no \u2014", "no -")):
+        mark = "\u274C"
     else:
-        mark = next((e for pat, e in TOPIC_EMOJI if re.search(pat, low)), "\u2705" if str(confidence).lower() == "high" else "\U0001F44D")
-    # after the first sentence, so the conclusion still comes first
-    m = re.search(r"(?<=[.!?])\s", text)
-    if m and m.start() < len(text) - 1:
-        return text[: m.start()] + " " + mark + text[m.start():]
-    return f"{text} {mark}"
+        mark = next((e for pat, e in TOPIC_EMOJI if re.search(pat, low)), "\u2705" if conf == "high" else "\U0001F44D")
+    return f"{body} {mark}"
+
+
+def _tidy(text: str) -> str:
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"\s+([.,;:!?])", r"\1", text)
+    return text.strip()
 
 
 _CAVEAT_REWRITES = (
@@ -411,6 +425,10 @@ def voice_report(answer: str) -> dict:
         problems.append("too many emojis")
     if plain and emojis:
         problems.append("emoji on an honest don't-know")
+    if emojis and not plain and not EMOJI_RE.search(text[-4:] or ""):
+        problems.append("emoji is not at the very end")
+    if emojis > 1:
+        problems.append("more than one emoji")
     if len(text) > 900:
         problems.append("padded: over 900 characters")
     return {"ok": not problems, "problems": problems, "emojis": emojis}

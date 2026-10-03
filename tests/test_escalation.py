@@ -111,7 +111,7 @@ async def test_confident_but_unsourced_answer_escalates(settings, net):
 async def test_primary_failure_phrase_triggers_parallel_research_with_context(settings, net):
     scripts = {
         "chatgpt": {
-            "answer": "I couldn't verify this reliably. I don't have enough information about the Acme Bolt release date.",
+            "answer": "I couldn't verify that reliably. I don't have enough information about the Acme Bolt release date.",
             "citations": [],
         },
         "gemini": {"answer": "Acme Bolt released March 2026.", "citations": [{"url": "https://reuters.com/b", "title": "Acme Bolt March 2026"}]},
@@ -141,7 +141,7 @@ async def test_contradiction_reaches_verifier_and_generates_targeted_followup(se
     net.confirm("https://reuters.com/old", tier=SourceTier.JOURNALISM)
     net.confirm("https://acme.com/press", tier=SourceTier.PRIMARY_OFFICIAL)
     scripts = {
-        "chatgpt": {"answer": "I couldn't verify this reliably; no solid data is available.", "citations": []},
+        "chatgpt": {"answer": "I couldn't verify that reliably; no solid data is available.", "citations": []},
         "gemini": {
             "answer": "Acme released the Bolt in March 2024.",
             "citations": [{"url": "https://reuters.com/old", "title": "Acme Bolt March 2024 release"}],

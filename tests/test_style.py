@@ -10,9 +10,10 @@ from backend.research.style import count_emojis, humanize, style_prompt, voice_r
 from backend.verification.verifier import build_final_answer
 
 
-def test_a_settled_answer_gets_one_fitting_emoji_after_the_first_sentence():
+def test_a_settled_answer_gets_one_fitting_emoji_at_the_very_end():
     out = humanize("The Eiffel Tower was completed on March 31, 1889. It is 330 metres tall today.", "moderate")
-    assert out.startswith("The Eiffel Tower was completed on March 31, 1889. ") and count_emojis(out) == 1
+    assert out.startswith("The Eiffel Tower was completed on March 31, 1889. It is 330 metres tall today.") and count_emojis(out) == 1
+    assert out.endswith("\U0001F5FC"), "the emoji closes the answer; never mid-sentence"
     assert "\U0001F5FC" in out, "a tower gets a tower"
     assert "\U0001F50B" in humanize("The battery lasts up to 30 hours with noise cancelling on.", "high")
     assert "\u2696" in humanize("Section 12 of the Act says the notice period is 28 days.", "high")
@@ -24,8 +25,8 @@ def test_a_settled_answer_gets_one_fitting_emoji_after_the_first_sentence():
     [
         "I don't know.",
         "I don't know. No public page states that figure.",
-        "I couldn't verify this reliably.",
-        "I couldn't verify this reliably. Only one forum post mentions it.",
+        "I couldn't verify that reliably.",
+        "I couldn't verify that reliably. Only one forum post mentions it.",
     ],
 )
 def test_warmth_never_touches_an_honest_dont_know(plain):
@@ -35,15 +36,21 @@ def test_warmth_never_touches_an_honest_dont_know(plain):
 
 def test_no_emoji_is_added_when_confidence_is_none_or_one_is_already_there():
     assert humanize("The price is $549.", "none") == "The price is $549."
-    already = "It costs $549 \U0001F4B8."
+    already = "It costs $549. \U0001F4B8"
     assert humanize(already, "high") == already
+    mid = humanize("It costs \U0001F4B8 $549 today.", "high")
+    assert mid == "It costs $549 today. \U0001F4B8", "a mid-sentence emoji is moved to the end"
+    assert humanize("It costs \U0001F4B8 $549 today.", "low") == "It costs $549 today.", "no emoji on an answer that is not confident"
 
 
-def test_a_correction_and_a_dispute_get_their_own_marks_and_stay_conclusion_first():
-    no = humanize("No - that doesn't hold up. The page says the opposite.", "high")
-    assert no.startswith("No - that doesn't hold up.") and "\U0001F6AB" in no
-    dispute = humanize("The sources genuinely conflict on this: the date is either 1887 or 1889.", "low")
-    assert dispute.startswith("The sources genuinely conflict") and "\U0001F914" in dispute
+def test_yes_and_no_get_a_check_and_a_cross_and_a_dispute_stays_plain():
+    no = humanize("No \u2014 that doesn't hold up. The page says the opposite.", "high")
+    assert no.startswith("No \u2014 that doesn't hold up.") and no.endswith("\u274C") and count_emojis(no) == 1
+    yes = humanize("Yes \u2014 the Act allows it.", "high")
+    assert yes.endswith("\u2705") and count_emojis(yes) == 1
+    unsure = "I'm not sure \u2014 the sources disagree."
+    assert humanize(unsure, "low") == unsure and humanize(unsure, "high") == unsure and voice_report(unsure)["ok"]
+    assert "emoji is not at the very end" in voice_report("It costs \U0001F4B8 $549 today.")["problems"]
 
 
 def test_the_final_answer_is_humanised_but_an_idk_is_not():
@@ -67,7 +74,7 @@ def test_voice_report_flags_corporate_hedging_and_internal_vocabulary():
 
 def test_the_prompts_carry_the_tone_rules_and_a_before_after_example():
     prompt = style_prompt()
-    assert "at most two emojis" in prompt and "knowledgeable friend" in prompt
+    assert "at most one emoji" in prompt and "very end" in prompt and "knowledgeable friend" in prompt
     assert "Before and after" in prompt and 'NEVER put an emoji on "I don\'t know."' in prompt
     assert "Warmth never softens" in style.VOICE
     assert "great question" in [p.lower() for p in style.BANNED_PHRASES]
@@ -98,7 +105,7 @@ def test_final_answer_caveats_are_plain_language():
     from backend.models import Confidence, VerifierReport
     from backend.verification.verifier import build_final_answer
 
-    report = VerifierReport(job_id="j", round=1, verdicts=[], answer="I couldn't verify this reliably.", confidence=Confidence.LOW)
+    report = VerifierReport(job_id="j", round=1, verdicts=[], answer="I couldn't verify that reliably.", confidence=Confidence.LOW)
     report.unresolved = ["verifier answer overruled to low confidence by the ledger"]
     report.caveats = ["(no model verifier active: cannot reach http://localhost:11434/v1)"]
     report.confidence_note = " No claim survived the evidence ledger."
@@ -118,4 +125,4 @@ def test_a_dont_know_draft_is_not_quoted_back_as_an_unconfirmed_claim():
         Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)._reconcile(report, [claim], [])
         quoted = [c for c in plain_caveats(report.caveats) if "One AI answer claimed" in c]
         assert bool(quoted) is expect_caveat
-        assert report.answer.startswith("I couldn't verify this reliably.")
+        assert report.answer.startswith("I couldn't verify that reliably.")

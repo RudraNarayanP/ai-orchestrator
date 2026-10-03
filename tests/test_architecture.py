@@ -79,7 +79,7 @@ async def test_supported_primary_answer_is_curated_and_done_without_escalation(s
 # ---- test 3
 async def test_hedged_primary_gets_a_same_conversation_follow_up_before_anyone_else(settings, net):
     confirm_sources(net)
-    hedge = {"answer": "I couldn't verify this reliably. I'm not certain of the release date.", "citations": []}
+    hedge = {"answer": "I couldn't verify that reliably. I'm not certain of the release date.", "citations": []}
     job, log, adapters = await run(settings, {"chatgpt": [hedge, SUPPORTED], "gemini": {"answer": "never"}, "copilot": {"answer": "never"}}, Q)
     order = [c["provider"] for c in log]
     assert order == ["chatgpt", "chatgpt"], "the follow-up goes to the SAME AI first, and settles it here"
@@ -96,7 +96,7 @@ async def test_hedged_primary_gets_a_same_conversation_follow_up_before_anyone_e
 # ---- test 4
 async def test_parallel_escalation_only_after_the_follow_up_failed_and_to_two_or_three_others(settings, net):
     confirm_sources(net)
-    hedge = {"answer": "I couldn't verify this reliably. I don't have enough information.", "citations": []}
+    hedge = {"answer": "I couldn't verify that reliably. I don't have enough information.", "citations": []}
     other = {"answer": "Acme released the Bolt in March 2026.", "citations": SUPPORTED["citations"]}
     replies = {"chatgpt": [hedge, hedge], "gemini": other, "qwen": other, "deepseek": other, "copilot": other, "le_chat": other}
     job, log, _ = await run(settings, replies, Q)
@@ -226,13 +226,13 @@ async def test_research_needed_loop_stops_at_the_limit(net, fake_openai):
     def always_more(body):
         seen.append(body["messages"][-1]["content"])
         return json.dumps(
-            {"verdicts": [], "answer": "I couldn't verify this reliably.", "confidence": "low", "needs_more_research": True,
+            {"verdicts": [], "answer": "I couldn't verify that reliably.", "confidence": "low", "needs_more_research": True,
              "research_needed": [{"claim": "the date", "reason": "still open", "preferred_researcher": "gemini", "instruction": "Find the date again."}],
              "unresolved": ["the date"]}
         )
 
     fake_openai.script(always_more)
-    hedge = {"answer": "I couldn't verify this reliably. I don't have enough information.", "citations": []}
+    hedge = {"answer": "I couldn't verify that reliably. I don't have enough information.", "citations": []}
     job, log, _ = await run(settings, {n: hedge for n in names}, Q, verifier=make_verifier(fake_openai), max_rounds=2)
     assert job.status.value == "completed"
     assert len(seen) <= 4, "a curator that always wants more must still stop at the round limit"

@@ -602,9 +602,9 @@ class Verifier:
             who = self._refuter(top, evidence)
             said = next((e.verbatim_excerpt for e in evidence if e.claim_id == top.claim_id and e.polarity == "refute" and e.verbatim_excerpt), "")
             answer = (
-                f"No - that doesn't hold up. {who} says: \"{said[:240].strip()}\""
+                f"No \u2014 that doesn't hold up. {who} says: \"{said[:240].strip()}\""
                 if said
-                else f"No - that doesn't hold up. {who} contradicts it: {top.claim}"
+                else f"No \u2014 that doesn't hold up. {who} contradicts it: {top.claim}"
             )
             confidence = top.confidence
             why = top.reasoning
@@ -617,7 +617,7 @@ class Verifier:
                 if u in by_url
             ][:6]
         elif contested:
-            answer = f"The sources genuinely conflict on this: {contested[0].claim}"
+            answer = "I'm not sure \u2014 the sources disagree."
             confidence = Confidence.LOW
             why = contested[0].reasoning
             disagreement = contested[0].claim
@@ -812,7 +812,7 @@ class Verifier:
             report.answer = (
                 f"I don't know. That's about {future}, which hasn't happened yet, so nothing published can say."
                 if future
-                else "I couldn't verify this reliably. None of the pages I opened confirms an answer, so I won't guess."
+                else "I couldn't verify that reliably. None of the pages I opened confirms an answer, so I won't guess."
             )
             report.why = ""
             report.sources = []

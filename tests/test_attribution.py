@@ -3,7 +3,7 @@
 Live: the DPA 2018 question opened legislation.gov.uk section 9 -- the statute that
 answers it -- but the link carried no usable title/snippet, so the page was attached
 to no claim, the ledger saw zero evidence for the headline claim, and the answer
-degraded to "I couldn't verify this reliably." even though the primary source was open.
+degraded to "I couldn't verify that reliably." even though the primary source was open.
 """
 
 from __future__ import annotations

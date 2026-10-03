@@ -107,7 +107,7 @@ async def test_unanimous_unsourced_consensus_earns_nothing(settings, net):
     }
     scripts["search"] = {"answer": "results", "citations": []}
     job, _, _ = await _run(settings, scripts, "How much does the Acme Bolt cost?")
-    assert job.final.answer.strip().startswith(("I don't know.", "I couldn't verify this reliably.")) or "Insufficient" in job.final.confidence_label
+    assert job.final.answer.strip().startswith(("I don't know.", "I couldn't verify that reliably.")) or "Insufficient" in job.final.confidence_label
     assert job.final.confidence in {Confidence.NONE, Confidence.LOW}
 
 
