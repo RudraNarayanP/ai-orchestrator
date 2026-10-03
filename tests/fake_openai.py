@@ -20,6 +20,7 @@ class FakeOpenAI:
         self.replies: list[Any] = list(replies or [])
         self.models = models if models is not None else ["fake-model"]
         self.requests: list[dict[str, Any]] = []
+        self.auth_status = 200
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
@@ -32,9 +33,11 @@ class FakeOpenAI:
             def log_message(self, *args: Any, **kwargs: Any) -> None:  # noqa: D102
                 return
 
-            def _send(self, status: int, payload: Any) -> None:
+            def _send(self, status: int, payload: Any, headers: dict[str, str] | None = None) -> None:
                 raw = payload if isinstance(payload, bytes) else json.dumps(payload).encode("utf-8")
                 self.send_response(status)
+                for k, v in (headers or {}).items():
+                    self.send_header(k, v)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
@@ -43,6 +46,8 @@ class FakeOpenAI:
             def do_GET(self) -> None:  # noqa: N802
                 if self.path.rstrip("/").endswith("/models"):
                     self._send(200, {"data": [{"id": m} for m in outer.models]})
+                elif self.path.rstrip("/").endswith("/auth/key"):
+                    self._send(outer.auth_status, {"data": {"label": "test", "is_free_tier": True}})
                 else:
                     self._send(404, {"error": "not found"})
 
@@ -61,7 +66,7 @@ class FakeOpenAI:
                 if callable(reply):
                     reply = reply(body)
                 if isinstance(reply, dict) and "status" in reply:
-                    self._send(int(reply["status"]), reply.get("body", "error"))
+                    self._send(int(reply["status"]), reply.get("body", "error"), reply.get("headers"))
                     return
                 if not isinstance(reply, str):
                     reply = json.dumps(reply)

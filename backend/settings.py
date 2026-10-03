@@ -87,6 +87,14 @@ class VerifierConfig(BaseModel):
     model: str = "qwen3:14b"
     base_url: str = "http://localhost:11434/v1"
     api_key: str = ""
+    """For OpenRouter this may stay empty if OPENROUTER_API_KEY is set in the environment."""
+
+    fallback_models: list[str] = Field(default_factory=list)
+    """Tried in order when the model is rate limited (429), gone (404) or returns nothing."""
+
+    headers: dict[str, str] = Field(default_factory=dict)
+    """Extra request headers, e.g. {"HTTP-Referer": "http://localhost", "X-Title": "OmniBrain"} for OpenRouter."""
+
     temperature: float = 0.1
     max_tokens: int = 4096
     timeout_s: int = 240
@@ -103,6 +111,8 @@ class AnalysisConfig(BaseModel):
     model: str = "qwen3:14b"
     base_url: str = "http://localhost:11434/v1"
     api_key: str = ""
+    fallback_models: list[str] = Field(default_factory=list)
+    headers: dict[str, str] = Field(default_factory=dict)
     temperature: float = 0.3
     max_tokens: int = 2048
     timeout_s: int = 120
@@ -120,6 +130,8 @@ class VisionConfig(BaseModel):
     model: str = ""
     base_url: str = ""
     api_key: str = ""
+    fallback_models: list[str] = Field(default_factory=list)
+    headers: dict[str, str] = Field(default_factory=dict)
     temperature: float = 0.0
     max_tokens: int = 1500
     timeout_s: int = 90
@@ -228,21 +240,22 @@ def load_settings(path: Path | None = None) -> Settings:
 def _apply_env(raw: dict[str, Any]) -> dict[str, Any]:
     """MODEL_PROVIDER / MODEL_NAME / BASE_URL / API_KEY / TEMPERATURE /
     MAX_TOKENS from the environment win over the file (section 12)."""
-    ver = raw.setdefault("verifier", {})
-    env_map = {
-        "provider": "OMNIBRAIN_VERIFIER_PROVIDER",
-        "model": "OMNIBRAIN_VERIFIER_MODEL",
-        "base_url": "OMNIBRAIN_VERIFIER_BASE_URL",
-        "api_key": "OMNIBRAIN_VERIFIER_API_KEY",
-        "temperature": "OMNIBRAIN_VERIFIER_TEMPERATURE",
-        "max_tokens": "OMNIBRAIN_VERIFIER_MAX_TOKENS",
-    }
-    for key, env in env_map.items():
-        val = os.environ.get(env)
-        if val is not None:
-            ver[key] = float(val) if key == "temperature" else (
-                int(val) if key == "max_tokens" else val
-            )
+    for section, prefix in (("verifier", "OMNIBRAIN_VERIFIER"), ("analysis", "OMNIBRAIN_ANALYSIS"), ("vision", "OMNIBRAIN_VISION")):
+        block = raw.setdefault(section, {})
+        env_map = {
+            "provider": f"{prefix}_PROVIDER",
+            "model": f"{prefix}_MODEL",
+            "base_url": f"{prefix}_BASE_URL",
+            "api_key": f"{prefix}_API_KEY",
+            "temperature": f"{prefix}_TEMPERATURE",
+            "max_tokens": f"{prefix}_MAX_TOKENS",
+        }
+        for key, env in env_map.items():
+            val = os.environ.get(env)
+            if val is not None:
+                block[key] = float(val) if key == "temperature" else (
+                    int(val) if key == "max_tokens" else val
+                )
     if os.environ.get("OMNIBRAIN_MODE"):
         raw.setdefault("research", {})["mode"] = os.environ["OMNIBRAIN_MODE"]
     if os.environ.get("OMNIBRAIN_MAX_ROUNDS"):

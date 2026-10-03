@@ -11,6 +11,7 @@ clearly-labelled fallback, not a crashed research job and not a silent lie.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -33,6 +34,9 @@ class LLMReply:
     latency_s: float = 0.0
     model: str | None = None
     usage: dict[str, Any] | None = None
+    status: int = 0
+    fatal: bool = False
+    """True when no other model can help (bad key, forbidden, server unreachable)."""
 
 
 class LLMUnavailable(RuntimeError):
@@ -48,15 +52,23 @@ class Endpoint:
     temperature: float = 0.1
     max_tokens: int = 2048
     timeout_s: int = 180
+    fallback_models: tuple[str, ...] = ()
+    headers: dict[str, str] | None = None
+    """Extra request headers, e.g. OpenRouter's HTTP-Referer / X-Title."""
 
     @classmethod
     def from_config(cls, cfg: Any) -> "Endpoint":
         base = (cfg.base_url or "").strip() or DEFAULT_BASE_URLS.get(cfg.provider, "")
+        key = cfg.api_key or ""
+        if not key and cfg.provider == "openrouter":
+            key = os.environ.get("OPENROUTER_API_KEY", "")
         return cls(
             provider=cfg.provider,
             model=cfg.model,
             base_url=base.rstrip("/"),
-            api_key=cfg.api_key or "",
+            api_key=key,
+            fallback_models=tuple(getattr(cfg, "fallback_models", None) or ()),
+            headers=dict(getattr(cfg, "headers", None) or {}) or None,
             temperature=float(cfg.temperature),
             max_tokens=int(cfg.max_tokens),
             timeout_s=int(getattr(cfg, "timeout_s", 180) or 180),
@@ -80,14 +92,26 @@ class LLMClient:
         if self.endpoint.provider == "openrouter":
             headers["HTTP-Referer"] = "http://localhost"
             headers["X-Title"] = "OmniBrain"
+        headers.update(self.endpoint.headers or {})
         return headers
 
     async def complete(self, messages: list[dict[str, str]], *, temperature: float | None = None, max_tokens: int | None = None, retries: int = 1) -> LLMReply:
         if not self.endpoint.enabled:
             return LLMReply(text="", ok=False, error="endpoint disabled or unconfigured", model=self.endpoint.model)
+        # Free hosted models are rate limited and sometimes vanish; try the configured fallbacks in order, but only
+        # for failures a different model can fix (limits, upstream errors, unknown model, empty output).
+        models = [self.endpoint.model] + [m for m in self.endpoint.fallback_models if m and m != self.endpoint.model]
+        reply = LLMReply(text="", ok=False, error="no model tried", model=self.endpoint.model)
+        for model in models:
+            reply = await self._complete_with(model, messages, temperature, max_tokens, retries)
+            if reply.ok or reply.fatal:
+                return reply
+        return reply
+
+    async def _complete_with(self, model: str, messages: list[dict[str, str]], temperature: float | None, max_tokens: int | None, retries: int) -> LLMReply:
         url = f"{self.endpoint.base_url}/chat/completions"
         payload = {
-            "model": self.endpoint.model,
+            "model": model,
             "messages": messages,
             "temperature": self.endpoint.temperature if temperature is None else temperature,
             "max_tokens": max_tokens or self.endpoint.max_tokens,
@@ -99,41 +123,73 @@ class LLMClient:
             payload["think"] = False
             payload["chat_template_kwargs"] = {"enable_thinking": False}
         last_error = ""
-        for attempt in range(max(1, retries + 1)):
+        status = 0
+        started = time.time()
+        attempt = 0
+        limit_waits = 0
+        attempts = max(1, retries + 1)
+        while attempt < attempts:
+            attempt += 1
             started = time.time()
+            delay = 1.5
             try:
                 async with httpx.AsyncClient(timeout=self.endpoint.timeout_s) as client:
                     response = await client.post(url, json=payload, headers=self._headers())
-                    if response.status_code >= 400:
-                        last_error = f"HTTP {response.status_code}: {response.text[:300]}"
-                        if response.status_code in {401, 403, 404}:
+                    status = response.status_code
+                    if status >= 400:
+                        last_error = f"HTTP {status}: {_scrub(response.text)[:300]}"
+                        if status in {401, 403}:
+                            return LLMReply(text="", ok=False, error=last_error, latency_s=round(time.time() - started, 2), model=model, status=status, fatal=True)
+                        if status == 404:
                             break
+                        if status == 429:
+                            # A rate limit is not a failed attempt: wait as told (bounded) and ask again.
+                            retry_after = _retry_after(response.headers.get("retry-after"))
+                            delay = min(retry_after if retry_after is not None else 2.0 * (2 ** limit_waits), 20.0)
+                            limit_waits += 1
+                            if limit_waits <= 2:
+                                attempts = max(attempts, attempt + 1)
+                        await _sleep(delay)
                         continue
                     data = response.json()
+                    if isinstance(data, dict) and data.get("error") and not data.get("choices"):
+                        # OpenRouter reports upstream failures with HTTP 200 and an error object.
+                        err = data["error"] if isinstance(data["error"], dict) else {"message": str(data["error"])}
+                        code = err.get("code")
+                        last_error = f"upstream error {code or ''}: {_scrub(str(err.get('message') or ''))[:240]}".strip()
+                        status = int(code) if str(code).isdigit() else 502
+                        if status in {401, 403}:
+                            return LLMReply(text="", ok=False, error=last_error, latency_s=round(time.time() - started, 2), model=model, status=status, fatal=True)
+                        if status == 404:
+                            break
+                        await _sleep(2.0 if status == 429 else 1.5)
+                        continue
                     choice = (data.get("choices") or [{}])[0]
                     message = choice.get("message") or {}
                     text = message.get("content") or choice.get("text") or ""
-                    if not text and message.get("reasoning"):
-                        # Some templates put the answer only in reasoning.
+                    if not text and message.get("reasoning") and choice.get("finish_reason") != "length":
+                        # Some templates put the answer only in reasoning -- but a reasoning trace cut off by the
+                        # token limit is scratch work, not an answer (live: "The user wants the exact word...").
                         text = message["reasoning"]
                     return LLMReply(
                         text=text.strip(),
                         ok=bool(text.strip()),
                         error=None if text.strip() else "empty completion",
                         latency_s=round(time.time() - started, 2),
-                        model=self.endpoint.model,
+                        model=model,
                         usage=data.get("usage"),
+                        status=200,
                     )
             except httpx.TimeoutException:
                 last_error = f"timeout after {self.endpoint.timeout_s}s"
             except httpx.ConnectError as exc:
                 last_error = f"cannot reach {self.endpoint.base_url} ({exc}). Is {self.endpoint.provider} running?"
-                break
+                return LLMReply(text="", ok=False, error=last_error, latency_s=round(time.time() - started, 2), model=model, fatal=True)
             except Exception as exc:  # noqa: BLE001
-                last_error = f"{type(exc).__name__}: {exc}"
-            if attempt + 1 < retries + 1:
-                await _sleep(1.5)
-        return LLMReply(text="", ok=False, error=last_error, latency_s=round(time.time() - started, 2), model=self.endpoint.model)
+                last_error = f"{type(exc).__name__}: {_scrub(str(exc))}"
+            if attempt < attempts:
+                await _sleep(delay)
+        return LLMReply(text="", ok=False, error=last_error, latency_s=round(time.time() - started, 2), model=model, status=status)
 
     async def complete_json(self, messages: list[dict[str, str]], *, temperature: float | None = None) -> tuple[dict[str, Any] | None, LLMReply]:
         reply = await self.complete(messages, temperature=temperature)
@@ -153,6 +209,26 @@ class LLMClient:
         except Exception:  # noqa: BLE001
             return []
 
+    async def check_key(self) -> tuple[bool, str]:
+        """OpenRouter: is the key accepted, and is the account on the free tier? Never returns the key."""
+        if not self.endpoint.api_key:
+            return False, "no OpenRouter API key configured (verifier/analysis api_key or OPENROUTER_API_KEY)"
+        try:
+            async with httpx.AsyncClient(timeout=12) as client:
+                response = await client.get(f"{self.endpoint.base_url}/auth/key", headers=self._headers())
+        except Exception as exc:  # noqa: BLE001
+            return False, f"could not check the OpenRouter key: {type(exc).__name__}"
+        if response.status_code in {401, 403}:
+            return False, "OpenRouter rejected the API key (HTTP %d)" % response.status_code
+        if response.status_code >= 400:
+            return True, f"key check unavailable (HTTP {response.status_code})"
+        try:
+            info = response.json().get("data") or {}
+        except ValueError:
+            return True, "key accepted"
+        tier = "free tier" if info.get("is_free_tier") else "paid account"
+        return True, f"key accepted, {tier}"
+
     async def health(self) -> dict[str, Any]:
         if not self.endpoint.enabled:
             return {"ok": False, "state": "disabled", "detail": "verifier provider set to disabled"}
@@ -163,17 +239,38 @@ class LLMClient:
                 "state": "unreachable",
                 "detail": f"no model list from {self.endpoint.base_url} -- start {self.endpoint.provider} or fix BASE_URL",
             }
-        present = self.endpoint.model in models or any(m.split(":")[0] == self.endpoint.model.split(":")[0] for m in models)
+        if self.endpoint.provider == "openrouter":
+            # Exact id only: "google/gemma:free" and its paid sibling are different products with different limits.
+            present = self.endpoint.model in models
+        else:
+            present = self.endpoint.model in models or any(m.split(":")[0] == self.endpoint.model.split(":")[0] for m in models)
+        key_note = ""
+        if self.endpoint.provider == "openrouter":
+            key_ok, key_note = await self.check_key()
+            if not key_ok:
+                return {"ok": False, "state": "auth_failed", "detail": key_note, "models": models[:40]}
         return {
             "ok": True,
             "state": "ready" if present else "model_missing",
             "detail": (
-                f"{self.endpoint.model} available"
+                f"{self.endpoint.model} available" + (f" ({key_note})" if key_note else "")
                 if present
                 else f"{self.endpoint.model} not pulled on this server; {len(models)} model(s) available"
             ),
             "models": models[:40],
         }
+
+
+def _scrub(text: str) -> str:
+    """Never let a key echoed back by a server reach an error string (and from there a log or the UI)."""
+    return re.sub(r"sk-[A-Za-z0-9_\-]{8,}", "sk-***", text or "")
+
+
+def _retry_after(value: str | None) -> float | None:
+    try:
+        return max(0.0, float(value)) if value is not None else None
+    except ValueError:
+        return None
 
 
 async def _sleep(seconds: float) -> None:
