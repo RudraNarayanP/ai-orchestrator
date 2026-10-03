@@ -76,3 +76,22 @@ def test_merge_does_not_duplicate_a_page_seen_again_without_a_claim():
     merged = _merge_evidence([], [_ev("a")])
     merged = _merge_evidence(merged, [_ev(None)])
     assert len(merged) == 1 and merged[0].claim_id == "a"
+
+async def test_a_page_that_never_mentions_the_questions_subject_is_irrelevant(fake_fetch):
+    """Live: California/Singapore/UK-SI pages 'supported' a Ukrainian Family Code claim that had lost the word Ukraine."""
+    got = await gather_from_links(
+        "j", [{"href": URL, "claim_id": "c1", "claim_text": "The marriageable age is set at 18 years for both."}], require_names=["ukrai"]
+    )
+    assert got and all(e.check_status == SourceCheckStatus.IRRELEVANT and e.polarity == "neutral" for e in got)
+    assert "never mentions the question's subject" in (got[0].check_notes or "")
+
+
+async def test_a_page_that_mentions_the_subject_is_kept(fake_fetch, monkeypatch):
+    async def fetch(url, **kwargs):
+        return FetchedPage(url=url, final_url=url, status=200, title="Ukraine Family Code", text="Family Code of Ukraine: the marriageable age is 18 years for women and men.", ok=True)
+
+    monkeypatch.setattr(sources, "fetch_page", fetch)
+    got = await gather_from_links(
+        "j", [{"href": "https://zakon.example/fc", "claim_id": "c1", "claim_text": "The marriageable age is set at 18 years for both."}], require_names=["ukrai"]
+    )
+    assert got[0].check_status == SourceCheckStatus.CONFIRMED

@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import Any, Awaitable, Callable, Iterable
 
-from backend.evidence.sources import TIER_WEIGHT, gather_from_links, tier_for
+from backend.evidence.sources import TIER_WEIGHT, gather_from_links, subject_names, tier_for
 from backend.models import Claim, Evidence, ProviderResponse, ResearchMode
 from backend.research.claims import signature
 from backend.settings import Settings
@@ -264,6 +264,7 @@ async def build_pool(
         round_no=round_no,
         max_chars=settings.search.fetch_body_chars,
         attribute_to=[(c.id, c.claim) for c in _rank_claims(claims)[:12]],
+        require_names=subject_names(question),
     )
 
     # Look for the other side. Nothing above ever asks "who says this is wrong?",
@@ -283,6 +284,7 @@ async def build_pool(
                 round_no=round_no,
                 origin="search",
                 max_chars=settings.search.fetch_body_chars,
+                require_names=subject_names(question),
             )
         )
 

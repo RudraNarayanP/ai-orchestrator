@@ -86,7 +86,7 @@ VERIFIER_SCHEMA = """Return strict JSON only, no prose before or after:
    {"claim_id": "...", "claim": "...",
     "verdict": "supported|partially_supported|contested|refuted|insufficient_evidence",
     "confidence": "high|moderate|low|insufficient_evidence",
-    "reasoning": "two or three sentences naming the specific evidence",
+    "reasoning": "one short sentence (under 30 words) naming the specific evidence",
     "strong_evidence": ["url"],
     "weak_or_bad_evidence": ["what is weak and why"],
     "problems": ["citation_mismatch|hallucinated_citation|broken_url|outdated|secondary_misrepresents_primary|unsupported_inference|exaggeration|no_web_research|single_source|conflicting_primary_sources|unverifiable"]}
@@ -152,6 +152,27 @@ class Verifier:
             report.answer = self._strip_numbers(report.answer)
         return report
 
+    MAX_CLAIMS = 12
+
+    @classmethod
+    def focus(cls, claims: list[Claim], evidence: list[Evidence]) -> tuple[list[Claim], list[Evidence]]:
+        """Judge the claims that carry the answer, not all forty.
+
+        Live: ~40 reworded claims made the verdict list outrun max_tokens, the JSON was cut off, and the
+        run silently fell back to the model-free path (which then picked an obsolete claim). Claims with
+        confirmed pages and more providers behind them go first; the rest stay in the ledger unjudged.
+        """
+        if len(claims) <= cls.MAX_CLAIMS:
+            return claims, evidence
+        confirmed: dict[str, int] = {}
+        for e in evidence:
+            if e.claim_id and e.check_status == SourceCheckStatus.CONFIRMED and e.polarity != "refute":
+                confirmed[e.claim_id] = confirmed.get(e.claim_id, 0) + 1
+        ranked = sorted(claims, key=lambda c: (confirmed.get(c.id, 0) > 0, min(confirmed.get(c.id, 0), 3), len(c.provider_sources)), reverse=True)
+        keep = ranked[: cls.MAX_CLAIMS]
+        ids = {c.id for c in keep}
+        return keep, [e for e in evidence if not e.claim_id or e.claim_id in ids]
+
     def _system(self) -> str:
         return "\n\n".join(
             [
@@ -184,6 +205,7 @@ class Verifier:
         )
 
     def _material(self, question, claims, evidence, responses, disagreements, round_no: int = 1) -> str:
+        claims, evidence = self.focus(claims, evidence)
         claim_rows = [
             {
                 "claim_id": c.id,

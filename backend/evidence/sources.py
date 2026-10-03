@@ -265,6 +265,7 @@ _NAME_STOP = {
     "january", "february", "march", "april", "june", "july", "august", "september", "october", "november", "december",
     "under", "which", "where", "while", "their", "after", "before", "state", "states", "united", "kingdom", "national",
     "official", "student", "students", "policy", "policies", "guidance", "definition", "department", "ministry", "office",
+    "family", "criminal", "civil", "labour", "labor", "penal", "online", "safety", "protection",
 }
 
 
@@ -547,6 +548,7 @@ async def gather_from_links(
     origin: str = "provider",
     max_chars: int = 12000,
     attribute_to: list[tuple[str, str]] | None = None,
+    require_names: list[str] | None = None,
 ) -> list[Evidence]:
     """Fetch many cited pages without letting one slow server serialise us.
 
@@ -621,6 +623,13 @@ async def gather_from_links(
         if ev.check_status == SourceCheckStatus.UNREACHABLE and not _looks_like_host(ev.domain or ""):
             ev.check_status = SourceCheckStatus.HALLUCINATED
             ev.check_notes = (ev.check_notes or "") + "; domain does not exist"
+        if require_names and page.ok and not any(n in _fold((page.text or "") + " " + (page.title or "") + " " + (page.final_url or url or "")) for n in require_names):
+            # Live: a California Family Code page and a UK statutory instrument "supported" a Ukrainian Family Code claim
+            # because the extracted claim no longer said "Ukraine". The question's own subject must appear on the page.
+            ev.check_status = SourceCheckStatus.IRRELEVANT
+            ev.polarity = "neutral"
+            ev.check_notes = (f"page never mentions the question's subject ({', '.join(require_names[:3])}); " + (ev.check_notes or ""))[:400]
+            return [ev]
         out = [ev]
         if attribute_to and page.ok and not link.get("counter"):
             out.extend(_attributed_copies(ev, page, attribute_to, skip=link.get("claim_id")))

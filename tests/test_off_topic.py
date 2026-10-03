@@ -92,3 +92,19 @@ def test_ledger_supported_claims_about_other_years_become_a_reasoned_dont_know()
     Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)._reconcile(report, [claim], evs, q)
     assert report.answer.startswith("I don't know.") and "2028" in report.answer and "hasn't happened yet" in report.answer
     assert not report.sources and report.confidence != Confidence.HIGH
+
+def test_verifier_judges_at_most_twelve_claims_and_keeps_the_ones_with_pages():
+    """Live: ~40 reworded claims made the verdict JSON outrun max_tokens and the run fell back to the model-free path."""
+    from backend.models import Claim, Evidence, SourceCheckStatus
+    from backend.verification.verifier import Verifier
+
+    claims = [Claim(job_id="j", id=f"c{i}", claim=f"claim number {i} about the thing", kind="fact") for i in range(40)]
+    backed = {"c33", "c38"}
+    evidence = [Evidence(job_id="j", claim_id=cid, url=f"https://x.example/{cid}", check_status=SourceCheckStatus.CONFIRMED) for cid in backed]
+    evidence.append(Evidence(job_id="j", claim_id=None, url="https://orphan.example/", check_status=SourceCheckStatus.CONFIRMED))
+    kept, ev = Verifier.focus(claims, evidence)
+    assert len(kept) == Verifier.MAX_CLAIMS
+    assert backed <= {c.id for c in kept}, "claims with confirmed pages are judged first"
+    assert {e.claim_id for e in ev if e.claim_id} == backed
+    small, ev_small = Verifier.focus(claims[:5], evidence)
+    assert len(small) == 5 and len(ev_small) == len(evidence)
