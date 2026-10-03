@@ -1,0 +1,178 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "triv-2plus2",
+   "category": "trivial",
+   "kind": "answer",
+   "question": "What is 2 + 2?",
+   "answer": "4",
+   "why": "",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [],
+   "primary_domains": [],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 0,
+   "pages_confirmed": 0,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [],
+   "providers_failed": [],
+   "rounds": 0,
+   "verifier_model": null,
+   "browser_sessions": 0,
+   "verifier_calls": 0,
+   "stop_reason": "question answered at level 0; no investigation earned",
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [
+    "4"
+   ],
+   "claim_text_len": 0,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 4.0,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "figures with no opened page behind them: 4"
+    ]
+   }
+  },
+  {
+   "id": "uk-dpa-age",
+   "category": "uk-law",
+   "kind": "answer",
+   "question": "Under the Data Protection Act 2018, what is the minimum age at which a child can consent to information society services in the UK?",
+   "answer": "Under the Data Protection Act 2018, the minimum age at which a child can independently give consent to the processing of their personal data in relation to information society services in the UK is 13 years old. Under Section 9 of the Data Protection Act 2018, the age at which a child can give consent to information society services under Article 8 of the UK GDPR is set at 13 years old. Section 9 of the Data Protection Act 2018 modifies the default EU GDPR Article 8 threshold of 16 years down to 13 years for information society services within the UK legal framework. ⚖️",
+   "why": "3 pages we opened, from 3 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The AI reviewer wasn't available, so this rests only on the pages I could open and check."
+   ],
+   "sources": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/contents",
+    "https://cookie-script.com/privacy-laws/uk-data-protection-act-2018",
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr-old/what-are-the-rules-about-an-iss-and-consent/"
+   ],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/contents",
+    "https://www.legislation.gov.uk/ukpga/2018/12/contents",
+    "https://www.legislation.gov.uk/ukpga/2018/12/contents",
+    "https://www.legislation.gov.uk/ukpga/2018/12/contents",
+    "https://www.legislation.gov.uk/ukpga/2018/12/contents",
+    "https://www.legislation.gov.uk/ukpga/2018/12/contents"
+   ],
+   "primary_cited": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/contents"
+   ],
+   "pages_opened": 30,
+   "pages_confirmed": 25,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 2
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 3,
+   "verifier_model": "nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 2,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [],
+   "claim_text_len": 8001,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 520.2,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "ua-marriage-age",
+   "category": "ua-law",
+   "kind": "answer",
+   "question": "Under the Family Code of Ukraine, what is the minimum marriageable age and can a court allow it earlier?",
+   "answer": "I couldn't verify that reliably. None of the pages I opened confirms an answer, so I won't guess.",
+   "why": "",
+   "confidence": "Insufficient evidence",
+   "caveats": [
+    "One AI answer claimed: \"Based on the sources we were able to open, we cannot confirm the minimum marriageable age or court exception under the Family Code of Ukraine.\" I couldn't confirm that from any page I opened.",
+    "We could not access the official legislation text despite attempting to open the Verkhovna Rada page.",
+    "Article 22 marriageable age",
+    "Article 22 registration-day requirement"
+   ],
+   "sources": [],
+   "primary_domains": [
+    "zakon.rada.gov.ua"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 3,
+   "pages_confirmed": 1,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 3,
+   "verifier_calls": 2,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [],
+   "claim_text_len": 3401,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 373.4,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "said it could not answer an answerable question"
+    ]
+   }
+  }
+ ]
+}

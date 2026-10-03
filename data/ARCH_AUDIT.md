@@ -39,3 +39,9 @@ Scope: read-only inspection of `backend/`, `browser/adapters/` and `scripts/` at
 5. Curator: explicit RESEARCH_NEEDED parser (claim, reason, preferred researcher, instruction), thread-aware loop with a stop limit.
 6. Final answer: emoji only at the end, "I'm not sure" form, supported-claim sources always carried to the answer.
 7. Offline tests 1-8 plus prompt/RESEARCH_NEEDED tests; live check; README/AGENTS.md.
+
+## Addendum: correction and status (after the change)
+
+- Correction to the finding above: `router.select_secondaries` already excluded the `search` provider as a researcher; it only served as an evidence transport. It is now also in the eval's default skip list and own discovery is off by default.
+- Changes by commit: c4875bd (one conversation per AI per research id), 659709b (primary -> same-thread follow-up -> parallel independents, own-web-search prompts, self-correction records), 84a703f (own discovery off, opened-vs-mentioned, claim-evidence-source link, RESEARCH_NEEDED loop, tests 1-8), bc2bcf5/fa7c9fa (voice), 075cb3c (persistence + eval), a05935d (turn numbering).
+- Live results: `data/eval/ARCH_RESULTS.md`. Still unverified live: other sites' conversation URLs and obedience to the OPENED / MENTIONED ONLY labelling.
