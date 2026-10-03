@@ -367,3 +367,20 @@ def test_hedges_in_the_spec_are_all_detected():
     ):
         assert is_failure_phrase(text), text
     assert not is_failure_phrase("The age is 13, per section 9 of the Act.")
+
+def test_threads_corrections_and_opened_flags_are_persisted_per_research(tmp_path):
+    from backend.models import Evidence, ProviderResponse, SelfCorrection
+    from backend.storage.db import Store
+    from tests.conftest import base_settings
+
+    settings = base_settings(storage={"db_path": str(tmp_path / "t.db"), "artifacts_dir": str(tmp_path / "a")})
+    store = Store(settings)
+    job = Job(question="Q?")
+    job.responses.append(ProviderResponse(job_id=job.id, provider="chatgpt", prompt="p", thread_id=f"{job.id}:chatgpt", turn=2, continued=True, superseded=True))
+    job.corrections.append(SelfCorrection(job_id=job.id, provider="chatgpt", initial_claim="X", follow_up_result="Y", verdict="corrected", final_position="Y"))
+    job.evidence.append(Evidence(job_id=job.id, url="https://a.example/x", ai_opened=False, cited_by=["chatgpt"]))
+    store.save_job(job)
+    extra = store.job_snapshot(job.id)["extra"]
+    assert extra["threads"][0]["turn"] == 2 and extra["threads"][0]["continued"] is True and extra["threads"][0]["superseded"] is True
+    assert extra["corrections"][0]["initial_claim"] == "X" and extra["corrections"][0]["final_position"] == "Y"
+    assert extra["evidence_flags"][0]["ai_opened"] is False and extra["evidence_flags"][0]["cited_by"] == ["chatgpt"]

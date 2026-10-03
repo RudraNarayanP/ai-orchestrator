@@ -79,7 +79,7 @@ def test_the_question_file_is_valid_and_covers_every_trap_type_and_category():
     data = yaml.safe_load((ROOT / "scripts" / "eval_questions.yaml").read_text(encoding="utf-8"))["questions"]
     assert len({d["id"] for d in data}) == len(data), "ids must be unique"
     assert {d["kind"] for d in data} == {"answer", "false_premise", "myth", "unanswerable"}
-    assert {d["category"] for d in data} == {"uk-law", "ua-law", "university", "research"}
+    assert {d["category"] for d in data} == {"uk-law", "ua-law", "university", "research", "trivial"}
     for d in data:
         assert d["question"].strip() and d.get("expect") is not None and d.get("notes")
 

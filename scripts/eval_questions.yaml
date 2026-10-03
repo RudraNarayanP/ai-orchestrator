@@ -11,6 +11,13 @@
 # Ground truths below were chosen because they are stable and well known; "notes" says what the check rests on.
 
 questions:
+  # ---------------------------------------------------------------- trivial (must never reach a browser or the verifier)
+  - id: triv-2plus2
+    category: trivial
+    kind: answer
+    question: "What is 2 + 2?"
+    expect: {must_match: ["\\b4\\b"]}
+    notes: "Level 0: computed locally, zero browser sessions, zero verifier calls."
   # ---------------------------------------------------------------- UK Acts of Parliament
   - id: uk-dpa-age
     category: uk-law

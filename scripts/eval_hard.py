@@ -42,8 +42,8 @@ from backend.research.style import voice_report  # noqa: E402
 QUESTIONS = ROOT / "scripts" / "eval_questions.yaml"
 OUT_DIR = ROOT / "data" / "eval"
 # Walled or broken when logged out in the 2026-10-03 live runs; asking them only burns minutes.
-SKIP_BY_DEFAULT = ["copilot", "meta_ai", "le_chat", "pi", "qwen", "deepseek", "google_ai"]
-IDK_RE = re.compile(r"^\s*(i don'?t know|i couldn'?t verify|i can'?t verify)", re.I)
+SKIP_BY_DEFAULT = ["copilot", "meta_ai", "le_chat", "pi", "qwen", "deepseek", "google_ai", "search"]
+IDK_RE = re.compile(r"^\s*(i don'?t know|i couldn'?t verify|i can'?t verify|i'?m not sure)", re.I)
 
 # --------------------------------------------------------------------------------------------- scoring
 
@@ -170,6 +170,20 @@ def analyse(q: dict[str, Any], snapshot: dict[str, Any], runtime_s: float) -> di
         "providers_failed": final.get("providers_failed"),
         "rounds": final.get("rounds_run"),
         "verifier_model": (reports[-1].get("verifier_model") if reports else None),
+        "browser_sessions": live.get("browser_sessions", live.get("browser_sessions_used")),
+        "verifier_calls": live.get("verifier_calls"),
+        "stop_reason": live.get("stop_reason"),
+        "threads": [
+            {k: t.get(k) for k in ("provider", "role", "turn", "continued", "superseded")}
+            for t in ((live.get("extra") or {}).get("threads") or [])
+        ],
+        "corrections": [
+            {k: c.get(k) for k in ("provider", "verdict", "initial_claim", "follow_up_result", "final_position")}
+            for c in ((live.get("extra") or {}).get("corrections") or [])
+        ],
+        "ai_opened": {
+            str(f.get("url")): f.get("ai_opened") for f in ((live.get("extra") or {}).get("evidence_flags") or []) if f.get("cited_by")
+        },
         "unsupported_figures": unsupported,
         "claim_text_len": len(claim_text),
         "voice": voice_report(answer),
@@ -269,7 +283,7 @@ def trimmed_config(skip: list[str], dest: Path) -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", default="", help="comma-separated question ids")
-    ap.add_argument("--category", default="", help="uk-law | ua-law | university | research")
+    ap.add_argument("--category", default="", help="uk-law | ua-law | university | research | trivial")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--mode", default="STANDARD")
     ap.add_argument("--max-rounds", type=int, default=2)

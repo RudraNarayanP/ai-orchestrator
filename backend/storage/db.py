@@ -60,6 +60,9 @@ CREATE TABLE IF NOT EXISTS events (
   message TEXT, provider TEXT, round INTEGER, payload_json TEXT
 );
 CREATE INDEX IF NOT EXISTS events_job ON events(job_id, id);
+CREATE TABLE IF NOT EXISTS job_extra (
+  job_id TEXT PRIMARY KEY, extra_json TEXT
+);
 CREATE TABLE IF NOT EXISTS provider_health (
   provider TEXT PRIMARY KEY, status TEXT, detail TEXT, updated_at REAL
 );
@@ -138,6 +141,28 @@ class Store:
         )
         self._conn.commit()
         self._save_artifacts(job)
+        self._save_extra(job)
+
+    def _save_extra(self, job: Job) -> None:
+        '''Conversation threads, self-corrections and the opened-vs-mentioned flags, per research id.'''
+        extra = {
+            "threads": [
+                {
+                    "response_id": r.id, "provider": r.provider, "thread_id": r.thread_id, "turn": r.turn,
+                    "continued": r.continued, "superseded": r.superseded, "conversation_url": r.conversation_url, "role": r.role,
+                }
+                for r in job.responses
+            ],
+            "corrections": [c.model_dump(mode="json") for c in job.corrections],
+            "evidence_flags": [
+                {"id": e.id, "url": e.url, "ai_opened": e.ai_opened, "cited_by": e.cited_by} for e in job.evidence
+            ],
+        }
+        self._conn.execute(
+            "INSERT INTO job_extra (job_id, extra_json) VALUES (?,?) ON CONFLICT(job_id) DO UPDATE SET extra_json=excluded.extra_json",
+            (job.id, json.dumps(extra, ensure_ascii=False)),
+        )
+        self._conn.commit()
 
     def _save_artifacts(self, job: Job) -> None:
         for response in job.responses:
@@ -320,6 +345,8 @@ class Store:
             _json_fields(dict(row), ("positions_json", "claim_ids_json"))
             for row in self._conn.execute("SELECT * FROM disagreements WHERE job_id=?", (job_id,)).fetchall()
         ]
+        extra_row = self._conn.execute("SELECT extra_json FROM job_extra WHERE job_id=?", (job_id,)).fetchone()
+        out["extra"] = json.loads(extra_row["extra_json"]) if extra_row and extra_row["extra_json"] else {}
         out["reports"] = [
             _json_fields(dict(row), ("verdicts_json", "report_json"))
             for row in self._conn.execute("SELECT * FROM reports WHERE job_id=? ORDER BY round", (job_id,)).fetchall()
