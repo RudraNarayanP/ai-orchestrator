@@ -57,27 +57,70 @@ def claim_for_link(link: dict[str, Any], claims: list[Claim]) -> Claim | None:
     return scored[0][1]
 
 
-def search_queries(claims: list[Claim], question: str, *, limit: int = 4) -> list[str]:
-    """Queries aimed at the checkable parts, not at the whole question."""
-    queries: list[str] = []
-    ranked = sorted(
+def _rank_claims(claims: list[Claim]) -> list[Claim]:
+    return sorted(
         claims,
         key=lambda c: (c.kind in PRIORITY_KINDS, bool(signature(c.claim)["numbers"] or signature(c.claim)["years"]), len(c.provider_sources)),
         reverse=True,
     )
-    for claim in ranked[:limit]:
-        sig = signature(claim.claim)
-        figures = list(dict.fromkeys((sig["numbers"] + sig["years"])[:2]))
-        cleaned_numbers = {re.sub(r"[^0-9.]", "", f) for f in figures}
-        words = [t for t in sig["tokens"][:8] if t not in cleaned_numbers and not t.replace(".", "").isdigit()]
-        query = " ".join(words + figures).strip()
-        if len(query) < 8:
-            query = " ".join(words[:6]).strip() or question[:150]
+
+
+def _claim_query(claim: Claim, question: str) -> str:
+    sig = signature(claim.claim)
+    figures = list(dict.fromkeys((sig["numbers"] + sig["years"])[:2]))
+    cleaned_numbers = {re.sub(r"[^0-9.]", "", f) for f in figures}
+    words = [t for t in sig["tokens"][:8] if t not in cleaned_numbers and not t.replace(".", "").isdigit()]
+    query = " ".join(words + figures).strip()
+    if len(query) < 8:
+        query = " ".join(words[:6]).strip() or question[:150]
+    return query[:180]
+
+
+def search_queries(claims: list[Claim], question: str, *, limit: int = 4) -> list[str]:
+    """Queries aimed at the checkable parts, not at the whole question."""
+    queries: list[str] = []
+    for claim in _rank_claims(claims)[:limit]:
+        query = _claim_query(claim, question)
         if query and query not in queries:
-            queries.append(query[:180])
+            queries.append(query)
     if not queries:
         queries.append(question[:180])
     return queries[:limit]
+
+
+COUNTER_SUFFIX = " correction rebuttal contradicts actually"
+
+
+def is_material(claim: Claim) -> bool:
+    """Worth a hunt for refuting evidence: checkable, and not an opinion."""
+    if claim.kind in {"opinion", "contradiction"}:
+        return False
+    sig = signature(claim.claim)
+    return claim.kind in PRIORITY_KINDS or bool(sig["numbers"] or sig["years"] or sig["dates"])
+
+
+def counter_query(claim: Claim, question: str = "") -> str:
+    """The adversarial query for one claim: the claim's own words plus the words
+    pages use when they are disputing something."""
+    return (_claim_query(claim, question) + COUNTER_SUFFIX)[:200]
+
+
+def counter_targets(claims: list[Claim], question: str, *, limit: int) -> list[tuple[Claim, str]]:
+    """Material claims to try to refute, most-repeated and most-checkable first.
+
+    Popularity ranks *which claim gets challenged first*; it is never evidence.
+    """
+    out: list[tuple[Claim, str]] = []
+    seen: set[str] = set()
+    for claim in _rank_claims([c for c in claims if is_material(c)]):
+        query = counter_query(claim, question)
+        if query in seen:
+            continue
+        seen.add(query)
+        out.append((claim, query))
+        if len(out) >= limit:
+            break
+    return out
 
 
 def browser_fetch_factory(engine: Any, settings: Settings) -> Callable[..., Awaitable[Any]]:
@@ -221,6 +264,25 @@ async def build_pool(
         round_no=round_no,
     )
 
+    # Look for the other side. Nothing above ever asks "who says this is wrong?",
+    # so without this the REFUTED verdict could never come from real data.
+    counter_trace: list[dict[str, Any]] = []
+    counter_links = await _counter_links(
+        claims, question, mode, settings, links, emit, round_no, counter_trace, enabled=run_searches
+    )
+    if counter_links:
+        evidence.extend(
+            await gather_from_links(
+                job_id,
+                counter_links,
+                max_pages=len(counter_links),
+                concurrency=min(6, max(2, settings.research.max_workers)),
+                browser_fetch=browser_fetch,
+                round_no=round_no,
+                origin="search",
+            )
+        )
+
     # keep provenance the fetch layer does not carry
     by_url = {l.get("href"): l for l in links}
     for ev in evidence:
@@ -239,8 +301,67 @@ async def build_pool(
         "distinct_domains": len({e.domain for e in evidence if e.domain}),
         "queries": queries,
         "discovery": discovery,
+        "counter_queries": counter_trace,
+        "refuting": sum(1 for e in evidence if e.polarity == "refute"),
     }
     return evidence, trace
+
+
+async def _counter_links(
+    claims: list[Claim],
+    question: str,
+    mode: ResearchMode,
+    settings: Settings,
+    taken: list[dict[str, Any]],
+    emit: Callable[..., Awaitable[None]],
+    round_no: int,
+    trace: list[dict[str, Any]],
+    *,
+    enabled: bool,
+) -> list[dict[str, Any]]:
+    limit = int(settings.search.refutation_queries)
+    if not enabled or limit <= 0 or not claims:
+        return []
+    limit = {ResearchMode.QUICK: min(1, limit), ResearchMode.STANDARD: limit, ResearchMode.DEEP_RESEARCH: limit + 2}[mode]
+    from backend.evidence.search_http import search as http_search
+
+    already = {l.get("href") for l in taken}
+    out: list[dict[str, Any]] = []
+    for claim, query in counter_targets(claims, question, limit=limit):
+        try:
+            items, info = await http_search(
+                query,
+                engines=settings.search.engines,
+                limit=settings.search.max_results,
+                timeout_s=settings.search.per_query_timeout_s,
+            )
+        except Exception as exc:  # noqa: BLE001
+            trace.append({"query": query[:80], "error": type(exc).__name__})
+            continue
+        trace.append({"query": query[:80], "claim_id": claim.id, "results": len(items), "used": info.get("used")})
+        kept = 0
+        for item in items:
+            href = item.get("href") or ""
+            if not href.startswith("http") or href in already:
+                continue
+            already.add(href)
+            out.append(
+                {
+                    **item,
+                    "claim_id": claim.id,
+                    "claim_text": claim.claim,
+                    "polarity": "support",  # decided after the page is read, never before
+                    "counter": True,
+                    "origin": "search",
+                    "cited_by": query,
+                }
+            )
+            kept += 1
+            if kept >= 3:
+                break
+    if out:
+        await emit("evidence", f"looked for sources that contradict {len(trace)} claim(s); reading {len(out)} page(s)", None, round_no)
+    return out
 
 
 def _rank_links(links: list[dict[str, Any]], claims: list[Claim]) -> list[dict[str, Any]]:

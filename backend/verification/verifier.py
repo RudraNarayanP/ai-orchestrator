@@ -163,6 +163,9 @@ class Verifier:
                         "the page and found the claim's figure or date in it. mismatch means the page does not contain it -- "
                         "that is a strike against the provider, not support.",
                         "- hallucinated means the cited domain does not exist. Treat it as fabricated evidence.",
+                        "- polarity=refute with check_status=confirmed means we opened a page and it says the OPPOSITE of the "
+                        "claim (the excerpt is its own sentence). Weigh it by tier like any other source; a primary source that "
+                        "contradicts a popular claim makes the claim refuted no matter how many providers repeated it.",
                         "- Count independent domains, not mentions. Four providers citing one wire story is one source.",
                         "- Do not raise a claim's confidence because several providers said the same thing.",
                         "- When two sources of comparable tier genuinely conflict, verdict is contested and you must say "
@@ -333,8 +336,33 @@ class Verifier:
         if any(r.web_research_status == WebResearchStatus.FAILED_OR_UNCLEAR for r in []):
             pass
 
+        # Evidence against a claim is weighed by who said it, exactly like evidence
+        # for it: a primary source outranks a pile of secondary ones, and a stray
+        # low-tier page does not outvote a primary source.
+        best_ref = max((TIER_WEIGHT.get(e.tier, 0.3) for e in refuting), default=0.0)
+        best_sup = max((TIER_WEIGHT.get(e.tier, 0.3) for e in supporting), default=0.0)
+        ref_domains = {e.domain for e in refuting if e.domain}
+        contradiction = None
         if refuting and supporting:
+            if best_ref >= 0.9 and best_ref >= best_sup + 0.2:
+                contradiction = "refuted"
+            elif best_sup >= best_ref + 0.2:
+                contradiction = "outweighed"
+                problems.append("contradicted_by_weaker_source")
+            else:
+                contradiction = "contested"
+        elif refuting:
+            contradiction = "refuted" if best_ref >= 0.6 else "weak"
+
+        if contradiction == "refuted":
+            verdict = ClaimStatus.REFUTED
+            confidence = Confidence.HIGH if (best_ref >= 0.9 and len(ref_domains) >= 2) else Confidence.MODERATE
+            problems.append("contradicted_by_source")
+        elif contradiction == "contested":
             verdict, confidence = ClaimStatus.CONTESTED, Confidence.LOW
+        elif contradiction == "weak":
+            verdict, confidence = ClaimStatus.INSUFFICIENT_EVIDENCE, Confidence.NONE
+            problems.append("weak_contradiction")
         elif supporting and len(domains) >= self.min_independent_sources and any(
             TIER_WEIGHT.get(e.tier, 0) >= 0.72 for e in supporting
         ):
@@ -347,8 +375,6 @@ class Verifier:
                 )
         elif supporting:
             verdict, confidence = ClaimStatus.PARTIALLY_SUPPORTED, Confidence.MODERATE if len(domains) >= 1 else Confidence.LOW
-        elif refuting:
-            verdict, confidence = ClaimStatus.REFUTED, Confidence.MODERATE
         elif bad:
             verdict, confidence = ClaimStatus.INSUFFICIENT_EVIDENCE, Confidence.NONE
             problems.append("citation_mismatch")
@@ -356,7 +382,7 @@ class Verifier:
             verdict, confidence = ClaimStatus.INSUFFICIENT_EVIDENCE, Confidence.NONE
 
         if contested and verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED, ClaimStatus.REFUTED}:
-            own = [e for e in confirmed]
+            own = [e for e in supporting]
             opp = [e for e in opposing_evidence if e.check_status == SourceCheckStatus.CONFIRMED]
             if own and not opp:
                 # Not a real conflict: one side opened a page that says it, the
@@ -385,10 +411,15 @@ class Verifier:
             confidence=confidence,
             reasoning=(
                 f"{len(supporting)} confirmed source(s) across {len(domains)} independent domain(s); "
-                f"{len(bad)} failed citation check(s); ledger score {round(score, 2)}. "
+                + (f"{len(refuting)} opened source(s) say the opposite; " if refuting else "")
+                + f"{len(bad)} failed citation check(s); ledger score {round(score, 2)}. "
                 f"Provider agreement ({len(claim.provider_sources)}) was deliberately not counted."
             ),
-            strong_evidence=[e.url for e in supporting if e.url][:5] or [e.url for e in refuting if e.url][:5],
+            strong_evidence=(
+                [e.url for e in refuting if e.url][:5]
+                if verdict == ClaimStatus.REFUTED
+                else ([e.url for e in supporting if e.url][:5] or [e.url for e in refuting if e.url][:5])
+            ),
             weak_or_bad_evidence=[f"{e.url}: {e.check_status.value}" for e in (bad + stale)][:5],
             problems=sorted(set(problems)),
         )
@@ -456,6 +487,7 @@ class Verifier:
         )
         good = [v for v in ranked if v.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED}]
         contested = [v for v in ranked if v.verdict == ClaimStatus.CONTESTED]
+        refuted = [v for v in ranked if v.verdict == ClaimStatus.REFUTED]
         urls = [u for v in good for u in v.strong_evidence]
         by_url = {e.url: e for e in evidence if e.url}
         sources = [
@@ -475,8 +507,30 @@ class Verifier:
             caveats = []
             if contested:
                 disagreement = f"Still in dispute: {contested[0].claim}"
+            elif refuted:
+                # Repeated by providers, contradicted by a page we opened.
+                disagreement = f"Often repeated but contradicted by {self._refuter(refuted[0], evidence)}: {refuted[0].claim}"
             if confidence == Confidence.MODERATE:
                 caveats.append("Only one solid source, or the source is a step away from primary.")
+        elif refuted and not contested:
+            top = refuted[0]
+            who = self._refuter(top, evidence)
+            said = next((e.verbatim_excerpt for e in evidence if e.claim_id == top.claim_id and e.polarity == "refute" and e.verbatim_excerpt), "")
+            answer = (
+                f"No - that doesn't hold up. {who} says: \"{said[:240].strip()}\""
+                if said
+                else f"No - that doesn't hold up. {who} contradicts it: {top.claim}"
+            )
+            confidence = top.confidence
+            why = top.reasoning
+            disagreement = None
+            caveats = []
+            urls = list(top.strong_evidence)
+            sources = [
+                Citation(url=u, title=by_url[u].title, published=by_url[u].published, provider=by_url[u].domain)
+                for u in dict.fromkeys(urls)
+                if u in by_url
+            ][:6]
         elif contested:
             answer = f"The sources genuinely conflict on this: {contested[0].claim}"
             confidence = Confidence.LOW
@@ -493,6 +547,13 @@ class Verifier:
         return {"answer": answer, "why": why, "disagreement": disagreement, "confidence": confidence, "sources": sources, "caveats": caveats}
 
     # ---------------------------------------------------------------- helpers
+
+    @staticmethod
+    def _refuter(verdict: ClaimVerdict, evidence: list[Evidence]) -> str:
+        for e in evidence:
+            if e.claim_id == verdict.claim_id and e.polarity == "refute" and e.domain:
+                return e.domain.removeprefix("www.")
+        return "a source we opened"
 
     def _from_model(self, parsed: dict[str, Any], *, job_id: str, round_no: int, claims: list[Claim], evidence: list[Evidence]) -> VerifierReport | None:
         try:
@@ -561,14 +622,29 @@ class Verifier:
         """A model cannot promote a claim our own ledger does not support."""
         confirmed_by_claim: dict[str, int] = {}
         domains_by_claim: dict[str, set[str]] = {}
+        claims_by_id = {c.id: c for c in claims}
+        by_claim: dict[str, list[Evidence]] = {}
         for ev in evidence:
-            if ev.check_status == SourceCheckStatus.CONFIRMED and ev.claim_id:
+            if ev.claim_id:
+                by_claim.setdefault(ev.claim_id, []).append(ev)
+        for ev in evidence:
+            if ev.check_status == SourceCheckStatus.CONFIRMED and ev.claim_id and ev.polarity != "refute":
                 confirmed_by_claim[ev.claim_id] = confirmed_by_claim.get(ev.claim_id, 0) + 1
                 domains_by_claim.setdefault(ev.claim_id, set())
                 if ev.domain:
                     domains_by_claim[ev.claim_id].add(ev.domain)
         for verdict in report.verdicts:
             count = confirmed_by_claim.get(verdict.claim_id, 0)
+            claim = claims_by_id.get(verdict.claim_id)
+            if claim is not None and verdict.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED}:
+                ledger = self._verdict_for(claim, by_claim.get(claim.id, []))
+                if ledger.verdict == ClaimStatus.REFUTED:
+                    # A model cannot keep a claim alive that an opened primary source contradicts.
+                    verdict.verdict = ClaimStatus.REFUTED
+                    verdict.confidence = ledger.confidence
+                    verdict.strong_evidence = ledger.strong_evidence
+                    verdict.problems.append("overruled: an opened primary source contradicts this claim")
+                    continue
             if count == 0 and verdict.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED}:
                 verdict.verdict = ClaimStatus.INSUFFICIENT_EVIDENCE
                 verdict.confidence = Confidence.NONE

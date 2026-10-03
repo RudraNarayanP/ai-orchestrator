@@ -608,12 +608,22 @@ class ResearchRunner:
         *,
         focus: str,
     ) -> SufficiencyAssessment:
-        confirmed = [e for e in evidence if e.check_status == SourceCheckStatus.CONFIRMED]
+        # A page that was opened and says the OPPOSITE is confirmed evidence too, but
+        # it never counts toward establishing a claim.
+        confirmed = [e for e in evidence if e.check_status == SourceCheckStatus.CONFIRMED and e.polarity != "refute"]
+        refuting = [e for e in evidence if e.check_status == SourceCheckStatus.CONFIRMED and e.polarity == "refute"]
         domains = {e.domain for e in confirmed if e.domain}
         has_primary = any(e.tier.value in {"primary_official", "original_research", "government"} for e in confirmed)
         material = [c for c in claims if c.kind in MATERIAL_KINDS or _has_figure(c.claim)]
-        established = [c for c in material if any(e.claim_id == c.id and e.check_status == SourceCheckStatus.CONFIRMED for e in evidence)]
-        unresolved = [c.claim for c in material if c not in established]
+        contradicted = {e.claim_id for e in refuting if e.claim_id}
+        established = [
+            c for c in material
+            if c.id not in contradicted and any(e.claim_id == c.id for e in confirmed)
+        ]
+        # Contradicted and nothing backs it: that question is settled (it is false),
+        # so it is not "unresolved" -- but it also establishes nothing.
+        refuted_only = [c for c in material if c.id in contradicted and not any(e.claim_id == c.id for e in confirmed)]
+        unresolved = [c.claim for c in material if c not in established and c not in refuted_only]
         failure_signals = sorted({s for r in job.responses if r.role in {"primary", "secondary"} for s in r.failure_signals})
         no_sources = [r.provider for r in job.responses if r.status.value == "completed" and not r.citations]
         mismatch = [e for e in evidence if e.check_status in {SourceCheckStatus.MISMATCH, SourceCheckStatus.HALLUCINATED, SourceCheckStatus.BROKEN_URL}]
@@ -627,8 +637,11 @@ class ResearchRunner:
             signals.append(f"{len(established)}/{len(material)} material claim(s) confirmed by an opened source")
         if len(domains) >= self.settings.research.min_independent_sources:
             signals.append(f"{len(domains)} independent domain(s) in agreement")
+        if refuted_only:
+            signals.append(f"{len(refuted_only)} claim(s) contradicted by an opened source")
         min_sources = self.settings.research.min_independent_sources
-        coverage = (len(established) / len(material)) if material else (1.0 if confirmed else 0.0)
+        open_material = [c for c in material if c not in refuted_only]
+        coverage = (len(established) / len(open_material)) if open_material else (0.0 if material else (1.0 if confirmed else 0.0))
         # Evidence only establishes something if it attaches to a claim. Eight
         # opened pages that answer nothing are eight pages, not an answer -- without
         # this, a provider that produced no text at all could look "sufficiently
@@ -676,6 +689,9 @@ class ResearchRunner:
         elif coverage < 0.8:
             recommends = EscalationLevel.PARALLEL
             reasons.append(f"{len(unresolved)} material claim(s) still unconfirmed")
+        if refuted_only:
+            recommends = max(recommends, EscalationLevel.PARALLEL, key=int)
+            reasons.append(f"{len(refuted_only)} claim(s) contradicted by an opened source; the true answer is still open")
         if contradictions:
             recommends = EscalationLevel.DEEP
             reasons.append(f"{contradictions} material conflict(s)")
@@ -946,6 +962,7 @@ def _merge_evidence(old: list[Evidence], new: list[Evidence]) -> list[Evidence]:
             rank = {SourceCheckStatus.CONFIRMED: 3, SourceCheckStatus.OUTDATED: 2, SourceCheckStatus.NOT_CHECKED: 1}
             if rank.get(ev.check_status, 0) > rank.get(existing.check_status, 0):
                 existing.check_status = ev.check_status
+                existing.polarity = ev.polarity
                 existing.verbatim_excerpt = ev.verbatim_excerpt or existing.verbatim_excerpt
                 existing.check_notes = ev.check_notes or existing.check_notes
             existing.claim_id = ev.claim_id or existing.claim_id

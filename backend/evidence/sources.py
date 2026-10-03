@@ -322,6 +322,118 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
     }
 
 
+_CURRENCY_RE = re.compile(r"[$\u20ac\u00a3\u20b9]|\b(?:usd|eur|gbp|inr|dollars?|euros?|pounds?|rupees?)\b", re.I)
+_MULT = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6, "b": 1e9, "bn": 1e9, "billion": 1e9}
+_STRONG_CUE_RE = re.compile(
+    r"\b(false(?:ly)?|incorrect(?:ly)?|untrue|not true|myth|debunk(?:ed|s)?|misreport(?:ed)?|mistaken(?:ly)?|"
+    r"misconception|correction|corrected|retract(?:ed|ion)?|rebut(?:ted|tal)?|erroneous(?:ly)?|inaccurate)\b",
+    re.I,
+)
+_NEGATOR_BEFORE = r"(?:\bnot|rather than|instead of|contrary to|unlike|\bnever)\s+(?:[\w$%.,-]+\s+){0,2}"
+
+
+def _figure_value(raw: str) -> tuple[str, float] | None:
+    """(kind, value) for a figure string such as '$549', '12%', '1.2 billion'."""
+    text = (raw or "").strip().lower()
+    digits = re.sub(r"[^0-9.]", "", text)
+    if not digits or digits == ".":
+        return None
+    try:
+        value = float(digits)
+    except ValueError:
+        return None
+    unit = re.search(r"(thousand|million|billion|bn|k|m|b)\s*$", text)
+    if unit:
+        value *= _MULT[unit.group(1)]
+    if "%" in text or "percent" in text:
+        kind = "pct"
+    elif _CURRENCY_RE.search(raw or ""):
+        kind = "cur"
+    else:
+        kind = "plain"
+    return kind, value
+
+
+def _figures(sig: dict[str, Any], context: str = "") -> dict[str, set[float]]:
+    out: dict[str, set[float]] = {}
+    years = set(sig.get("years") or [])
+    for raw in sig.get("numbers") or []:
+        if re.sub(r"[^0-9]", "", raw) in years:
+            continue  # a year is compared as a year, not as a quantity
+        parsed = _figure_value(raw)
+        if parsed:
+            kind, value = parsed
+            out.setdefault(kind, set()).add(value)
+    if context and _CURRENCY_RE.search(context) and "plain" in out and "cur" not in out:
+        out["cur"] = out.pop("plain")  # "549 dollars" -> currency
+    return out
+
+
+def check_refutation(claim: str, page: "FetchedPage") -> dict[str, Any] | None:
+    """Does this page document the *opposite* of the claim?
+
+    Deliberately conservative, because a false refutation is as damaging as a false
+    confirmation. A page only counts if one sentence of it is about the same
+    subject (most of the claim's distinctive words) AND does one of:
+
+    * explicit correction -- negates the claim's own figure ("not $499") or pairs it
+      with a retraction word ("the $499 price is false");
+    * conflicting figure -- gives a different figure of the same kind (currency,
+      percentage, plain count) or a different year for the same subject;
+    * negation -- flips the claim's polarity, or calls it a myth/false/debunked.
+
+    Returns the evidence sentence and why it counts, or None.
+    """
+    from backend.research.claims import signature, split_sentences
+
+    text = page.text or ""
+    if not text.strip():
+        return None
+    sig = signature(claim)
+    topical = [t for t in sig["tokens"] if not re.fullmatch(r"[\d.,$%]+", t)][:10]
+    if len(topical) < 2:
+        return None
+    need = max(2, -(-len(topical) * 6 // 10))
+    claim_figs = _figures(sig, claim)
+    claim_years = set(sig["years"])
+    raw_figures = [n.strip().rstrip(".,") for n in sig["numbers"] if re.sub(r"[^0-9]", "", n) not in claim_years]
+
+    for sentence in split_sentences(text)[:400]:
+        low = sentence.lower()
+        if sum(1 for t in topical if t in low) < need:
+            continue
+        ssig = signature(sentence)
+        sent_figs = _figures(ssig, sentence)
+        sent_years = set(ssig["years"])
+
+        def hit(kind: str, why: str) -> dict[str, Any]:
+            return {"kind": kind, "excerpt": re.sub(r"\s+", " ", sentence)[:420], "why": why}
+
+        for raw in raw_figures:
+            if re.search(_NEGATOR_BEFORE + re.escape(raw), sentence, re.I):
+                return hit("explicit_correction", f"page says it is not {raw}")
+        for raw in raw_figures:
+            value = _figure_value(raw)
+            if value and value[1] in sent_figs.get(value[0], set()) and _STRONG_CUE_RE.search(sentence):
+                return hit("explicit_correction", f"page calls the {raw} figure wrong")
+        for kind, values in claim_figs.items():
+            theirs = sent_figs.get(kind)
+            if not theirs or values & theirs:
+                continue
+            if kind == "plain" and (len(values) != 1 or len(theirs) != 1):
+                continue  # bare counts are too ambiguous unless exactly one on each side
+            return hit("conflicting_figure", f"page gives {sorted(theirs)[:2]} where the claim has {sorted(values)[:2]}")
+        if claim_years and sent_years and not (claim_years & sent_years):
+            return hit("conflicting_figure", f"page gives {sorted(sent_years)} where the claim has {sorted(claim_years)}")
+        strict = max(3, -(-len(topical) * 7 // 10))
+        if sum(1 for t in topical if t in low) >= strict:
+            if sig["polarity"] != ssig["polarity"] and not (claim_figs or claim_years):
+                return hit("negation", f"page states the opposite ({ssig['polarity']} vs claim {sig['polarity']})")
+            if _STRONG_CUE_RE.search(sentence) and not (claim_figs or claim_years):
+                return hit("negation", "page calls this claim false or a myth")
+    return None
+
+
 def evidence_from_page(job_id: str, claim_id: str | None, page: FetchedPage, check: dict[str, Any], *, round_no: int = 1, polarity: str = "support", origin: str = "provider") -> Evidence:
     return Evidence(
         job_id=job_id,
@@ -402,13 +514,31 @@ async def gather_from_links(
             unique[url] = link
     items = list(unique.values())[:max_pages]
 
-    async def one(link: dict[str, Any]) -> Evidence:
+    async def one(link: dict[str, Any]) -> Evidence | None:
         url = link.get("href") or link.get("url")
         async with sem:
             page = await fetch_page(url, browser_fetch=browser_fetch)
         claim = link.get("claim_text")
+        polarity = link.get("polarity", "support")
+        refutation: dict[str, Any] | None = None
         if claim:
             check = check_support(claim, page)
+            counter = bool(link.get("counter"))
+            # A page that failed to back the claim may be documenting the opposite;
+            # a page found by a counter-query is only worth keeping if it does.
+            if page.ok and (counter or check["status"] == SourceCheckStatus.MISMATCH):
+                refutation = check_refutation(claim, page)
+            if refutation:
+                polarity = "refute"
+                check = {
+                    "status": SourceCheckStatus.CONFIRMED,
+                    "coverage": check.get("coverage"),
+                    "excerpt": refutation["excerpt"],
+                    "missing": [],
+                    "refutation": refutation,
+                }
+            elif counter and check["status"] != SourceCheckStatus.CONFIRMED:
+                return None
         else:
             check = {
                 "status": SourceCheckStatus.CONFIRMED if page.ok else SourceCheckStatus.UNREACHABLE,
@@ -422,9 +552,12 @@ async def gather_from_links(
             page,
             check,
             round_no=round_no,
-            polarity=link.get("polarity", "support"),
+            polarity=polarity,
             origin=origin,
         )
+        if refutation:
+            ev.check_notes = f"contradicts the claim ({refutation['kind']}): {refutation['why']}; " + (ev.check_notes or "")
+            ev.check_notes = ev.check_notes[:400]
         if link.get("title") and not ev.title:
             ev.title = str(link["title"])[:220]
         if link.get("snippet") and not ev.snippet:
@@ -438,7 +571,8 @@ async def gather_from_links(
             ev.check_notes = (ev.check_notes or "") + "; domain does not exist"
         return ev
 
-    return await asyncio.gather(*(one(link) for link in items)) if items else []
+    gathered = await asyncio.gather(*(one(link) for link in items)) if items else []
+    return [ev for ev in gathered if ev is not None]
 
 
 def summarise(evidence: list[Evidence]) -> dict[str, Any]:

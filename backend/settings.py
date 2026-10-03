@@ -163,6 +163,9 @@ class SearchConfig(BaseModel):
     max_results: int = 8
     fetch_body_chars: int = 12000
     http_fallback: bool = True
+    refutation_queries: int = 3
+    """Material claims per round that get a counter-query (claim + correction / rebuttal / contradicts / actually). 0 disables."""
+
     per_query_timeout_s: int = 40
 
 
