@@ -31,6 +31,7 @@ create table if not exists messages(msg_id integer primary key autoincrement, th
   role text, content text, provider text, ts real, tokens integer, job_id text, emb blob);
 create index if not exists msg_thread_seq on messages(thread_id, seq);
 create index if not exists msg_seg on messages(segment_id);
+create index if not exists msg_seg_seq on messages(segment_id, seq);
 create virtual table if not exists messages_fts using fts5(tid, content, tokenize='porter unicode61');
 create virtual table if not exists summaries_fts using fts5(tid, segment, content, tokenize='porter unicode61');
 """
@@ -264,9 +265,9 @@ class ThreadStore:
 
     def messages(self, tid: str, *, last: int | None = None, segment_id: str | None = None, after_seq: int | None = None) -> list[Message]:
         q, args = f"select {self._COLS} from messages where thread_id=?", [tid]
-        if segment_id:
-            q += " and segment_id=?"
-            args.append(segment_id)
+        if segment_id:  # +thread_id: keep the planner on the (segment_id, seq) index instead of scanning the whole thread
+            q = f"select {self._COLS} from messages where segment_id=? and +thread_id=?"
+            args = [segment_id, tid]
         if after_seq is not None:
             q += " and seq>?"
             args.append(after_seq)
