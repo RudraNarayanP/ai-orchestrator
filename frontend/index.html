@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OmniBrain</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="dot" id="doctorDot" title="checking local model..."></span>
+    <h1>OmniBrain</h1>
+  </div>
+  <div class="controls">
+    <label class="field">
+      <span>mode</span>
+      <select id="mode">
+        <option value="QUICK">Quick</option>
+        <option value="STANDARD" selected>Standard</option>
+        <option value="DEEP_RESEARCH">Deep research</option>
+      </select>
+    </label>
+    <label class="field narrow">
+      <span>rounds</span>
+      <input type="number" id="maxRounds" min="1" max="8" value="3">
+    </label>
+    <button id="openSettings" class="ghost">providers &amp; verifier</button>
+  </div>
+</header>
+
+<main>
+  <section id="stream" class="stream" aria-live="polite"></section>
+
+  <section id="live" class="live" hidden>
+    <h2>Working</h2>
+    <div id="liveStage" class="stage"></div>
+    <ul id="providers" class="providers"></ul>
+    <ol id="log" class="log"></ol>
+    <button id="cancel" class="ghost small">stop</button>
+  </section>
+
+  <aside id="settings" class="settings" hidden>
+    <h2>Providers</h2>
+    <div id="providerList"></div>
+    <h2>Verifier</h2>
+    <label>Backend
+      <select id="vProvider">
+        <option value="ollama">Ollama</option>
+        <option value="lm_studio">LM Studio</option>
+        <option value="openrouter">OpenRouter</option>
+        <option value="openai_compatible">Other OpenAI-compatible</option>
+        <option value="disabled">Disabled (ledger only)</option>
+      </select>
+    </label>
+    <label>Model <input id="vModel" type="text" placeholder="qwen3:14b"></label>
+    <label>Base URL <input id="vBaseUrl" type="text" placeholder="http://localhost:11434/v1"></label>
+    <label>API key <input id="vApiKey" type="password" placeholder="stored locally, never sent to the page"></label>
+    <div class="row">
+      <label>Temp <input id="vTemp" type="number" step="0.05" min="0" max="1"></label>
+      <label>Max tokens <input id="vTokens" type="number" min="256" step="256"></label>
+    </div>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="vDeep"> deep verification</label>
+      <label class="check"><input type="checkbox" id="vInspect"> open cited sources</label>
+    </div>
+    <p id="modelList" class="hint"></p>
+    <div class="row">
+      <button id="saveSettings" class="primary">save</button>
+      <button id="testVerifier" class="ghost">test connection</button>
+      <button id="closeSettings" class="ghost">close</button>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <form id="askForm">
+    <textarea id="question" rows="1" placeholder="Ask something that needs checking&hellip;"></textarea>
+    <button type="submit" class="primary" id="askBtn">Ask</button>
+  </form>
+  <p class="hint" id="footHint">
+    Runs in its own Chrome windows &mdash; never your everyday browser. No API keys for the chat sites: sign in once, it remembers.
+  </p>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+# OmniBrain configuration.
+# Copy to config/settings.yaml (that file is what gets loaded) and edit.
+#
+# BROWSER ISOLATION, THE SHORT VERSION
+# OmniBrain runs in its own Chrome window(s) with their own profiles under
+# browser/profiles/. It never attaches to, reads, or clicks inside the Chrome you
+# use day to day, and it never copies your session cookies out of it.
+#
+# Default is ONE window with one tab per provider, reused between runs -- a run
+# should not leave eight Chrome windows on your desktop. Set window_mode:
+# per_provider if you want each site isolated in its own profile at the cost of
+# one window each.
+#
+# You asked about driving your real logged-in Chrome: Chrome 136+ ignores
+# --remote-debugging-port on the default profile, so there is no port to point
+# cdp_url at unless you relaunch Chrome with a separate --user-data-dir (which
+# would be a different, logged-out profile). The practical route is to sign into
+# the OmniBrain profile once -- run.py login -- and it is remembered.
+
+browser:
+  channel: chrome            # installed Chrome; set to "msedge" to use Edge
+  headless: false            # you must be able to watch it work
+  window_mode: single        # single | per_provider
+  reuse_tabs: true           # adopt an already-open provider tab instead of another
+  # cdp_url: http://127.0.0.1:9222   # only useful for a Chrome YOU launched with
+                                     # --remote-debugging-port and a non-default profile
+  width: 1440
+  height: 900
+  window_offset_x: 60
+  window_offset_y: 40
+  nav_timeout_ms: 45000
+  settle_ms: 900
+  max_concurrent_profiles: 4  # in single mode this caps concurrent tabs
+  focus_nudge_after_s: 25     # bring a stalled background tab forward after this long
+  keep_windows_open: true
+
+verifier:
+  # provider: ollama | lm_studio | openrouter | openai_compatible | disabled
+  provider: ollama
+  model: qwen3:14b
+  base_url: http://localhost:11434/v1
+  api_key: ""                # never leaves the backend
+  temperature: 0.1
+  max_tokens: 4096
+  timeout_s: 240
+  deep_verification: true
+  inspect_cited_sources: true
+  max_sources_per_claim: 3
+
+analysis:
+  # cheaper endpoint for question analysis / claim extraction / synthesis
+  provider: ollama
+  model: qwen3:14b
+  base_url: http://localhost:11434/v1
+  api_key: ""
+  temperature: 0.3
+  max_tokens: 2048
+
+research:
+  mode: STANDARD             # QUICK | STANDARD | DEEP_RESEARCH
+  max_rounds: 3
+  max_workers: 4
+  per_provider_concurrency: 1
+  follow_up_providers: 3
+  min_independent_sources: 2
+  claim_batch_size: 12
+  response_stability_poll_ms: 700
+  response_stable_rounds: 3
+  hard_response_timeout_s: 180
+
+search:
+  engines: [duckduckgo, google]
+  max_results: 8
+  fetch_body_chars: 12000
+  http_fallback: true
+  per_query_timeout_s: 40
+
+storage:
+  db_path: data/omnibrain.db
+  artifacts_dir: data/artifacts
+  keep_raw_responses: true
+
+providers:
+  chatgpt:
+    enabled: true
+    label: ChatGPT
+    url: https://chatgpt.com/
+    new_chat_url: https://chatgpt.com/
+    timeout_s: 180
+    weight: 1.0
+
+  gemini:
+    enabled: true
+    label: Gemini
+    url: https://gemini.google.com/app
+    new_chat_url: https://gemini.google.com/app
+    timeout_s: 180
+    weight: 1.0
+
+  google_ai:
+    # Google's consumer AI search overlay ("AI Mode"), i.e. the AI answer layer
+    # on top of Search -- deliberately separate from the Gemini chat app.
+    enabled: true
+    label: Google AI
+    url: https://www.google.com/search?udm=50
+    tab_role: own_window
+    timeout_s: 150
+    weight: 0.9
+    notes: Uses Google AI Mode; no login needed but a consent wall can appear.
+
+  copilot:
+    enabled: true
+    label: Microsoft Copilot
+    url: https://copilot.microsoft.com/
+    new_chat_url: https://copilot.microsoft.com/
+    timeout_s: 180
+    weight: 1.0
+
+  meta_ai:
+    enabled: true
+    label: Meta AI
+    url: https://meta.ai/
+    new_chat_url: https://meta.ai/
+    timeout_s: 150
+    weight: 0.8
+
+  le_chat:
+    enabled: true
+    label: Le Chat
+    url: https://chat.mistral.ai/chat
+    new_chat_url: https://chat.mistral.ai/chat
+    timeout_s: 150
+    weight: 0.8
+
+  pi:
+    enabled: true
+    label: Pi
+    url: https://pi.ai/
+    new_chat_url: https://pi.ai/
+    timeout_s: 120
+    weight: 0.6
+    requires_login: true
+    notes: Pi keeps no searchable history in some regions; capture is live-only.
+
+  search:
+    # Not a chat model: real web research in a dedicated window. This is the
+    # layer that produces independent evidence instead of another opinion.
+    enabled: true
+    label: Google Search
+    url: https://www.google.com/search?q=
+    tab_role: shared_tab
+    timeout_s: 60
+    weight: 1.2
+    requires_login: false
+    notes: Doubles as the citation-fetching transport.
+
+  qwen:
+    enabled: true
+    label: Qwen Chat
+    url: https://chat.qwen.ai/
+    new_chat_url: https://chat.qwen.ai/
+    adapter: generic_chat
+    timeout_s: 180
+    weight: 0.8
+    notes: Selectors not yet probed; uses candidate scoring. Sign in once in its window.
+
+  deepseek:
+    enabled: true
+    label: DeepSeek
+    url: https://chat.deepseek.com/
+    new_chat_url: https://chat.deepseek.com/
+    adapter: generic_chat
+    timeout_s: 180
+    weight: 0.8
+    notes: Consumer web chat at chat.deepseek.com; needs a one-time sign-in in its window.
+
+  # ---- further examples of config-only providers (adapter inherited from the
+  # ---- generic chat adapter, so adding a site is configuration, not new code) ----
+  perplexity:
+    enabled: false
+    label: Perplexity
+    url: https://www.perplexity.ai/
+    adapter: generic_chat
+    timeout_s: 180
+    weight: 1.0
+
+  grok:
+    enabled: false
+    label: Grok
+    url: https://grok.com/
+    adapter: generic_chat
+    timeout_s: 150
+    weight: 0.7

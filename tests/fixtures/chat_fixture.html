@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OmniBrain adapter fixture</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee; margin: 0; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; height: 100vh; }
+  #thread { flex: 1; overflow-y: auto; }
+  .row { padding: 10px 12px; margin: 8px 0; border-radius: 10px; }
+  .user { background: #233; }
+  .assistant { background: #1c1f26; border: 1px solid #2a2f3a; }
+  .composer { display: flex; gap: 8px; align-items: flex-end; padding-top: 12px; }
+  textarea { flex: 1; background: #171a21; color: #eee; border: 1px solid #2a2f3a; border-radius: 10px; padding: 10px; font: inherit; }
+  button { background: #2b3a55; color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; font: inherit; cursor: pointer; }
+  button[hidden] { display: none; }
+  .srcs { margin-top: 8px; font-size: 12px; }
+  .srcs a { color: #8ab4f8; }
+  .toolbar { font-size: 11px; color: #6a7382; }
+  #overlay { position: fixed; inset: auto 16px 90px 16px; background: #20242c; border: 1px solid #333; padding: 10px; border-radius: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="overlay">We value your privacy <button id="cookie">Accept all</button></div>
+  <div id="thread" role="log" aria-live="polite"></div>
+  <div class="composer">
+    <textarea id="composer-input" placeholder="Ask anything" rows="2"></textarea>
+    <button type="submit" aria-label="Send message" id="send">&#8593;</button>
+    <button aria-label="Stop generating" id="stop" hidden>&#9632;</button>
+  </div>
+</main>
+
+<script>
+/*
+ * A deliberately awkward fake chat UI, used to test the real browser adapters
+ * against real DOM behaviour: React-ish value handling, a streaming answer, a
+ * stop button that only exists mid-generation, a SEPARATE assistant turn for
+ * sources, UI chrome ("Copied!") inside the answer node, a consent overlay, and
+ * the user's own prompt echoed into the transcript.
+ */
+const thread = document.getElementById('thread');
+const input = document.getElementById('composer-input');
+const send = document.getElementById('send');
+const stop = document.getElementById('stop');
+document.getElementById('cookie').onclick = () => document.getElementById('overlay').remove();
+
+const ANSWERS = [
+  {
+    text: 'The Acme Bolt was announced on 14 May 2026 at a price of $549.\\n\\n## Details\\n- Wi-Fi 7 is supported\\n- Ships in three colours\\n\\nSources are listed separately below. Copied!',
+    sources: [
+      ['Acme press release', 'https://example.test/press'],
+      ['The Verge report', 'https://example.test/verge']
+    ]
+  },
+  {
+    text: 'Correction: the launch price was \\$549, not \\$499.',
+    sources: [['Acme store page', 'https://example.test/store']]
+  }
+];
+let turn = 0;
+let timer = null;
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+function respond(promptText) {
+  const answer = ANSWERS[Math.min(turn, ANSWERS.length - 1)];
+  turn += 1;
+  send.hidden = true;
+  stop.hidden = false;
+
+  const holder = el('article', 'assistant');
+  holder.setAttribute('data-message-author-role', 'assistant');
+  const body = el('div', 'markdown');
+  holder.append(body);
+  const bar = el('div', 'toolbar');
+  bar.append(Object.assign(el('button'), {textContent: 'Copy'}));
+  bar.append(Object.assign(el('button'), {textContent: 'Regenerate'}));
+  bar.append(el('span', null, 'Acme said'));
+  holder.append(bar);
+  thread.append(holder);
+
+  // stream character-by-character so the capture loop has to track growth
+  let shown = '';
+  const chunks = answer.text.split('');
+  let i = 0;
+  timer = setInterval(() => {
+    const step = chunks.slice(i, i + 7).join('');
+    i += 7;
+    shown += step;
+    body.textContent = shown.replace(/\\\\n/g, '\\n');
+    if (i >= chunks.length) {
+      clearInterval(timer);
+      timer = null;
+      stop.hidden = true;
+      send.hidden = false;
+      // sources arrive as their own assistant turn, later -- like ChatGPT does
+      setTimeout(() => {
+        const ref = el('article', 'assistant');
+        ref.setAttribute('data-message-author-role', 'assistant');
+        const s = el('div', 'sources');
+        s.append(el('strong', null, 'Sources'));
+        answer.sources.forEach(([title, url], index) => {
+          const line = el('div');
+          const a = el('a', null, title + ' [' + (index + 1) + ']');
+          a.href = url;
+          a.setAttribute('data-search-result-url', url);
+          line.append(a);
+          s.append(line);
+        });
+        ref.append(s);
+        thread.append(ref);
+      }, 900);
+    }
+  }, 60);
+}
+
+function submit() {
+  const value = input.value.trim();
+  if (!value) return;
+  const userRow = el('article', 'user');
+  userRow.setAttribute('data-message-author-role', 'user');
+  userRow.append(el('div', null, 'You: ' + value));
+  thread.append(userRow);
+  input.value = '';
+  input.dispatchEvent(new Event('input', {bubbles: true}));
+  respond(value);
+}
+
+send.addEventListener('click', submit);
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
+window.__answerCount = () => thread.querySelectorAll('[data-message-author-role="assistant"]').length;
+</script>
+</body>
+</html>

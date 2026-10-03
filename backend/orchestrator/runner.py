@@ -1,0 +1,999 @@
+"""Adaptive research runner.
+
+Sequential first, parallel on failure. The objective is the highest reliable
+accuracy for the *least* necessary investigation, so every escalation has to be
+justified by a concrete signal: an unresolved claim, a citation that failed
+checking, a real conflict, or consequence (legal/medical/financial/visa).
+
+Nothing here runs the verifier just because it can, and nothing stops just
+because an answer sounded confident.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import re
+import time
+from typing import Any, Awaitable, Callable, Protocol
+
+from backend.evidence.pool import build_pool
+from backend.models import (
+    Claim,
+    ClaimStatus,
+    Confidence,
+    Disagreement,
+    EscalationLevel,
+    EscalationStep,
+    Evidence,
+    FinalAnswer,
+    FollowUp,
+    Job,
+    JobStatus,
+    ProviderResponse,
+    ProviderStatus,
+    ResearchMode,
+    RoundRecord,
+    SourceCheckStatus,
+    SufficiencyAssessment,
+    VerifierReport,
+    WebResearchStatus,
+)
+from backend.research import claims as claim_ops
+from backend.research import router
+from backend.research.prompts import angle_for, escalation_prompt, follow_up_prompt, research_prompt
+from backend.research.style import style_prompt
+from backend.verification.llm import Endpoint, LLMClient
+from backend.verification.verifier import Verifier, build_final_answer, confidence_label
+from backend.settings import Settings
+
+MATERIAL_KINDS = {"statistic", "date", "legal", "scientific", "product", "ranking", "causal", "contested"}
+
+STABLE_KNOWLEDGE_ASK = """You are the level-0 classifier for a research system.
+
+Decide ONE thing: can you answer this question reliably right now, with no web
+access and no browser research?
+
+Answer directly only if the facts involved are stable and you are genuinely
+certain (standard definitions, programming syntax you use routinely, simple
+transformations, arithmetic, or a question that is banter/opinion/creative and
+needs no facts at all).
+
+Answer UNRESEARCHABLE if the question involves anything current, contested,
+numeric-and-recent, niche, or anything where you would be reconstructing rather
+than knowing. Do not guess. Do not produce a confident answer to look useful.
+
+Reply with strict JSON: {"can_answer": true|false, "answer": "..." , "why": "..."}"""
+
+
+class Adapter(Protocol):
+    provider: str
+
+    async def ask(self, job_id: str, prompt: str, round_no: int = 1, emit: Any = None) -> ProviderResponse: ...
+
+
+class EventBus(Protocol):
+    async def emit(self, kind: str, message: str, provider: str | None = None, round_no: int | None = None, **payload: Any) -> None: ...
+
+
+class NullBus:
+    async def emit(self, kind: str, message: str, provider: str | None = None, round_no: int | None = None, **payload: Any) -> None:
+        return None
+
+
+class ResearchRunner:
+    def __init__(
+        self,
+        settings: Settings,
+        adapters: dict[str, Adapter],
+        *,
+        engine: Any = None,
+        bus: EventBus | None = None,
+        health: dict[str, str] | None = None,
+        verifier: Verifier | None = None,
+        analysis_endpoint: Endpoint | None = None,
+        store: Any = None,
+    ) -> None:
+        self.settings = settings
+        self.adapters = adapters
+        self.engine = engine
+        self.bus = bus or NullBus()
+        self.health = dict(health or {})
+        self.verifier = verifier
+        self.analysis_endpoint = analysis_endpoint
+        self.store = store
+        self._sem = asyncio.Semaphore(max(1, settings.research.max_workers))
+
+    # ------------------------------------------------------------------ entry
+
+    async def run(self, job: Job) -> Job:
+        try:
+            return await self._run(job)
+        except asyncio.CancelledError:
+            job.status = JobStatus.CANCELLED
+            job.stop_reason = "cancelled by user"
+            await self._emit("status", "cancelled", job=job)
+            raise
+        except Exception as exc:  # noqa: BLE001
+            job.status = JobStatus.FAILED
+            job.error = f"{type(exc).__name__}: {exc}"
+            await self._emit("error", f"research job failed: {job.error}", job=job)
+            return job
+
+    async def _run(self, job: Job) -> Job:
+        enabled = [name for name, cfg in self.settings.providers.items() if cfg.enabled and name in self.adapters]
+        if not enabled:
+            job.status = JobStatus.FAILED
+            job.error = "no providers enabled"
+            return job
+
+        job.status = JobStatus.ANALYZING
+        await self._emit("status", "classifying question", job=job)
+        analysis = await self._analyze(job.question, job.mode, enabled)
+        job.analysis = analysis
+        job.level = analysis.starting_level
+
+        if analysis.can_answer_directly and analysis.direct_answer:
+            job.status = JobStatus.COMPLETED
+            job.level = EscalationLevel.DIRECT
+            job.escalation_log.append(
+                EscalationStep(level=EscalationLevel.DIRECT, reason=analysis.rationale or "level 0", triggered_by=["trivial"])
+            )
+            await self._emit("escalation", f"level 0 -- answered without research: {analysis.rationale}", job=job)
+            job.final = FinalAnswer(
+                answer=analysis.direct_answer,
+                why=None or "",
+                confidence=Confidence.HIGH if analysis.classifier_source == "computed" else Confidence.MODERATE,
+                confidence_label="High confidence" if analysis.classifier_source == "computed" else "Moderate confidence",
+                caveats=[] if analysis.classifier_source == "computed" else ["Answered from stable knowledge without research -- ask 'why' to have it checked."],
+                rounds_run=0,
+                providers_used=[],
+                providers_failed=[],
+            )
+            job.stop_reason = "question answered at level 0; no investigation earned"
+            await self._emit("final", job.final.answer, job=job)
+            return job
+
+        if not analysis.needs_web_research and analysis.trivial:
+            # banter with no model configured: one provider, no research framing.
+            primary = router.select_primary(analysis, enabled, self.health)
+            if primary:
+                response = await self._ask(primary, job.question, 1, role="primary", needs_web=False)
+                if response and response.status.value == "completed":
+                    job.status = JobStatus.COMPLETED
+                    job.final = FinalAnswer(
+                        answer=response.answer_text[:1200],
+                        confidence=Confidence.MODERATE,
+                        confidence_label="Moderate confidence",
+                        rounds_run=1,
+                        providers_used=[primary],
+                        providers_failed=[],
+                    )
+                    job.browser_sessions_used = 1
+                    job.stop_reason = "non-factual ask handled by one provider; no research required"
+                    await self._emit("final", job.final.answer, job=job)
+                    return job
+
+        return await self._investigate(job, analysis, enabled)
+
+    # --------------------------------------------------------------- level 1+
+
+    async def _investigate(self, job: Job, analysis: Any, enabled: list[str]) -> Job:
+        max_rounds = max(1, job.max_rounds)
+        job.status = JobStatus.RESEARCHING
+        # "Answer now" shortcuts skip the provider's own research; acceptable in
+        # QUICK, never in a round whose job is to establish evidence.
+        for adapter in self.adapters.values():
+            setattr(adapter, "quick_answer_allowed", job.mode == ResearchMode.QUICK)
+        primary = router.select_primary(analysis, enabled, self.health)
+        if not primary:
+            job.status = JobStatus.FAILED
+            job.error = "no healthy provider available"
+            return job
+
+        await self._emit(
+            "escalation",
+            f"level {int(job.level.value) if job.level else 1} -- primary researcher: {primary}",
+            provider=primary,
+            job=job,
+        )
+        job.escalation_log.append(
+            EscalationStep(
+                level=EscalationLevel.PRIMARY,
+                reason=f"question needs external evidence ({analysis.intent}); {primary} gets first shot alone",
+                providers=[primary],
+                triggered_by=["needs_web_research"] if analysis.needs_web_research else ["non_factual"],
+            )
+        )
+
+        round_no = 1
+        record = RoundRecord(number=round_no, kind="initial")
+        job.rounds.append(record)
+        job.active_round = round_no
+
+        prompt = research_prompt(
+            job.question,
+            provider=primary,
+            analysis=analysis,
+            round_no=round_no,
+            needs_web=analysis.needs_web_research,
+        )
+        response = await self._ask(primary, prompt, round_no, role="primary")
+        responses: list[ProviderResponse] = [r for r in [response] if r]
+        job.responses.extend(responses)
+        record.response_ids = [r.id for r in responses]
+        job.browser_sessions_used += len({r.provider for r in responses})
+
+        claims = await self._extract(responses, job)
+        evidence, trace = await self._pool(job, claims, responses, round_no)
+        disagreements = await self._disagreements(job, claims, round_no)
+        assessment = self._assess(job, analysis, claims, evidence, disagreements, round_no, focus="primary")
+        job.assessments.append(assessment)
+        await self._emit(
+            "assessment",
+            f"primary {assessment.reason}",
+            provider=primary,
+            round_no=round_no,
+            job=job,
+            sufficient=assessment.sufficient,
+        )
+
+        verifier_enabled = self.verifier is not None and self.settings.verifier.provider != "disabled"
+
+        # Enough already? Then stop. Do not spawn a swarm to feel thorough.
+        if assessment.sufficient and not analysis.high_stakes and not disagreements:
+            report = await self._lightweight_report(job, analysis, claims, evidence, responses, round_no)
+            return self._complete(job, report, responses, rounds=round_no, stop="evidence sufficient after the primary researcher; no escalation earned")
+
+        # Level 2 -- expansion, earned by failure, never assumed.
+        job.level = EscalationLevel.PARALLEL
+        partial = bool(assessment.established) and bool(assessment.unresolved)
+        if partial:
+            # Most of it is settled. Investigate only what is not -- re-running
+            # every provider on the whole question wastes sessions and re-asks
+            # claims the ledger already confirmed.
+            (
+                round_no,
+                responses,
+                claims,
+                evidence,
+                disagreements,
+                assessment,
+            ) = await self._targeted_expansion(job, analysis, enabled, primary, round_no, responses, claims, evidence, disagreements, assessment)
+
+        secondaries = router.select_secondaries(
+            analysis,
+            enabled,
+            exclude=[primary],
+            count=2 if job.mode == ResearchMode.QUICK else self.settings.research.swarm_providers,
+            health=self.health,
+        )
+        # A full swarm is for the case where nothing was established at all.
+        # After a targeted expansion, what remains is a conflict for the verifier,
+        # not a gap more researchers would fill.
+        if secondaries and not partial:
+            context = self._failure_context(responses, claims, evidence, disagreements, assessment)
+            job.escalation_log.append(
+                EscalationStep(
+                    level=EscalationLevel.PARALLEL,
+                    reason=f"primary could not close it: {assessment.reason}",
+                    providers=secondaries,
+                    triggered_by=assessment.failure_signals[:8],
+                    round=round_no,
+                )
+            )
+            await self._emit(
+                "escalation",
+                f"level 2 -- escalating to {len(secondaries)} independent researchers: {', '.join(secondaries)}",
+                round_no=round_no,
+                job=job,
+            )
+            extra = await self._ask_many(secondaries, job, analysis, context, round_no, exclude=primary)
+            job.browser_sessions_used += len(extra)
+            responses.extend(extra)
+            job.responses = responses
+            record.response_ids.extend(r.id for r in extra)
+            claims = await self._extract(responses, job)
+            more_evidence, more_trace = await self._pool(job, claims, extra or responses, round_no)
+            evidence = _merge_evidence(evidence, more_evidence)
+            disagreements = await self._disagreements(job, claims, round_no)
+            assessment = self._assess(job, analysis, claims, evidence, disagreements, round_no, focus="swarm")
+            job.assessments.append(assessment)
+            await self._emit(
+                "assessment",
+                f"after parallel research: {assessment.reason}",
+                round_no=round_no,
+                job=job,
+                sufficient=assessment.sufficient,
+            )
+            if (
+                assessment.sufficient
+                and not analysis.high_stakes
+                and not disagreements
+                and not verifier_enabled
+            ):
+                report = await self._lightweight_report(job, analysis, claims, evidence, responses, round_no)
+                return self._complete(job, report, responses, rounds=round_no, stop="sufficient evidence without needing the verifier")
+
+        # Enough now, and nothing conflicts? Skip the expensive engine entirely.
+        if assessment.sufficient and not disagreements and not analysis.high_stakes:
+            report = await self._lightweight_report(job, analysis, claims, evidence, responses, round_no)
+            return self._complete(
+                job, report, responses, rounds=round_no,
+                stop="evidence sufficient after expansion; running the verifier would have added cost, not certainty",
+            )
+
+        # Level 3 -- adversarial verification, then targeted rounds.
+        report: VerifierReport | None = None
+        while round_no <= max_rounds:
+            job.status = JobStatus.VERIFYING
+            job.level = EscalationLevel.DEEP if (analysis.high_stakes or disagreements) else job.level
+            if job.mode == ResearchMode.QUICK and round_no > 1:
+                break
+            report = await self._verify(job, analysis, claims, evidence, responses, disagreements, round_no)
+            job.reports.append(report)
+            job.verifier_calls += 1
+            await self._emit(
+                "verifier",
+                f"round {round_no}: {report.confidence_label if hasattr(report, 'confidence_label') else report.confidence.value}"
+                + (" -- requesting more research" if report.needs_more_research else ""),
+                round_no=round_no,
+                job=job,
+            )
+
+            actionable = [f for f in report.follow_ups if f.question]
+            if not report.needs_more_research or not actionable or round_no >= max_rounds:
+                break
+
+            # Target only what is unresolved. Never restart the whole thing.
+            next_round = round_no + 1
+            job.status = JobStatus.FOLLOWUP
+            job.level = EscalationLevel.DEEP
+            job.escalation_log.append(
+                EscalationStep(
+                    level=EscalationLevel.DEEP,
+                    reason=f"verifier found {len(actionable)} unresolved point(s); researching those specifically",
+                    providers=[],
+                    triggered_by=[u[:60] for u in report.unresolved[:4]] or ["needs_more_research"],
+                    round=next_round,
+                )
+            )
+            await self._emit(
+                "escalation",
+                f"level 3 round {next_round} -- targeted research on {len(actionable)} unresolved point(s), not a re-ask",
+                round_no=next_round,
+                job=job,
+            )
+            targets = router.select_secondaries(
+                analysis,
+                enabled,
+                exclude=[primary] if round_no == 1 else [],
+                count=max(2, self.settings.research.follow_up_providers),
+                health=self.health,
+            )
+            follow_round = RoundRecord(number=next_round, kind="follow_up")
+            job.rounds.append(follow_round)
+            job.active_round = next_round
+            job.follow_ups.extend(actionable)
+            follow_round.follow_up_ids = [f.id for f in actionable]
+
+            targeted = await self._targeted_round(job, actionable, targets, round_no=next_round)
+            responses.extend(targeted)
+            job.responses = responses
+            follow_round.response_ids = [r.id for r in targeted]
+            job.browser_sessions_used += len({r.provider for r in targeted})
+
+            claims = await self._extract(responses, job)
+            more_evidence, _ = await self._pool(job, claims, targeted or responses, next_round)
+            evidence = _merge_evidence(evidence, more_evidence)
+            disagreements = await self._disagreements(job, claims, next_round)
+            assessment = self._assess(job, analysis, claims, evidence, disagreements, next_round, focus="targeted")
+            job.assessments.append(assessment)
+            follow_round.finished_at = time.time()
+            round_no = next_round
+            if assessment.sufficient and not disagreements and not analysis.high_stakes:
+                report = await self._verify(job, analysis, claims, evidence, responses, disagreements, round_no)
+                job.reports.append(report)
+                job.verifier_calls += 1
+                break
+
+        if report is None:
+            report = await self._lightweight_report(job, analysis, claims, evidence, responses, round_no)
+        return self._complete(
+            job,
+            report,
+            responses,
+            rounds=round_no,
+            stop=self._stop_reason(assessment, disagreements, analysis, round_no, max_rounds),
+        )
+
+    # ------------------------------------------------------------ components
+
+    async def _analyze(self, question: str, mode: ResearchMode, enabled: list[str]) -> Any:
+        hint: str | None = None
+        endpoint = self.analysis_endpoint
+        if endpoint and endpoint.enabled and not _obviously_arithmetic(question):
+            client = LLMClient(endpoint)
+            parsed, reply = await client.complete_json(
+                [
+                    {"role": "system", "content": STABLE_KNOWLEDGE_ASK},
+                    {"role": "user", "content": f"Question: {question}"},
+                ],
+                temperature=0.0,
+            )
+            if parsed and parsed.get("can_answer") and str(parsed.get("answer") or "").strip():
+                hint = str(parsed["answer"]).strip()
+        analysis = router.classify(question, mode=mode, enabled=enabled, llm_stable_answer=hint)
+        if hint:
+            analysis.classifier_source = "llm"
+        computed = analysis.starting_level == EscalationLevel.DIRECT and analysis.trivial and analysis.classifier_source == "heuristic"
+        if computed and analysis.direct_answer:
+            analysis.classifier_source = "computed"
+        return analysis
+
+    async def _ask(
+        self,
+        provider: str,
+        prompt: str,
+        round_no: int,
+        *,
+        role: str = "secondary",
+        needs_web: bool = True,
+        escalation_reason: str | None = None,
+    ) -> ProviderResponse | None:
+        adapter = self.adapters.get(provider)
+        if adapter is None:
+            return None
+        async with self._sem:
+            await self._emit("provider", f"{provider}: opening dedicated window ({role})", provider=provider, round_no=round_no)
+            try:
+                response = await adapter.ask("job", prompt, round_no, emit=self._adapter_emit)
+            except Exception as exc:  # noqa: BLE001
+                response = ProviderResponse(id=f"resp_err_{provider}_{round_no}", job_id="", round=round_no, provider=provider, prompt=prompt)
+                response.status = ProviderStatus.FAILED
+                response.error = f"{type(exc).__name__}: {exc}"
+                response.answer_text = ""
+        response.role = role
+        response.escalation_reason = escalation_reason
+        response.pages_visited = [c.url for c in response.citations if c.url][:20]
+        response.failure_signals = router.is_failure_phrase(response.answer_text or response.raw_text or "")
+        if response.status.value == "completed":
+            self.health[provider] = "completed"
+        elif response.status.value in {"logged_out", "rate_limited", "broken", "failed", "timeout"}:
+            self.health[provider] = response.status.value
+        await self._emit(
+            "provider",
+            f"{provider}: {response.status.value}" + (f" -- {response.error}" if response.error else ""),
+            provider=provider,
+            round_no=round_no,
+        )
+        return response
+
+    async def _adapter_emit(self, kind: str, message: str, provider: str | None = None, round_no: int | None = None) -> None:
+        await self._emit(kind, message, provider=provider, round_no=round_no)
+
+    async def _ask_many(
+        self,
+        providers: list[str],
+        job: Job,
+        analysis: Any,
+        context: dict[str, Any],
+        round_no: int,
+        *,
+        exclude: str,
+    ) -> list[ProviderResponse]:
+        tasks = []
+        for index, provider in enumerate(providers):
+            prompt = escalation_prompt(
+                job.question,
+                provider=provider,
+                primary=context["primary"],
+                established=context["established"],
+                unresolved=context["unresolved"],
+                contradictions=context["contradictions"],
+                sources=context["sources"],
+                needs_web=analysis.needs_web_research,
+            )
+            if index >= 2:
+                angle = angle_for(provider, index)
+                if angle:
+                    prompt = f"{prompt}\n\nApproach it from this angle: {angle}"
+            tasks.append(
+                self._ask(
+                    provider,
+                    prompt,
+                    round_no,
+                    role="secondary",
+                    escalation_reason=f"primary ({exclude}) left {len(context['unresolved'])} point(s) unresolved",
+                )
+            )
+        done = await asyncio.gather(*tasks, return_exceptions=True)
+        out: list[ProviderResponse] = []
+        for provider, item in zip(providers, done):
+            if isinstance(item, BaseException):
+                job.error = f"{provider} crashed: {item}"
+                continue
+            if item is not None:
+                out.append(item)  # type: ignore[arg-type]
+        return out
+
+    async def _targeted_round(self, job: Job, follow_ups: list[FollowUp], targets: list[str], *, round_no: int) -> list[ProviderResponse]:
+        """Give each unresolved point to a specific agent. One agent, one point."""
+        tasks = []
+        for index, follow_up in enumerate(follow_ups):
+            pool = follow_up.target_providers or targets
+            if not pool:
+                break
+            provider = pool[index % len(pool)]
+            prompt = follow_up_prompt(job.question, follow_up)
+            tasks.append(self._ask(provider, prompt, round_no, role="targeted", escalation_reason=follow_up.reason))
+        done = await asyncio.gather(*tasks, return_exceptions=True)
+        return [item for item in done if isinstance(item, ProviderResponse)]
+
+    async def _extract(self, responses: list[ProviderResponse], job: Job) -> list[Claim]:
+        job.status = JobStatus.EXTRACTING
+        await self._emit("status", "extracting atomic claims", round_no=job.active_round, job=job)
+        extracted = await claim_ops.extract_claims(
+            [r for r in responses if r.status.value in {"completed", "timeout"}],
+            job.id,
+            endpoint=self.analysis_endpoint if self.analysis_endpoint and self.analysis_endpoint.enabled else None,
+            batch_size=self.settings.research.claim_batch_size,
+        )
+        job.claims = extracted
+        return extracted
+
+    async def _pool(self, job: Job, claims: list[Claim], responses: list[ProviderResponse], round_no: int) -> tuple[list[Evidence], dict[str, Any]]:
+        await self._emit("status", "opening cited sources and gathering independent evidence", round_no=round_no, job=job)
+        search_adapter = self.adapters.get("search") if self.settings.providers.get("search") and self.settings.providers["search"].enabled else None
+        evidence, trace = await build_pool(
+            job_id=job.id,
+            question=job.question,
+            claims=claims,
+            responses=responses,
+            mode=job.mode,
+            settings=self.settings,
+            engine=self.engine,
+            search_adapter=search_adapter,
+            round_no=round_no,
+            emit=self._adapter_emit,
+            run_searches=job.mode != ResearchMode.QUICK or round_no > 1,
+        )
+        job.evidence = _merge_evidence(job.evidence, evidence)
+        return evidence, trace
+
+    async def _disagreements(self, job: Job, claims: list[Claim], round_no: int) -> list[Disagreement]:
+        conflicts = claim_ops.find_contradictions(claims)
+        existing = {d.topic for d in job.disagreements}
+        found: list[Disagreement] = []
+        for conflict in conflicts:
+            left, right = conflict["left"], conflict["right"]
+            topic = left.topic or right.topic or left.claim[:40]
+            key = f"{topic}|{conflict['kind']}"
+            if key in existing:
+                continue
+            disagreement = Disagreement(
+                job_id=job.id,
+                round=round_no,
+                topic=key[:60],
+                description=(
+                    f"{conflict['kind']} conflict at topic overlap {conflict['topic_overlap']}: "
+                    f"{left.provider_sources} said \"{left.claim[:120]}\" vs "
+                    f"{right.provider_sources} said \"{right.claim[:120]}\""
+                ),
+                positions={
+                    ",".join(left.provider_sources): [left.claim],
+                    ",".join(right.provider_sources): [right.claim],
+                },
+                severity="material" if conflict["material"] else "minor",
+                claim_ids=[left.id, right.id],
+            )
+            found.append(disagreement)
+        job.disagreements = _merge_disagreements(job.disagreements, found)
+        material = [d for d in found if d.severity == "material"]
+        for index, disagreement in enumerate(material, start=1):
+            await self._emit(
+                "disagreement",
+                f"checking disagreement #{index}: {disagreement.topic} ({disagreement.description.split(':')[0]})",
+                round_no=round_no,
+            )
+        return job.disagreements
+
+    def _assess(
+        self,
+        job: Job,
+        analysis: Any,
+        claims: list[Claim],
+        evidence: list[Evidence],
+        disagreements: list[Disagreement],
+        round_no: int,
+        *,
+        focus: str,
+    ) -> SufficiencyAssessment:
+        confirmed = [e for e in evidence if e.check_status == SourceCheckStatus.CONFIRMED]
+        domains = {e.domain for e in confirmed if e.domain}
+        has_primary = any(e.tier.value in {"primary_official", "original_research", "government"} for e in confirmed)
+        material = [c for c in claims if c.kind in MATERIAL_KINDS or _has_figure(c.claim)]
+        established = [c for c in material if any(e.claim_id == c.id and e.check_status == SourceCheckStatus.CONFIRMED for e in evidence)]
+        unresolved = [c.claim for c in material if c not in established]
+        failure_signals = sorted({s for r in job.responses if r.role in {"primary", "secondary"} for s in r.failure_signals})
+        no_sources = [r.provider for r in job.responses if r.status.value == "completed" and not r.citations]
+        mismatch = [e for e in evidence if e.check_status in {SourceCheckStatus.MISMATCH, SourceCheckStatus.HALLUCINATED, SourceCheckStatus.BROKEN_URL}]
+        stale = [e for e in evidence if e.check_status == SourceCheckStatus.OUTDATED]
+        unanswered = _unanswered_subquestions(analysis, claims)
+        weak_only = bool(confirmed) and not has_primary and analysis.high_stakes
+        contradictions = len([d for d in disagreements if d.severity == "material"])
+
+        signals: list[str] = []
+        if established:
+            signals.append(f"{len(established)}/{len(material)} material claim(s) confirmed by an opened source")
+        if len(domains) >= self.settings.research.min_independent_sources:
+            signals.append(f"{len(domains)} independent domain(s) in agreement")
+        min_sources = self.settings.research.min_independent_sources
+        coverage = (len(established) / len(material)) if material else (1.0 if confirmed else 0.0)
+        # Evidence only establishes something if it attaches to a claim. Eight
+        # opened pages that answer nothing are eight pages, not an answer -- without
+        # this, a provider that produced no text at all could look "sufficiently
+        # verified" and the run would stop while saying "I don't know."
+        attached = [e for e in confirmed if e.claim_id]
+
+        # "Enough" is a property of the evidence, never of how the answer was
+        # phrased.
+        ledger_ok = (
+            bool(attached)
+            and bool(claims)
+            and coverage >= 0.8
+            and len({e.domain for e in attached}) >= min_sources
+            and contradictions == 0
+            and not unresolved
+            and not unanswered
+        )
+        sufficient = ledger_ok
+        if analysis.high_stakes:
+            sufficient = sufficient and has_primary and not weak_only
+        # An admitted inability is a demand for evidence, not a life sentence: once
+        # the ledger independently confirms the material claims, the model's own
+        # hedge stops being the controlling signal. Before that point it blocks.
+        if failure_signals and not ledger_ok:
+            sufficient = False
+        if unanswered:
+            sufficient = False
+        if mismatch and len(mismatch) > len(confirmed):
+            sufficient = False
+        # No figure-bearing claims, but sources that clearly speak to the question:
+        # still needs an actual claim to hang them on.
+        if not material and attached and claims and len({e.domain for e in attached}) >= min_sources:
+            sufficient = sufficient and not failure_signals and contradictions == 0
+        if not claims:
+            sufficient = False
+
+        recommends = EscalationLevel.PRIMARY
+        reasons: list[str] = []
+        if not confirmed:
+            recommends = EscalationLevel.PARALLEL
+            reasons.append("no opened source confirms anything yet")
+        elif not attached:
+            recommends = EscalationLevel.PARALLEL
+            reasons.append(f"{len(confirmed)} source(s) opened but none attach to a claim the researchers actually made")
+        elif coverage < 0.8:
+            recommends = EscalationLevel.PARALLEL
+            reasons.append(f"{len(unresolved)} material claim(s) still unconfirmed")
+        if contradictions:
+            recommends = EscalationLevel.DEEP
+            reasons.append(f"{contradictions} material conflict(s)")
+        if failure_signals:
+            recommends = max(recommends, EscalationLevel.PARALLEL, key=int)
+            reasons.append("an explicit inability to verify appeared in the answers")
+        if analysis.high_stakes and not has_primary:
+            recommends = EscalationLevel.DEEP
+            reasons.append("high-stakes question with no primary source yet")
+        if stale and not any(fresh_enough(e) for e in confirmed) and analysis.needs_current_data:
+            recommends = max(recommends, EscalationLevel.PARALLEL, key=int)
+            reasons.append("only aging sources so far for a current question")
+
+        if sufficient:
+            reason = f"evidence sufficient after {focus}: {len(established) or len(confirmed)} confirmed claim(s) across {len(domains)} domain(s), no material conflict"
+        else:
+            reason = "; ".join(reasons) or f"{focus} did not establish the material claims"
+
+        return SufficiencyAssessment(
+            job_id=job.id,
+            round=round_no,
+            sufficient=sufficient,
+            signals=signals,
+            failure_signals=failure_signals + [f"no_sources:{p}" for p in no_sources] + [f"mismatch:{len(mismatch)}"] if mismatch or no_sources else failure_signals,
+            established=[c.claim for c in established],
+            unresolved=unresolved,
+            unanswered_subquestions=unanswered,
+            confirmed_sources=len(confirmed),
+            independent_domains=len(domains),
+            has_primary_source=has_primary,
+            contradictions=contradictions,
+            coverage=round(coverage, 2),
+            reason=reason,
+            recommends_level=recommends,
+        )
+
+    def _failure_context(
+        self,
+        responses: list[ProviderResponse],
+        claims: list[Claim],
+        evidence: list[Evidence],
+        disagreements: list[Disagreement],
+        assessment: SufficiencyAssessment,
+    ) -> dict[str, Any]:
+        primary = responses[0] if responses else None
+        confirmed_urls = [e.url for e in evidence if e.check_status == SourceCheckStatus.CONFIRMED and e.url]
+        return {
+            "primary": primary.provider if primary else "none",
+            "established": assessment.established or [c.claim for c in claims if c.status == ClaimStatus.SUPPORTED][:6],
+            "unresolved": assessment.unresolved or [c.claim for c in claims][:6],
+            "contradictions": [d.description for d in disagreements if d.severity == "material"][:4],
+            "sources": confirmed_urls[:8] or (list(primary.citations[:6]) if primary else []),
+        }
+
+    async def _targeted_expansion(
+        self,
+        job: Job,
+        analysis: Any,
+        enabled: list[str],
+        primary: str,
+        round_no: int,
+        responses: list[ProviderResponse],
+        claims: list[Claim],
+        evidence: list[Evidence],
+        disagreements: list[Disagreement],
+        assessment: SufficiencyAssessment,
+    ) -> tuple[int, list[ProviderResponse], list[Claim], list[Evidence], list[Disagreement], SufficiencyAssessment]:
+        follow_ups = self._open_follow_ups(job, assessment, round_no + 1)
+        chosen = router.select_secondaries(
+            analysis, enabled, exclude=[primary],
+            count=min(3, max(2, len(enabled) - 1)), health=self.health,
+        )
+        next_round = round_no + 1
+        job.escalation_log.append(
+            EscalationStep(
+                level=EscalationLevel.PARALLEL,
+                reason=(
+                    f"{len(assessment.established)} claim(s) already established, {len(assessment.unresolved)} open -- "
+                    "investigating only the open ones"
+                ),
+                providers=chosen,
+                triggered_by=["partial_success"] + assessment.failure_signals[:4],
+                round=next_round,
+            )
+        )
+        await self._emit(
+            "escalation",
+            f"level 2 (targeted) -- {len(follow_ups)} open point(s) to {', '.join(chosen)}; "
+            f"the {len(assessment.established)} settled claim(s) were deliberately not re-asked",
+            round_no=next_round,
+            job=job,
+        )
+        record = RoundRecord(number=next_round, kind="follow_up")
+        job.rounds.append(record)
+        job.active_round = next_round
+        job.follow_ups.extend(follow_ups)
+        record.follow_up_ids = [f.id for f in follow_ups]
+
+        targeted = await self._targeted_round(job, follow_ups, chosen, round_no=next_round)
+        job.browser_sessions_used += len({r.provider for r in targeted})
+        responses = responses + targeted
+        job.responses = responses
+        record.response_ids = [r.id for r in targeted]
+
+        claims = await self._extract(responses, job)
+        more_evidence, _ = await self._pool(job, claims, targeted or responses, next_round)
+        evidence = _merge_evidence(evidence, more_evidence)
+        disagreements = await self._disagreements(job, claims, next_round)
+        assessment = self._assess(job, analysis, claims, evidence, disagreements, next_round, focus="targeted expansion")
+        job.assessments.append(assessment)
+        record.finished_at = time.time()
+        await self._emit("assessment", f"after targeted research: {assessment.reason}", round_no=next_round, job=job)
+        return next_round, responses, claims, evidence, disagreements, assessment
+
+    @staticmethod
+    def _open_follow_ups(job: Job, assessment: SufficiencyAssessment, next_round: int) -> list[FollowUp]:
+        """Turn each unresolved material claim into its own research task."""
+        out: list[FollowUp] = []
+        for item in assessment.unresolved[:5]:
+            clean = item.strip()
+            if not clean:
+                continue
+            out.append(
+                FollowUp(
+                    job_id=job.id,
+                    question=(
+                        f"Establish whether this is true: {clean[:300]} "
+                        "Find the primary or official source that settles it, give the exact figure or date, "
+                        "the publisher, and the source's publication date. If nothing solid exists, say so."
+                    ),
+                    reason="The primary researcher could not back this with a source we were able to confirm.",
+                    claim_ids=[],
+                    round=next_round,
+                )
+            )
+        for item in assessment.unanswered_subquestions[:2]:
+            clean = " ".join(item.split()).lstrip("-: ").strip()
+            if not clean:
+                continue
+            out.append(
+                FollowUp(
+                    job_id=job.id,
+                    question=(
+                        f"Answer this specific part of a larger question: {clean[:280]} "
+                        "Nothing so far addressed it. Cite the source that answers it."
+                    ),
+                    reason="A part of the question has gone untouched.",
+                    claim_ids=[],
+                    round=next_round,
+                )
+            )
+        return out
+
+    async def _verify(
+        self,
+        job: Job,
+        analysis: Any,
+        claims: list[Claim],
+        evidence: list[Evidence],
+        responses: list[ProviderResponse],
+        disagreements: list[Disagreement],
+        round_no: int,
+    ) -> VerifierReport:
+        if self.verifier is None:
+            endpoint = Endpoint.from_config(self.settings.verifier)
+            self.verifier = Verifier(endpoint, min_independent_sources=self.settings.research.min_independent_sources, deep=self.settings.verifier.deep_verification)
+        job.status = JobStatus.VERIFYING
+        await self._emit("status", "adversarial verification (evidence, not votes)", round_no=round_no, job=job)
+        return await self.verifier.verify(
+            job_id=job.id,
+            question=job.question,
+            round_no=round_no,
+            claims=claims,
+            evidence=evidence,
+            responses=responses,
+            disagreements=disagreements,
+        )
+
+    async def _lightweight_report(
+        self,
+        job: Job,
+        analysis: Any,
+        claims: list[Claim],
+        evidence: list[Evidence],
+        responses: list[ProviderResponse],
+        round_no: int,
+    ) -> VerifierReport:
+        """Skip the expensive engine when the ledger already settles it (section 9)."""
+        endpoint = Endpoint.from_config(self.settings.verifier)
+        verifier = self.verifier or Verifier(endpoint, min_independent_sources=self.settings.research.min_independent_sources)
+        report = verifier.deterministic(
+            job_id=job.id,
+            question=job.question,
+            round_no=round_no,
+            claims=claims,
+            evidence=evidence,
+            responses=responses,
+            disagreements=[],
+            reason="escalation rules did not require the adversarial pass",
+        )
+        report.verifier_model = "deterministic ledger (no verifier call)"
+        job.reports.append(report)
+        return report
+
+    def _complete(self, job: Job, report: VerifierReport | None, responses: list[ProviderResponse], *, rounds: int, stop: str) -> Job:
+        job.status = JobStatus.SYNTHESIZING
+        if report is None:
+            job.final = FinalAnswer(
+                answer="I don't know.",
+                confidence=Confidence.NONE,
+                confidence_label="Insufficient evidence",
+                caveats=["No researcher returned anything usable."],
+                rounds_run=rounds,
+                providers_used=[],
+                providers_failed=sorted({r.provider for r in responses}),
+            )
+            job.stop_reason = stop
+            return job
+        final = build_final_answer(report, responses, rounds)
+        final.caveats = [c for c in final.caveats if c][:6]
+        job.final = final
+        job.status = JobStatus.COMPLETED
+        job.stop_reason = stop
+        job.finished_at = time.time()
+        for record in job.rounds:
+            record.finished_at = record.finished_at or time.time()
+        return job
+
+    def _stop_reason(self, assessment: SufficiencyAssessment, disagreements: list[Disagreement], analysis: Any, round_no: int, max_rounds: int) -> str:
+        if assessment.sufficient and not disagreements:
+            return f"remaining uncertainty is not material to the question (round {round_no})"
+        if round_no >= max_rounds:
+            return f"stopped at max rounds ({max_rounds}) with material uncertainty still open"
+        material = [d for d in disagreements if d.severity == "material"]
+        if material:
+            return f"sources still conflict on {material[0].topic}; reported as unresolved rather than averaged"
+        return assessment.reason
+
+    async def _emit(
+        self,
+        kind: str,
+        message: str,
+        provider: str | None = None,
+        round_no: int | None = None,
+        job: Job | None = None,
+        **payload: Any,
+    ) -> None:
+        if job is not None:
+            job.updated_at = time.time()
+        try:
+            await self.bus.emit(kind, message, provider=provider, round_no=round_no, **payload)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+# ------------------------------------------------------------------ utilities
+
+
+def _has_figure(text: str) -> bool:
+    return bool(re.search(r"\d", text or ""))
+
+
+def _merge_evidence(old: list[Evidence], new: list[Evidence]) -> list[Evidence]:
+    by_url = {e.url: e for e in old if e.url}
+    for ev in new:
+        if ev.url and ev.url in by_url:
+            existing = by_url[ev.url]
+            rank = {SourceCheckStatus.CONFIRMED: 3, SourceCheckStatus.OUTDATED: 2, SourceCheckStatus.NOT_CHECKED: 1}
+            if rank.get(ev.check_status, 0) > rank.get(existing.check_status, 0):
+                existing.check_status = ev.check_status
+                existing.verbatim_excerpt = ev.verbatim_excerpt or existing.verbatim_excerpt
+                existing.check_notes = ev.check_notes or existing.check_notes
+            existing.claim_id = ev.claim_id or existing.claim_id
+            # Later passes see the full claim set, so their attribution beats the
+            # earlier guess made when only the first answer existed.
+            if ev.claim_id and existing.claim_id != ev.claim_id:
+                existing.claim_id = ev.claim_id
+            continue
+        old.append(ev)
+        if ev.url:
+            by_url[ev.url] = ev
+    return old
+
+
+def _merge_disagreements(existing: list[Disagreement], found: list[Disagreement]) -> list[Disagreement]:
+    topics = {d.topic for d in existing}
+    for dis in found:
+        if dis.topic in topics:
+            for d in existing:
+                if d.topic == dis.topic:
+                    for provider, claims in dis.positions.items():
+                        d.positions.setdefault(provider, [])
+                        for claim in claims:
+                            if claim not in d.positions[provider]:
+                                d.positions[provider].append(claim)
+            continue
+        existing.append(dis)
+    return existing
+
+
+def _unanswered_subquestions(analysis: Any, claims: list[Claim]) -> list[str]:
+    if not getattr(analysis, "sub_questions", None):
+        return []
+    corpus = " ".join(c.claim for c in claims).lower()
+    out = []
+    for question in analysis.sub_questions:
+        tokens = [t for t in re.findall(r"[a-z0-9']+", question.lower()) if len(t) > 3][:5]
+        if tokens and not any(t in corpus for t in tokens):
+            out.append(f"sub-question untouched: {question[:80]}")
+    return out
+
+
+def fresh_enough(evidence: Evidence) -> bool:
+    from backend.evidence.sources import freshness
+
+    return freshness(evidence.published)["verdict"] in {"fresh", "unknown"}
+
+
+def _obviously_arithmetic(question: str) -> bool:
+    computed, _ = router.try_arithmetic(question or "")
+    return computed is not None

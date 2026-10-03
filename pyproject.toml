@@ -1,0 +1,29 @@
+[project]
+name = "omnibrain"
+version = "0.1.0"
+description = "Personal browser-based multi-AI research council with adversarial evidence verification"
+requires-python = ">=3.11"
+dependencies = [
+    "playwright==1.55.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+    "aiosqlite>=0.20",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "browser: launches a dedicated headless Chrome with its own profile (deselect with -m 'not browser')",
+]
+
+[tool.setuptools]
+packages = ["backend", "browser"]

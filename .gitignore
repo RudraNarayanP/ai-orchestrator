@@ -1,0 +1,11 @@
+.venv/
+data/*.db
+data/*.json
+data/artifacts/
+data/probe/
+data/*.log
+browser/profiles/
+__pycache__/
+*.pyc
+.pytest_cache/
+config/settings.yaml
