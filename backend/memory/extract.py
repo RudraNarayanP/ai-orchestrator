@@ -35,7 +35,7 @@ PATTERNS: list[tuple[re.Pattern[str], MemoryType, str, float]] = [
     (re.compile(r"\bi(?:'m| am) (?:studying|a student of|majoring in|doing (?:a|my) (?:phd|masters?|degree) in) (?P<v>[^.,;!?]+)", re.I), MemoryType.FACT, "education", 0.75),
     (re.compile(r"\bi(?:'m| am) (?:an? )(?P<v>[a-z][a-z -]{2,40}(?:developer|engineer|student|researcher|designer|teacher|doctor|analyst|writer|scientist))", re.I), MemoryType.FACT, "occupation", 0.7),
     (re.compile(r"\bi (?:speak|write in) (?P<v>[^.,;!?]+)", re.I), MemoryType.FACT, "languages", 0.65),
-    (re.compile(r"\bmy (?P<k>[a-z ]{2,24}) is (?P<v>[^.,;!?]+)", re.I), MemoryType.FACT, "attr", 0.6),
+    (re.compile(r"\bmy (?!goal\b)(?P<k>[a-z ]{2,24}) is (?P<v>[^.,;!?]+)", re.I), MemoryType.FACT, "attr", 0.6),
     (re.compile(r"\bi (?:really )?(?P<verb>prefer|like|love|enjoy|hate|dislike|can'?t stand) (?P<v>[^.;!?]+)", re.I), MemoryType.PREFERENCE, "pref", 0.7),
     (re.compile(r"\b(?:please )?always (?P<v>[^.;!?]+)", re.I), MemoryType.PREFERENCE, "pref", 0.7),
     (re.compile(r"\b(?:please )?never (?P<v>[^.;!?]+)", re.I), MemoryType.PREFERENCE, "pref", 0.7),
@@ -51,7 +51,7 @@ ENTITY_RE = re.compile(r"\b[A-Z][\w'-]{1,}(?:\s+[A-Z][\w'-]{1,})*\b")
 _NOT_ENT = {"I", "I'm", "I've", "My", "The", "A", "An", "Please", "Actually", "Yesterday", "Also", "And", "But", "So", "Remember", "Note", "Always", "Never", "It", "This", "That", "What", "How"}
 
 TEMPLATES = {"residence": "Lives in {v}", "name": "Name is {v}", "employer": "Works at {v}", "education": "Studies {v}", "languages": "Speaks {v}"}
-TIME_TAIL_RE = re.compile(r"\s+(?:last (?:week|month|year|night)|this (?:week|month|year)|yesterday|recently|just now|(?:a|one) (?:week|month|year) ago|since \w+)\s*$", re.I)
+TIME_TAIL_RE = re.compile(r"\s+(?:last (?:week|month|year|night)|this (?:week|month|year)|yesterday|recently|just now|now|today|(?:a|one) (?:week|month|year) ago|since \w+)\s*$", re.I)
 _VERB3 = {"prefer": "Prefers", "like": "Likes", "love": "Loves", "enjoy": "Enjoys", "hate": "Hates", "dislike": "Dislikes", "can't stand": "Can't stand", "cant stand": "Can't stand"}
 
 
@@ -108,6 +108,8 @@ def neutralise(sentence: str) -> str:
 def _slot(base: str, m: re.Match[str], value: str) -> str:
     if base == "attr":
         return "attr:" + "_".join(re.findall(r"[a-z0-9]+", m.group("k").lower())[:3])
+    if base == "goal":  # goals are many; a slot per goal so a new goal never replaces an unrelated one
+        return "goal:" + " ".join(re.findall(r"[a-z0-9]+", value.lower())[:4])
     if base == "pref":
         verbless = " ".join(re.findall(r"[a-z0-9]+", value.lower())[:4])
         return "pref:" + (verbless or "general")

@@ -607,7 +607,7 @@ class ResearchRunner:
         job.memory_context = block
         job.memory_used = [h.public() for h in res.hits]
         if res.hits:
-            await self._emit("memory", f"using {len(res.hits)} remembered thing(s) as context (not evidence)", job=job, kind=res.kind, ids=[h.memory.memory_id for h in res.hits])
+            await self._emit("memory", f"using {len(res.hits)} remembered thing(s) as context (not evidence)", job=job, memory_kind=res.kind, ids=[h.memory.memory_id for h in res.hits])
 
     async def _learn(self, job: Job) -> None:
         """After the conversation: keep what the USER said (never what an AI answered), subject to their settings."""

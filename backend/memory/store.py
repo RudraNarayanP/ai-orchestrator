@@ -181,7 +181,7 @@ class MemoryStore:
         if n == 0:
             return []
         if allow is not None:
-            idx = np.array([self._row[i] for i in allow if i in self._row and self._live[self._row[i]]], dtype=np.int64)
+            idx = np.array([self._row[i] for i in allow if i in self._row], dtype=np.int64)  # lifecycle is judged by the caller (history lookups need superseded rows)
             if idx.size == 0:
                 return []
             sims = self._mat[idx] @ qvec
@@ -351,6 +351,47 @@ class MemoryStore:
         self.db.commit()
         return AddResult("merged", old, None, "same memory said again")
 
+    def consolidate(self, threshold: float | None = None) -> int:
+        """Merge near-duplicate ACTIVE memories (same type, scope, project; cosine >= the embedder's duplicate threshold).
+
+        The stronger one survives (explicit beats inferred, then importance, then newer); the weaker one is deleted
+        after its entities/topics/usage are folded in. Different slots are never merged (a slot is a fact about one thing).
+        """
+        thr = self.embedder.dup if threshold is None else threshold
+        merged = 0
+        with self._lock:
+            groups: dict[tuple, list[Memory]] = {}
+            for m in self.list(status="ACTIVE", limit=100000):
+                groups.setdefault((m.memory_type, m.scope, m.project or "", m.slot or ""), []).append(m)
+            for items in groups.values():
+                if len(items) < 2:
+                    continue
+                self._ensure_loaded()
+                vecs = np.stack([self._mat[self._row[m.memory_id]] for m in items])
+                sims = vecs @ vecs.T
+                dead: set[str] = set()
+                order = sorted(range(len(items)), key=lambda i: (items[i].source != Source.USER_EXPLICIT, -items[i].importance, -items[i].updated_at))
+                for a in order:
+                    if items[a].memory_id in dead:
+                        continue
+                    for b in order:
+                        if b == a or items[b].memory_id in dead or items[a].memory_id in dead or sims[a, b] < thr:
+                            continue
+                        if order.index(b) < order.index(a):
+                            continue
+                        keep, drop = items[a], items[b]
+                        keep.entities = sorted(set(keep.entities) | set(drop.entities))
+                        keep.topics = sorted(set(keep.topics) | set(drop.topics))
+                        keep.access_count += drop.access_count
+                        keep.confidence = min(1.0, max(keep.confidence, drop.confidence) + 0.02)
+                        self._write(keep, insert=False)
+                        self._event(keep.memory_id, "consolidated", "absorbed a near-duplicate")
+                        self.db.commit()
+                        self.delete(drop.memory_id)
+                        dead.add(drop.memory_id)
+                        merged += 1
+        return merged
+
     def _link_entities(self, m: Memory) -> None:
         if not m.entities:
             return
@@ -365,7 +406,7 @@ class MemoryStore:
 
     def update(self, memory_id: str, *, content: str | None = None, importance: float | None = None, confidence: float | None = None,
                status: Status | str | None = None, project: str | None = None, entities: list[str] | None = None, topics: list[str] | None = None,
-               goal_active: bool | None = None, by_user: bool = True) -> Memory | None:
+               goal_active: bool | None = None, expires_at: float | None = None, by_user: bool = True) -> Memory | None:
         """Edit in place (the user fixing their own memory). Editing is explicit by definition."""
         with self._lock:
             m = self.get(memory_id)
@@ -389,6 +430,8 @@ class MemoryStore:
                 m.topics = sorted(set(topics))
             if goal_active is not None:
                 m.goal_active = goal_active
+            if expires_at is not None:
+                m.metadata = {**m.metadata, "expires_at": expires_at}
             if status is not None:
                 st = Status(status)
                 if st == Status.DELETED:

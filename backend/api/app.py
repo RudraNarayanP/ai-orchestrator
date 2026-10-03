@@ -397,6 +397,10 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="no such memory")
         return {"deleted": memory_id}
 
+    @app.post("/api/memory/consolidate")
+    async def memory_consolidate() -> Any:
+        return {"merged": _mem().store.consolidate()}
+
     @app.post("/api/memory/forget-all")
     async def memory_forget_all(request: Request) -> Any:
         body = await _json_object(request)

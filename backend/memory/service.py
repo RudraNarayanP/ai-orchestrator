@@ -120,5 +120,5 @@ class MemoryService:
                               importance=0.3, metadata={"expires_at": time.time() + 2 * 86400})
 
     def prune_conversation_memory(self, older_than_s: float = 2 * 86400) -> int:
-        rows = self.store.db.execute("select memory_id from memories where memory_type='conversation' and created_at < ?", (time.time() - older_than_s,)).fetchall()
+        rows = self.store.db.execute("select memory_id from memories where memory_type='conversation' and created_at <= ?", (time.time() - older_than_s,)).fetchall()
         return sum(1 for r in rows if self.store.delete(r["memory_id"]))

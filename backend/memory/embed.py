@@ -15,7 +15,8 @@ import numpy as np
 _WORD = re.compile(r"[a-z0-9]+(?:'[a-z]+)?", re.I)
 _STOP = frozenset(
     "a an and are as at be but by do does for from had has have he her his i in is it its me my of on or our she so than that the their them "
-    "then there these they this to was we were what when where which who why will with would you your am been being can could should".split()
+    "then there these they this to was we were what when where which who why will with would you your am been being can could should "
+    "did before previously earlier".split()
 )
 
 
