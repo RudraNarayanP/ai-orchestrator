@@ -71,3 +71,36 @@ def test_the_prompts_carry_the_tone_rules_and_a_before_after_example():
     assert "Before and after" in prompt and 'NEVER put an emoji on "I don\'t know."' in prompt
     assert "Warmth never softens" in style.VOICE
     assert "great question" in [p.lower() for p in style.BANNED_PHRASES]
+
+
+def test_plain_caveats_reword_or_drop_internal_bookkeeping():
+    from backend.research.style import plain_caveats, INTERNAL_VOCAB_RE
+
+    raw = [
+        "verifier model unavailable (cannot reach http://localhost:11434/v1); verdicts come from the evidence ledger, not from a language model",
+        "(no model verifier active: cannot reach http://localhost:11434/v1)",
+        "verifier answer overruled to low confidence by the ledger",
+        " No claim survived the evidence ledger.",
+        "Not confirmed by any page we opened: The minimum age is 13 years old.",
+        "Only one independent site backs this.",
+        "Only one independent site backs this.",
+        "voice scrub removed: ledger",
+    ]
+    got = plain_caveats(raw)
+    assert got[0].startswith("The AI reviewer wasn't available")
+    assert "None of the claims could be confirmed from the pages I opened." in got
+    assert any(c.startswith("The AI answers said The minimum age is 13 years old.") for c in got)
+    assert got.count("Only one independent site backs this.") == 1, "duplicates collapse"
+    assert not any(INTERNAL_VOCAB_RE.search(c) or "localhost" in c or "verifier" in c.lower() for c in got)
+
+
+def test_final_answer_caveats_are_plain_language():
+    from backend.models import Confidence, VerifierReport
+    from backend.verification.verifier import build_final_answer
+
+    report = VerifierReport(job_id="j", round=1, verdicts=[], answer="I couldn't verify this reliably.", confidence=Confidence.LOW)
+    report.unresolved = ["verifier answer overruled to low confidence by the ledger"]
+    report.caveats = ["(no model verifier active: cannot reach http://localhost:11434/v1)"]
+    report.confidence_note = " No claim survived the evidence ledger."
+    final = build_final_answer(report, [], 1)
+    assert final.caveats == ["None of the claims could be confirmed from the pages I opened."]

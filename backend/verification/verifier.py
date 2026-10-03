@@ -38,6 +38,7 @@ from backend.research.style import (
     SYNTHESIS_INSTRUCTIONS,
     VERIFIER_ROLE,
     humanize,
+    plain_caveats,
     scrub,
 )
 from backend.research.prompts import fence_all
@@ -732,7 +733,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
         confidence=report.confidence,
         confidence_label=confidence_label(report.confidence),
         sources=report.sources,
-        caveats=[c for c in (list(report.caveats) + ([report.confidence_note] if report.confidence_note else []) + list(report.unresolved or [])) if c][:6],
+        caveats=plain_caveats(list(report.caveats) + ([report.confidence_note] if report.confidence_note else []) + list(report.unresolved or [])),
         rounds_run=rounds_run,
         providers_used=used,
         providers_failed=failed,

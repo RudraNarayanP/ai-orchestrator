@@ -354,6 +354,35 @@ def humanize(answer: str, confidence: str = "moderate") -> str:
     return f"{text} {mark}"
 
 
+_CAVEAT_REWRITES = (
+    (re.compile(r"^verifier model unavailable", re.I), "The AI reviewer wasn't available, so this rests only on the pages I could open and check."),
+    (re.compile(r"^\(?no model verifier active", re.I), ""),
+    (re.compile(r"^verifier answer overruled", re.I), ""),
+    (re.compile(r"^voice scrub removed", re.I), ""),
+    (re.compile(r"^no claim survived the (?:evidence )?ledger\.?$", re.I), "None of the claims could be confirmed from the pages I opened."),
+    (re.compile(r"^not confirmed by any page we opened:\s*(.+)$", re.I | re.S), r"The AI answers said \1 but none of the pages I opened confirmed it."),
+)
+
+
+def plain_caveats(caveats: list[str], limit: int = 4) -> list[str]:
+    """Caveats a person can read: internal bookkeeping is reworded or dropped."""
+    out: list[str] = []
+    for raw in caveats or []:
+        text = re.sub(r"\s+", " ", str(raw or "")).strip()
+        if not text:
+            continue
+        for pattern, repl in _CAVEAT_REWRITES:
+            if pattern.search(text):
+                text = (pattern.sub(repl, text).strip() if pattern.groups else repl)
+                break
+        text = re.sub(r"\s+([.,])", r"\1", text)
+        text = re.sub(r"\bNo claim survived the evidence ledger\.?", "None of the claims could be confirmed from the pages I opened.", text).strip()
+        if not text or INTERNAL_VOCAB_RE.search(text) or text in out:
+            continue
+        out.append(text)
+    return out[:limit]
+
+
 INTERNAL_VOCAB_RE = re.compile(
     r"\b(ledger|evidence score|confidence score|tier\s*\d|claim[- ]?id|clm_|round\s*\d|provider agreement|primary_official|"
     r"web_research_status|ai_unsourced|verdicts?|insufficient_evidence)\b",
