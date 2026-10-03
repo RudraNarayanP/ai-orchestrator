@@ -1,0 +1,992 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "google_ai",
+   "copilot",
+   "meta_ai",
+   "le_chat",
+   "pi",
+   "qwen",
+   "deepseek"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 3
+ },
+ "records": [
+  {
+   "id": "uk-dpa-age",
+   "category": "uk-law",
+   "kind": "answer",
+   "question": "Under the Data Protection Act 2018, what is the minimum age at which a child can consent to information society services in the UK?",
+   "answer": "The minimum age at which a child can consent to information society services in the UK under the Data Protection Act 2018 is 13 years old. ⚖️",
+   "why": "The legislation (Section 9 of the Data Protection Act 2018) modifies Article 8(1) of the UK GDPR so that references to '16 years' are read as '13 years' for information society services. The ICO's current guidance confirms that only children aged 13 and over can give their own consent when an ISS is offered directly to them and consent is the lawful basis.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The age of 13 applies only when consent is the lawful basis and the service is an information society service offered directly to the child."
+   ],
+   "sources": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9",
+    "https://www.legislation.gov.uk/ukpga/2018/12/notes/division/6/index.htm",
+    "https://www.gov.uk/guidance/child-online-safety-data-protection-and-privacy",
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/",
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/how-do-the-lawful-bases-apply-to-children-s-personal-information/",
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/childrens-code-guidance-and-resources/the-children-s-code-and-online-tv-and-radio/"
+   ],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9",
+    "https://www.legislation.gov.uk/ukpga/2018/12/notes/division/6/index.htm",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9",
+    "https://www.legislation.gov.uk/ukpga/2018/12/notes/division/6/index.htm",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9"
+   ],
+   "primary_cited": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9",
+    "https://www.legislation.gov.uk/ukpga/2018/12/notes/division/6/index.htm"
+   ],
+   "pages_opened": 56,
+   "pages_confirmed": 47,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "sources still conflict on Data Protection Act 2018 commencement|figure; reported as unresolved rather than averaged",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "unclear",
+     "initial_claim": "**13 years old.** As of **4 October 2026**, under section 9 of the **Data Protection Act 2018**, the UK age for a child to give their own consent to the processing of personal data in connection with an information society service (ISS) is **13**. For children under 13, parental consent or authorisa",
+     "follow_up_result": "**The original answer was right on the central point.** I re-investigated the three claims using the legislation and current ICO guidance, and I can establish them from sources I actually opened. As of **4 October 2026**, section 9 of the Data Protection Act 2018 modifies Article 8(1) of the UK GDPR",
+     "final_position": ""
+    }
+   ],
+   "ai_opened": {
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/childrens-code-guidance-and-resources/age-appropriate-design-a-code-of-practice-for-online-services/annex-c-lawful-basis-for-processing/": false,
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/childrens-code-guidance-and-resources/age-appropriate-design-a-code-of-practice-for-online-services/services-covered-by-this-code/": false,
+    "https://ico.org.uk/media/for-organisations/guide-to-data-protection/guide-to-the-general-data-protection-regulation-gdpr/children-and-the-uk-gdpr-1-0.pdf": false,
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9": true,
+    "https://www.legislation.gov.uk/ukpga/2018/12/notes/division/6/index.htm": false,
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/": true,
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/how-do-the-lawful-bases-apply-to-children-s-personal-information/": true,
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/childrens-code-guidance-and-resources/the-children-s-code-and-online-tv-and-radio/": true,
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/childrens-code-guidance-and-resources/age-appropriate-design-code/annex-c-lawful-basis-for-processing/": false,
+    "https://www.gov.uk/guidance/child-online-safety-data-protection-and-privacy": true,
+    "https://ico.org.uk/media2/migrated/2620427/accs-3-2021-technical-requirements-aadc.pdf": true,
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr-old/what-are-the-rules-about-an-iss-and-consent/": true
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 4512,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 339.1,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "ua-closed-session",
+   "category": "ua-law",
+   "kind": "unanswerable",
+   "question": "What exactly did the Verkhovna Rada discuss in the closed part of its session last Tuesday?",
+   "answer": "The Verkhovna Rada did not hold a plenary session on 29 September 2026, and no official record indicates any closed-door discussion took place that day; the day was part of a non‑plenary week devoted to committee work, none of which were reported as closed. ⚖️",
+   "why": "",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://unn.ua/en/news/the-verkhovna-rada-has-suspended-plenary-sessions-for-nearly-a-month-mps-will-return-on-october-13"
+   ],
+   "primary_domains": [
+    "zakon.rada.gov.ua"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 20,
+   "pages_confirmed": 10,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "google_ai",
+    "le_chat",
+    "qwen"
+   ],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 6,
+   "verifier_calls": 1,
+   "stop_reason": "sources still conflict on Verkhovna Rada plenary sessions|figure; reported as unresolved rather than averaged",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "secondary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "secondary",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "secondary",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "qwen",
+     "role": "secondary",
+     "status": "failed",
+     "error": "readiness=blocked"
+    },
+    {
+     "provider": "google_ai",
+     "role": "secondary",
+     "status": "broken",
+     "error": "no-response-element: AI Mode produced no answer block"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "qwen",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "google_ai",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "unclear",
+     "initial_claim": "I could not substantiate the premise that the Verkhovna Rada held a plenary session with a “closed part” on Tuesday, **29 September 2026**. The Rada's own parliamentary calendar identifies **28 September–4 October as a non-plenary week**, and its official chronology for **29 September** says that **",
+     "follow_up_result": "I could not substantiate the premise that the Verkhovna Rada held a plenary session with a “closed part” on Tuesday, **29 September 2026**. The Rada's own parliamentary calendar identifies **28 September–4 October as a non-plenary week**, and its official chronology for **29 September** says that **",
+     "final_position": ""
+    }
+   ],
+   "ai_opened": {
+    "https://meeting.rada.gov.ua/work/vote/agenda/ed20260929/sps%3Amax100?lang=uk": true,
+    "https://meeting.rada.gov.ua/work/vote/chron/ed20260929?lang=uk": true,
+    "https://www.rada.gov.ua/meeting/stenogr/show/8783.html": true,
+    "https://www.rada.gov.ua/newscenter": true,
+    "https://www.rada.gov.ua/news/news_kom/275646.html": true,
+    "https://www.rada.gov.ua/news/news_kom/275645.html": true,
+    "https://www.rada.gov.ua/news/news_kom/275642.html": true,
+    "https://www.rada.gov.ua/news/news_kom/275639.html": true,
+    "https://komsamovr.rada.gov.ua/print/79798.html": true,
+    "https://english.nv.ua/nation/ukraine-s-verkhovna-rada-begins-26-day-recess-amid-financial-crisis-warning-50642807.html": true,
+    "https://unn.ua/en/news/the-verkhovna-rada-has-suspended-plenary-sessions-for-nearly-a-month-mps-will-return-on-october-13": null
+   },
+   "unsupported_figures": [
+    "29"
+   ],
+   "claim_text_len": 2458,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 442.1,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "answered a question that has no public answer",
+     "figures with no opened page behind them: 29"
+    ]
+   }
+  },
+  {
+   "id": "uni-oxford-plagiarism",
+   "category": "university",
+   "kind": "answer",
+   "question": "How does the University of Oxford define plagiarism in its guidance for students?",
+   "answer": "The University of Oxford defines plagiarism as presenting someone else’s work or ideas as your own, with or without their consent, by incorporating it into your work without full acknowledgement. 🎓",
+   "why": "The NDS plagiarism guidance page explicitly states: ‘Plagiarism is presenting someone else’s work or ideas as your own, with or without their consent, by incorporating it into your work without full acknowledgement.’",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "The University Student Handbook 2026/27 was opened but its exact wording was not captured in the evidence, so it cannot corroborate the definition."
+   ],
+   "sources": [
+    "https://www.nds.ox.ac.uk/study-with-us/current-students/skills-training/plagiarism"
+   ],
+   "primary_domains": [
+    "ox.ac.uk"
+   ],
+   "primary_opened": [
+    "https://www.ox.ac.uk/students/academic/guidance/skills/plagiarism",
+    "https://www.ox.ac.uk/students/academic/student-handbook",
+    "https://www.ox.ac.uk/students/academic/academicpractice",
+    "https://www.ox.ac.uk/admissions/graduate/application-guide/applicant-policies/plagiarism",
+    "https://www.new.ox.ac.uk/sites/default/files/2025-08/Undergraduates%20Study%20Guide.pdf",
+    "https://www.nds.ox.ac.uk/study-with-us/current-students/skills-training/plagiarism"
+   ],
+   "primary_cited": [
+    "https://www.nds.ox.ac.uk/study-with-us/current-students/skills-training/plagiarism"
+   ],
+   "pages_opened": 15,
+   "pages_confirmed": 9,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "sources still conflict on Oxford Student Handbook|figure; reported as unresolved rather than averaged",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "unclear",
+     "initial_claim": "The University of Oxford defines plagiarism as **presenting work or ideas from another source as your own, without full acknowledgement**, whether or not the original author consented. Its definition covers published and unpublished material in manuscript, print, or electronic form, and Oxford also ",
+     "follow_up_result": "Both material claims are **confirmed** by Oxford's official University Student Handbook 2026/27, which I opened. - The handbook explicitly says: “This handbook applies to the 2026–27 academic year and will be revised annually.” Oxford University - In section 6.10, “Plagiarism,” it reproduces the Uni",
+     "final_position": ""
+    }
+   ],
+   "ai_opened": {
+    "https://www.ox.ac.uk/students/academic/guidance/skills/plagiarism": true,
+    "https://www.ox.ac.uk/students/academic/student-handbook": true,
+    "https://www.ox.ac.uk/students/academic/academicpractice": true,
+    "https://www.ox.ac.uk/admissions/graduate/application-guide/applicant-policies/plagiarism": false,
+    "https://www.new.ox.ac.uk/sites/default/files/2025-08/Undergraduates%20Study%20Guide.pdf": false,
+    "https://www.nds.ox.ac.uk/study-with-us/current-students/skills-training/plagiarism": false,
+    "https://lifelong-learning.ox.ac.uk/wp-content/uploads/2026/07/StudentHandbook-Weekly-Classes-MT26-HT27-TT27.pdf": null
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 5207,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 280.9,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "uni-ucl-appeal",
+   "category": "university",
+   "kind": "answer",
+   "question": "What are the grounds for appealing an academic misconduct decision at University College London?",
+   "answer": "Under UCL’s 2026‑27 Student Academic Misconduct Procedure, an academic‑misconduct decision may be appealed on one or more of four grounds: procedural non‑compliance, fresh evidence that was not previously available, an unreasonable misconduct finding, and (only for penalties that result in non‑progression or suspension/termination) significant impact of the penalty. 🎓",
+   "why": "",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework"
+   ],
+   "primary_domains": [
+    "ucl.ac.uk"
+   ],
+   "primary_opened": [
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework/section-9-student-academic-misconduct-procedure",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals"
+   ],
+   "primary_cited": [
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework"
+   ],
+   "pages_opened": 37,
+   "pages_confirmed": 13,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "gemini",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "8 material claim(s) still unconfirmed",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "failed",
+     "error": "off_topic: the reply does not address this question"
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "confirmed",
+     "initial_claim": "Under UCL’s **2026–27 Student Academic Misconduct Procedure**, an academic-misconduct decision can be appealed on **one or more of four grounds**: - Procedural non-compliance: the decision or panel process was not conducted in accordance with UCL’s procedures. - Fresh evidence: new evidence has beco",
+     "follow_up_result": "Your earlier answer was **correct** on this specific point. The exact primary source is UCL’s current **Section 9: Student Academic Misconduct Procedure**, published for **2026–27**. I opened it and read the relevant Stage 3 provisions. It states that: - Stage 3 is an “Appeal Review” and is a “paper",
+     "final_position": "Under UCL’s **2026–27 Student Academic Misconduct Procedure**, an academic-misconduct decision can be appealed on **one or more of four grounds**: - Procedural non-compliance: the decision or panel process was not conducted in accordance with UCL’s procedures. - Fresh evidence: new evidence has beco"
+    }
+   ],
+   "ai_opened": {
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework/section-9-student-academic-misconduct-procedure": true,
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals": true,
+    "https://www.ucl.ac.uk/srs/news/2021/jul/updated-academic-misconduct-procedures": false,
+    "https://www.ucl.ac.uk/srs/news/2021/sep/new-academic-misconduct-forms": false,
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework": true,
+    "https://www.ucl.ac.uk/study/sites/study/files/2026-01/academic_manual_2025-26_combined_0.pdf": true,
+    "https://www.ucl.ac.uk/srs/news/2021/dec/important-academic-misconduct-updates": false,
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework/section-2-disciplinary-code-and-procedure-respect-students": true
+   },
+   "unsupported_figures": [
+    "27"
+   ],
+   "claim_text_len": 2986,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 325.6,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "figures with no opened page behind them: 27"
+    ]
+   }
+  },
+  {
+   "id": "res-ramsey-r55",
+   "category": "research",
+   "kind": "answer",
+   "question": "What are the best known lower and upper bounds for the Ramsey number R(5,5)?",
+   "answer": "The best known bounds for R(5,5) are 43 ≤ R(5,5) ≤ 46. The lower bound of 43 was established by Geoffrey Exoo in 1989 via an explicit 2-coloring of K₄₂ with no monochromatic K₅. ✅",
+   "why": "",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://leapsinbounds.org/constants/ramsey-5-5/",
+    "https://cairn-commons.com/problems/ramsey-r55",
+    "https://arxiv.org/abs/2409.15709",
+    "https://mathweb.ucsd.edu/~erdosproblems/erdos/newproblems/RamseyLimit.html",
+    "https://mathworld.wolfram.com/RamseyNumber.html",
+    "https://github.com/techno-optimist/r55-rigidity-certificates"
+   ],
+   "primary_domains": [
+    "arxiv.org"
+   ],
+   "primary_opened": [
+    "https://arxiv.org/abs/2409.15709",
+    "https://arxiv.org/abs/1703.08768",
+    "https://arxiv.org/abs/2409.15709"
+   ],
+   "primary_cited": [
+    "https://arxiv.org/abs/2409.15709"
+   ],
+   "pages_opened": 53,
+   "pages_confirmed": 44,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "sources still conflict on Ramsey number lower bound|figure; reported as unresolved rather than averaged",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "confirmed",
+     "initial_claim": "The best known bounds as of **4 October 2026** are 43≤R(5,5)≤46.\\boxed{43 \\le R(5,5) \\le 46}. The lower bound R(5,5)≥43R(5,5)\\ge 43 was established by Geoffrey Exoo in 1989, via an explicit 2-coloring of K42K_{42} with no monochromatic K5K_5. The upper bound R(5,5)≤46R(5,5)\\le46 was proved by Viglei",
+     "follow_up_result": "The re-investigation confirms all three points in the earlier answer. The key primary source is **Geoffrey Exoo's original 1989 paper in the Journal of Graph Theory**. Wiley's article page identifies the paper, gives its publication date as March 1989, and states in the abstract that it describes a ",
+     "final_position": "The best known bounds as of **4 October 2026** are 43≤R(5,5)≤46.\\boxed{43 \\le R(5,5) \\le 46}. The lower bound R(5,5)≥43R(5,5)\\ge 43 was established by Geoffrey Exoo in 1989, via an explicit 2-coloring of K42K_{42} with no monochromatic K5K_5. The upper bound R(5,5)≤46R(5,5)\\le46 was proved by Viglei"
+    }
+   ],
+   "ai_opened": {
+    "https://onlinelibrary.wiley.com/doi/full/10.1002/jgt.70029": true,
+    "https://arxiv.org/abs/2409.15709": true,
+    "https://arxiv.org/abs/1703.08768": true,
+    "https://pascal-francis.inist.fr/vibad/index.php?action=getRecordDetail&idt=7351667": true,
+    "https://www.combinatorics.org/ojs/index.php/eljc/article/view/DS1": true,
+    "https://leapsinbounds.org/constants/ramsey-5-5/": true,
+    "https://cairn-commons.com/problems/ramsey-r55": true,
+    "https://mathworld.wolfram.com/RamseyNumber.html": false,
+    "https://onlinelibrary.wiley.com/doi/10.1002/jgt.3190130113": true,
+    "https://onlinelibrary.wiley.com/doi/pdf/10.1002/jgt.3190130113": true,
+    "https://users.cecs.anu.edu.au/~bdm/papers/r55.pdf": true,
+    "https://mathweb.ucsd.edu/~erdosproblems/erdos/newproblems/RamseyLimit.html": false,
+    "https://www.limitsregistry.com/limits/LR-003110": true,
+    "https://github.com/techno-optimist/r55-rigidity-certificates": false,
+    "https://github.com/antydizajn/ramsey-r55-verification/blob/main/paper.md": false,
+    "https://www.combinatorics.org/files/Surveys/ds1/ds1v2-1995.pdf": false,
+    "https://www.google.com/search?q=https://www.semanticscholar.org/paper/A-lower-bound-for-r%252C-5-Exoo/2c85d9682e2587f048886b1b498319c08a1292dd": false
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 3319,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 474.8,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "res-private-review",
+   "category": "research",
+   "kind": "unanswerable",
+   "question": "What did the anonymous reviewers privately write about the AlphaFold 3 paper during Nature's peer review?",
+   "answer": "The published Nature article does not provide the reviewers' reports. Dunbrack specifically criticized the server's suitability for high-throughput calculations and methods development. ✅",
+   "why": "5 pages we opened, from 4 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://www.nature.com/articles/d41586-024-01463-0",
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC11168924/",
+    "https://fraserlab.com/2024/05/22/AlphaFold3/",
+    "https://www.genengnews.com/topics/artificial-intelligence/alphafold-3-angst-limited-accessibility-stirs-outcry-from-researchers/",
+    "https://www.techmeme.com/240508/p3",
+    "https://www.nature.com/articles/s41586-024-07487-w"
+   ],
+   "primary_domains": [
+    "nature.com"
+   ],
+   "primary_opened": [
+    "https://www.nature.com/articles/d41586-024-01463-0",
+    "https://www.nature.com/articles/d41586-024-01463-0",
+    "https://www.nature.com/articles/d41586-024-01463-0",
+    "https://www.nature.com/articles/d41586-024-01463-0",
+    "https://www.nature.com/articles/s41586-024-07487-w",
+    "https://www.nature.com/articles/s41586-024-07487-w"
+   ],
+   "primary_cited": [
+    "https://www.nature.com/articles/d41586-024-01463-0",
+    "https://www.nature.com/articles/s41586-024-07487-w"
+   ],
+   "pages_opened": 34,
+   "pages_confirmed": 33,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt"
+   ],
+   "providers_failed": [],
+   "rounds": 1,
+   "verifier_model": "deterministic ledger (no verifier call)",
+   "browser_sessions": 1,
+   "verifier_calls": 0,
+   "stop_reason": "evidence sufficient after the primary researcher; no escalation earned",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://www.nature.com/articles/d41586-024-01463-0": true,
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC11168924/": true,
+    "https://fraserlab.com/2024/05/22/AlphaFold3/": true,
+    "https://www.genengnews.com/topics/artificial-intelligence/alphafold-3-angst-limited-accessibility-stirs-outcry-from-researchers/": false,
+    "https://www.techmeme.com/240508/p3": false
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 1137,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 73.1,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "answered a question that has no public answer"
+    ]
+   }
+  }
+ ]
+}
