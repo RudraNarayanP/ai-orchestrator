@@ -69,6 +69,14 @@ main { flex: 1; display: flex; min-height: 0; position: relative; }
 }
 .msg.ai .answer { font-size: 16.5px; line-height: 1.6; }
 .answer-text { margin: 0 0 8px; white-space: pre-wrap; }
+.memory h3 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.memory .row { gap: 8px; align-items: center; flex-wrap: wrap; }
+.memory input[type=text] { flex: 1; min-width: 160px; }
+.mem-list { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; max-height: 38vh; overflow: auto; }
+.mem { border: 1px solid var(--line); background: var(--panel-2); border-radius: 10px; padding: 8px 10px; }
+.mem-text { font-size: 14px; }
+.mem-why { color: var(--accent); font-size: 12px; margin-top: 2px; }
+.project { max-width: 150px; }
 .err { color: var(--bad); font-size: 13px; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }

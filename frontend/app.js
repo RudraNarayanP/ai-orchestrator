@@ -53,6 +53,15 @@ async function boot() {
   $("#cancel").addEventListener("click", cancelJob);
   $("#newThread").addEventListener("click", newThread);
   $("#openHistory").addEventListener("click", () => openPanel("history"));
+  $("#openMemory").addEventListener("click", () => openPanel("memory"));
+  $("#closeMemory").addEventListener("click", () => openPanel(null));
+  $("#memSearch").addEventListener("click", memSearch);
+  $("#memQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); memSearch(); } });
+  $("#memAdd").addEventListener("click", memAdd);
+  $("#memStatus").addEventListener("change", loadMemory);
+  $("#memForgetAll").addEventListener("click", memForgetAll);
+  $("#memInject").addEventListener("change", () => memSetting({ inject: $("#memInject").checked }));
+  $("#memCapture").addEventListener("change", () => memSetting({ capture: $("#memCapture").checked }));
   $("#closeHistory").addEventListener("click", () => openPanel(null));
   $("#historyList").addEventListener("keydown", historyKeys);
   $("#question").addEventListener("keydown", questionKeys);
@@ -139,12 +148,113 @@ function toggleSettings(open) {
 
 /** One side panel at a time ("settings", "history", or null). Focus moves in on open and back to the question on close. */
 function openPanel(name) {
-  for (const id of ["settings", "history"]) $("#" + id).hidden = id !== name;
+  for (const id of ["settings", "history", "memory"]) $("#" + id).hidden = id !== name;
   $("#openSettings").setAttribute("aria-expanded", String(name === "settings"));
   $("#openHistory").setAttribute("aria-expanded", String(name === "history"));
+  $("#openMemory").setAttribute("aria-expanded", String(name === "memory"));
   if (name === "history") loadHistory();
+  if (name === "memory") loadMemory();
   if (name) $("#" + name).querySelector("input, select, button")?.focus();
   else $("#question").focus();
+}
+
+/* ------------------------------------------------------------------ memory panel
+ * Everything here is text-only (no innerHTML). The server is the source of truth; we just draw it.
+ */
+async function memCall(path, opts) {
+  const res = await fetch(path, opts);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "HTTP " + res.status);
+  return body;
+}
+
+const jsonOpts = (method, body) => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+function memCard(m, opts = {}) {
+  const card = el("div", "mem");
+  card.append(el("div", "mem-text", m.content));
+  const bits = [m.memory_type, m.source === "user_explicit" ? "you said it" : "inferred", `confidence ${Math.round((m.confidence || 0) * 100)}%`, m.status.toLowerCase()];
+  if (m.project) bits.push("project: " + m.project);
+  bits.push("saved " + fmtTime(m.created_at));
+  if (m.updated_at && Math.abs(m.updated_at - m.created_at) > 60) bits.push("updated " + fmtTime(m.updated_at));
+  const chips = el("div", "chips");
+  for (const b of bits) chips.append(el("span", "chip", b));
+  card.append(chips);
+  if (m.why?.length) card.append(el("div", "mem-why", "why: " + m.why.join("; ")));
+  if (!opts.readonly) {
+    const row = el("div", "row");
+    const edit = el("button", "ghost small", "edit");
+    edit.type = "button";
+    edit.addEventListener("click", async () => {
+      const next = window.prompt("Edit this memory", m.content);
+      if (next === null || !next.trim() || next.trim() === m.content) return;
+      try { await memCall(`/api/memory/${encodeURIComponent(m.memory_id)}`, jsonOpts("PATCH", { content: next.trim() })); loadMemory(); } catch (e) { note("Could not edit: " + e.message); }
+    });
+    const del = el("button", "ghost small", "delete");
+    del.type = "button";
+    del.addEventListener("click", async () => {
+      try { await memCall(`/api/memory/${encodeURIComponent(m.memory_id)}`, { method: "DELETE" }); loadMemory(); } catch (e) { note("Could not delete: " + e.message); }
+    });
+    row.append(edit, del);
+    card.append(row);
+  }
+  return card;
+}
+
+async function loadMemory() {
+  const box = $("#memList");
+  box.textContent = "loading.";
+  try {
+    const s = await memCall("/api/memory/settings");
+    $("#memInject").checked = !!s.inject;
+    $("#memCapture").checked = !!s.capture;
+    const status = $("#memStatus").value;
+    const data = await memCall("/api/memory?limit=200" + (status ? "&status=" + status : ""));
+    const t = data.stats?.total ?? data.items.length;
+    $("#memStats").textContent = `${t} stored - search: ${s.embedder}`;
+    box.textContent = "";
+    if (!data.items.length) box.append(el("p", "hint", "Nothing stored."));
+    for (const m of data.items) box.append(memCard(m));
+  } catch (err) {
+    box.textContent = "";
+    box.append(el("p", "err", "Memory is unavailable: " + err.message));
+  }
+}
+
+async function memSearch() {
+  const q = $("#memQuery").value.trim();
+  const out = $("#memSearchOut");
+  out.textContent = "";
+  if (!q) return;
+  try {
+    const r = await memCall("/api/memory/search", jsonOpts("POST", { query: q, project: $("#project").value.trim() || undefined }));
+    out.append(el("p", "hint", `${r.kind} question - up to ${r.budget} memories - ${r.hits.length} picked of ${r.candidates} candidates` + (r.reason ? " - " + r.reason : "")));
+    for (const h of r.hits) out.append(memCard(h, { readonly: true }));
+  } catch (err) {
+    out.append(el("p", "err", err.message));
+  }
+}
+
+async function memAdd() {
+  const text = $("#memNew").value.trim();
+  if (!text) return;
+  try {
+    const r = await memCall("/api/memory", jsonOpts("POST", { content: text, memory_type: $("#memNewType").value, project: $("#project").value.trim() || undefined }));
+    $("#memNew").value = "";
+    note(r.action === "merged" ? "Already remembered - merged." : r.action === "superseded" ? "Saved - it replaces an older memory." : "Saved.");
+    loadMemory();
+  } catch (err) {
+    note("Could not save: " + err.message);
+  }
+}
+
+async function memSetting(change) {
+  try { await memCall("/api/memory/settings", jsonOpts("POST", change)); } catch (err) { note("Could not change that: " + err.message); }
+}
+
+async function memForgetAll() {
+  if (!window.confirm("Delete EVERYTHING OmniBrain remembers about you? This cannot be undone.")) return;
+  try { await memCall("/api/memory/forget-all", jsonOpts("POST", { confirm: true })); loadMemory(); } catch (err) { note("Could not delete: " + err.message); }
 }
 
 function fmtTime(seconds) {
@@ -234,7 +344,7 @@ function questionKeys(e) {
 
 /** Escape closes the open side panel; "/" jumps to the question box. */
 function globalKeys(e) {
-  if (e.key === "Escape" && (!$("#settings").hidden || !$("#history").hidden)) {
+  if (e.key === "Escape" && (!$("#settings").hidden || !$("#history").hidden || !$("#memory").hidden)) {
     openPanel(null);
   } else if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "")) {
     e.preventDefault();
@@ -336,6 +446,7 @@ async function ask(event) {
       mode: $("#mode").value,
       max_rounds: Number($("#maxRounds").value),
       conversation_id: state.conversationId,
+      project: $("#project").value.trim() || undefined,
     }),
   });
   const res = await reply.json().catch(() => ({}));
@@ -440,7 +551,21 @@ async function hydrate(jobId, shell) {
  * The audit trail (spec section 19): every page we opened, whether it actually
  * said what the model claimed it said, and the raw capture behind each answer.
  */
+function paintMemoryUsed(shell, job) {
+  const used = job.memory_used || job.live?.memory_used || job.extra?.memory?.used || [];
+  if (!used.length) return;
+  shell.sections.append(
+    expander(`Memory used as context (${used.length})`, () => {
+      const wrap = el("div", "body");
+      wrap.append(el("p", "meta", "Offered to the AIs as background about you. Not evidence - it is not in the sources or claims."));
+      for (const m of used) wrap.append(memCard(m, { readonly: true }));
+      return wrap;
+    })
+  );
+}
+
 async function paintEvidence(shell, job) {
+  paintMemoryUsed(shell, job);
   const evidence = job.evidence || job.live?.evidence || [];
   const disagreements = job.disagreements || job.live?.disagreements || [];
   const claims = job.claims || job.live?.claims || [];

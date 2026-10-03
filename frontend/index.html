@@ -27,6 +27,7 @@
     </label>
     <button id="newThread" class="ghost" type="button" title="Start a fresh conversation: earlier questions stop being used as context">new thread</button>
     <button id="openHistory" class="ghost" type="button" aria-controls="history" aria-expanded="false" title="Earlier questions and their evidence">history</button>
+    <button id="openMemory" class="ghost" type="button" aria-controls="memory" aria-expanded="false" title="What OmniBrain remembers about you, and why">memory</button>
     <button id="openSettings" class="ghost" type="button" aria-controls="settings" aria-expanded="false">providers &amp; verifier</button>
   </div>
 </header>
@@ -46,6 +47,33 @@
     <h2>History</h2>
     <div id="historyList" class="history-list"></div>
     <div class="row"><button id="closeHistory" class="ghost" type="button">close</button></div>
+  </aside>
+
+  <aside id="memory" class="settings memory" aria-label="Memory" hidden>
+    <h2>Memory</h2>
+    <p class="hint">Stored only on this computer. It is offered to the AIs as background context for personal questions &mdash; it is never treated as evidence and never appears in sources.</p>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="memInject"> use memory in answers</label>
+      <label class="check"><input type="checkbox" id="memCapture"> learn from what I say</label>
+    </div>
+    <p id="memStats" class="hint"></p>
+    <h3>Why would it be used?</h3>
+    <div class="row"><input id="memQuery" type="text" placeholder="type a question to see which memories it would pick"><button id="memSearch" class="ghost" type="button">test</button></div>
+    <div id="memSearchOut" class="mem-list"></div>
+    <h3>Add a memory</h3>
+    <div class="row">
+      <input id="memNew" type="text" maxlength="1000" placeholder="e.g. I prefer short answers">
+      <select id="memNewType"><option value="fact">fact</option><option value="preference">preference</option><option value="goal">goal</option><option value="project">project</option></select>
+      <button id="memAdd" class="primary" type="button">add</button>
+    </div>
+    <h3>Everything stored</h3>
+    <div class="row">
+      <select id="memStatus"><option value="ACTIVE">active</option><option value="SUPERSEDED">replaced (history)</option><option value="ARCHIVED">archived</option><option value="">all</option></select>
+      <a id="memExport" class="export-link" href="/api/memory/export" download="omnibrain-memory.json">export</a>
+      <button id="memForgetAll" class="ghost" type="button">forget everything</button>
+    </div>
+    <div id="memList" class="mem-list"></div>
+    <div class="row"><button id="closeMemory" class="ghost" type="button">close</button></div>
   </aside>
 
   <aside id="settings" class="settings" aria-label="Providers and verifier" hidden>
@@ -84,6 +112,7 @@
 <footer>
   <form id="askForm">
     <textarea id="question" rows="1" aria-label="Your question" placeholder="Ask something that needs checking&hellip;"></textarea>
+    <input id="project" type="text" class="project" maxlength="60" aria-label="Project (optional)" placeholder="project (optional)" title="Memories saved under a project are only used for questions in that project">
     <button type="submit" class="primary" id="askBtn">Ask</button>
   </form>
   <p class="hint" id="footHint">
