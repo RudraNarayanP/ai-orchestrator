@@ -1,0 +1,10 @@
+server on 58034; providers ['chatgpt', 'gemini', 'search']; verifier ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)
+[1/4] uk-theft-s1: How does section 1 of the Theft Act 1968 define theft?
+    -> WARN in 8s: "Section 1(1) of the Theft Act 1968 defines theft as follows: 'A person is guilty of theft if he dishonestly appropriates" ['no primary source cited']
+[2/4] ua-marriage-age: Under the Family Code of Ukraine, what is the minimum marriageable age and can a court all
+    -> FAIL in 369s: 'The relevant provisions of the Family Code were amended in 2012. ⚖️ Under Article 22 of the Family Code of Ukraine, the ' ['missing expected content: \\b16\\b', 'no primary source cited', 'figures with no opened page behind them: 17, article23, 14']
+[3/4] ua-constitution-year: When was the current Constitution of Ukraine adopted?
+    -> WARN in 313s: 'The current Constitution of Ukraine was adopted on 28 June 1996. ✅' ['no primary source cited']
+[4/4] uni-oxford-dphil-length: What is the maximum thesis length for an Oxford DPhil, and does it differ by division?
+    -> PASS in 581s: "Oxford's Social Sciences regulations specify 100,000 words as the maximum for DPhil theses. ✅ Current Politics and Inter" []
+wrote C:\Users\ADMIN\Downloads\ai orchestrator\omnibrain\data\eval\eval_20261003_114727.md

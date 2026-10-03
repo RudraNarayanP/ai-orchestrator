@@ -1,0 +1,225 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "search"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "uk-theft-s1",
+   "category": "uk-law",
+   "kind": "answer",
+   "question": "How does section 1 of the Theft Act 1968 define theft?",
+   "answer": "Section 1(1) of the Theft Act 1968 defines theft as follows: 'A person is guilty of theft if he dishonestly appropriates property belonging to another with the intention of permanently depriving the other of it.' The section then elaborates on key terms such as 'dishonestly', 'appropriates', 'property', 'belonging to another', and 'intention to permanently deprive'.",
+   "why": "",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "Answered from stable knowledge without research -- ask 'why' to have it checked."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 0,
+   "pages_confirmed": 0,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [],
+   "providers_failed": [],
+   "rounds": 0,
+   "verifier_model": null,
+   "unsupported_figures": [],
+   "claim_text_len": 0,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 8.1,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "no primary source cited"
+    ]
+   }
+  },
+  {
+   "id": "ua-marriage-age",
+   "category": "ua-law",
+   "kind": "answer",
+   "question": "Under the Family Code of Ukraine, what is the minimum marriageable age and can a court allow it earlier?",
+   "answer": "The relevant provisions of the Family Code were amended in 2012. ⚖️ Under Article 22 of the Family Code of Ukraine, the general marriageable age is set at 17 years for women and 18 years for men. Under Article 23 of the Family Code of Ukraine, a court may grant the right to marry to a person who has reached the age of 14 upon application, if it is established that the marriage corresponds to their interests.",
+   "why": "5 pages we opened, from 4 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The AI reviewer wasn't available, so this rests only on the pages I could open and check."
+   ],
+   "sources": [
+    "https://www.legislation.gov.uk/uksi/2012/679/made",
+    "https://legal-wires.com/singapore/central-provident-fund-relevant-individual-regulations-2012/",
+    "https://codes.findlaw.com/ca/family-code/fam-sect-2012/",
+    "https://california.public.law/codes/family_code_section_2012",
+    "https://california.public.law/codes/family_code_section_2010",
+    "https://en.wikipedia.org/wiki/Marriageable_age"
+   ],
+   "primary_domains": [
+    "zakon.rada.gov.ua"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 43,
+   "pages_confirmed": 37,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [
+    "17",
+    "article23",
+    "14"
+   ],
+   "claim_text_len": 4387,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 369.2,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "missing expected content: \\b16\\b",
+     "no primary source cited",
+     "figures with no opened page behind them: 17, article23, 14"
+    ]
+   }
+  },
+  {
+   "id": "ua-constitution-year",
+   "category": "ua-law",
+   "kind": "answer",
+   "question": "When was the current Constitution of Ukraine adopted?",
+   "answer": "The current Constitution of Ukraine was adopted on 28 June 1996. ✅",
+   "why": "The 112.ua articles from June 2026 explicitly state that Ukraine’s Constitution Day commemorates the adoption of the founding law on June 28, 1996. The Wikipedia entry for the Constitution of Ukraine notes that the constitution was adopted and ratified at the 5th session of the Verkhovna Rada on 28 June 1996. These independent sources corroborate the date.",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [],
+   "primary_domains": [
+    "zakon.rada.gov.ua",
+    "constitution.rada.gov.ua"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 34,
+   "pages_confirmed": 29,
+   "refutation": {
+    "refuting_pages": 1,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 1,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 1202,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 313.0,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "no primary source cited"
+    ]
+   }
+  },
+  {
+   "id": "uni-oxford-dphil-length",
+   "category": "university",
+   "kind": "answer",
+   "question": "What is the maximum thesis length for an Oxford DPhil, and does it differ by division?",
+   "answer": "Oxford's Social Sciences regulations specify 100,000 words as the maximum for DPhil theses. ✅ Current Politics and International Relations regulations specify 100,000 words as the maximum for DPhil theses. The Social Sciences regulations identify 100,000 words as the maximum and state that successful theses can be significantly shorter.",
+   "why": "3 pages we opened, from 3 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The AI reviewer wasn't available, so this rests only on the pages I could open and check."
+   ],
+   "sources": [
+    "https://contentxprtz.com/blog/is-70000-words-enough-for-phd",
+    "https://www.law.ox.ac.uk/content/course/dphil-law",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rditosogandareastud",
+    "https://www.mpls.ox.ac.uk/graduate-school/information-for-postgraduate-research-students/submitting-your-thesis",
+    "https://philosophy.site.ox.ac.uk/dphil-philosophy-0"
+   ],
+   "primary_domains": [
+    "ox.ac.uk"
+   ],
+   "primary_opened": [
+    "https://examregs.admin.ox.ac.uk/Regulation?code=grftdodoctofphil",
+    "https://www.ox.ac.uk/admissions/graduate/courses/dphil-philosophy",
+    "https://www.law.ox.ac.uk/content/course/dphil-law",
+    "https://www.law.ox.ac.uk/content/course/dphil-law",
+    "https://www.law.ox.ac.uk/content/course/dphil-law",
+    "https://www.law.ox.ac.uk/content/course/dphil-law"
+   ],
+   "primary_cited": [
+    "https://www.law.ox.ac.uk/content/course/dphil-law",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rditosogandareastud",
+    "https://www.mpls.ox.ac.uk/graduate-school/information-for-postgraduate-research-students/submitting-your-thesis",
+    "https://philosophy.site.ox.ac.uk/dphil-philosophy-0"
+   ],
+   "pages_opened": 30,
+   "pages_confirmed": 28,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "gemini"
+   ],
+   "rounds": 2,
+   "verifier_model": "nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 2748,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 581.8,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  }
+ ]
+}

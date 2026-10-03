@@ -1,0 +1,458 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "search"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "uk-dpa-age",
+   "category": "uk-law",
+   "kind": "answer",
+   "question": "Under the Data Protection Act 2018, what is the minimum age at which a child can consent to information society services in the UK?",
+   "answer": "The current UK GDPR Article 8 continues to specify 13 years as the applicable age. ✅ A child under 13 generally requires consent or authorisation from a holder of parental responsibility when consent is the lawful basis. The Article 8 rule does not apply to preventive or counselling services.",
+   "why": "5 pages we opened, from 5 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [
+    "(no model verifier active: verifier returned unparsable output)",
+    "verifier model unavailable (verifier returned unparsable output); verdicts come from the evidence ledger, not from a language model"
+   ],
+   "sources": [
+    "https://grokipedia.com/page/Age_of_Digital_Consent",
+    "https://www.gdpr.org/regulation/article-8.html",
+    "https://watchdogsecurity.io/gdpr/child-consent-collection",
+    "https://www.legislation.gov.uk/ukpga/2018/12/contents",
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr-old/what-are-the-rules-about-an-iss-and-consent/",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/13"
+   ],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/13",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/13",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/13",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/13",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/13",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/13"
+   ],
+   "primary_cited": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/contents",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/13"
+   ],
+   "pages_opened": 93,
+   "pages_confirmed": 55,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 3
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 2629,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 450.5,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "uk-future-amendment",
+   "category": "uk-law",
+   "kind": "unanswerable",
+   "question": "Which amendments will Parliament make to the Employment Rights Act 1996 during 2028?",
+   "answer": "I couldn't verify this reliably.",
+   "why": "",
+   "confidence": "Low confidence",
+   "caveats": [
+    "Not confirmed by any page we opened: No amendments to the Employment Rights Act 1996 are scheduled for 2028; the major changes from the Employment Rights Act 2025 are being implemented in 2026 and 2027.",
+    "The absence of a published 2028 amendment programme does not rule out future legislation; Parliament could introduce new bills after the sources consulted.",
+    "The absence of evidence does not guarantee that no amendments will be made, but based on current information none are scheduled for 2028. No claim survived the evidence ledger.",
+    "verifier answer overruled to low confidence by the ledger"
+   ],
+   "sources": [],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/2025/36",
+    "https://www.legislation.gov.uk/uksi/2026/559/made",
+    "https://www.legislation.gov.uk/ukpga/2025/36/contents",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-23/data.xht?view=snippet&wrap=true",
+    "https://www.legislation.gov.uk/ukpga/2018/12/notes/division/6/index.htm",
+    "https://www.legislation.gov.uk/ukpga/2025/36"
+   ],
+   "primary_cited": [],
+   "pages_opened": 73,
+   "pages_confirmed": 68,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 4416,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 560.6,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "don't-know without a reason"
+    ]
+   }
+  },
+  {
+   "id": "ua-marriage-age",
+   "category": "ua-law",
+   "kind": "answer",
+   "question": "Under the Family Code of Ukraine, what is the minimum marriageable age and can a court allow it earlier?",
+   "answer": "The Employment Rights Act 2025 was enacted on 18 December 2025 and requires secondary commencement regulations to bring its sections into force. ⚖️ The Employment Rights Act 2025 (Commencement No. 4 and Transitional and Saving Provisions) Regulations 2026 were made on 26 May 2026. Official publication records on legislation.gov.uk list the \"Made\" date of these regulations as 2 September 2026.",
+   "why": "3 pages we opened, from 2 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [
+    "(no model verifier active: verifier returned unparsable output)",
+    "verifier model unavailable (verifier returned unparsable output); verdicts come from the evidence ledger, not from a language model"
+   ],
+   "sources": [
+    "https://www.legislation.gov.uk/uksi/2026/559/made",
+    "https://www.legislation.gov.uk/ukpga/2025/36",
+    "https://www.tribunalclaimsolicitors.co.uk/employment-rights-act-2025/",
+    "https://www.legislation.gov.uk/uksi/2026/3/contents/made",
+    "https://www.hrconnect.org.uk/news/employment-rights-act-2025-receives-royal-assent",
+    "https://knowledge.dlapiper.com/dlapiperknowledge/globalemploymentlatestdevelopments/2025/ERB-receives-royal-assent-"
+   ],
+   "primary_domains": [
+    "zakon.rada.gov.ua"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 94,
+   "pages_confirmed": 91,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 6
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 3485,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 314.2,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "missing expected content: \\b16\\b",
+     "no primary source cited"
+    ]
+   }
+  },
+  {
+   "id": "ua-russian-state-language",
+   "category": "ua-law",
+   "kind": "false_premise",
+   "question": "Which article of the Constitution of Ukraine makes Russian the second state language?",
+   "answer": "No article of the Constitution of Ukraine makes Russian the second state language; Article 10 establishes Ukrainian as the sole state language and guarantees the free development of Russian as a minority language. ✅",
+   "why": "Wikipedia and the official legislation show that Article 10 of the Constitution states Ukrainian is the state language and separately guarantees the free development, use, and protection of Russian and other minority languages.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The Constitutional Court's interpretation was not independently verified in this research.",
+    "clm_0ee3a7f218db40a0",
+    "clm_0ab63dd8e5946318",
+    "clm_38e49822c7404d3d"
+   ],
+   "sources": [],
+   "primary_domains": [
+    "zakon.rada.gov.ua",
+    "constitution.rada.gov.ua"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 60,
+   "pages_confirmed": 48,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 4199,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 324.5,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "no primary source cited"
+    ]
+   }
+  },
+  {
+   "id": "uni-oxford-plagiarism",
+   "category": "university",
+   "kind": "answer",
+   "question": "How does the University of Oxford define plagiarism in its guidance for students?",
+   "answer": "The University of Oxford defines plagiarism as presenting someone else's work or ideas as your own, with or without their consent, by incorporating it into your work without full acknowledgement. 🎓 This definition covers all published and unpublished material in any form, includes unauthorised AI‑generated material, and also treats the reuse of one's own previously submitted work without citation as plagiarism.",
+   "why": "Oxford's official plagiarism guidance webpage explicitly states the definition and its scope, confirming each element of the claim.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The 2026/27 Student Handbook could not be accessed to verify its reproduction of the definition."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "ox.ac.uk"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 47,
+   "pages_confirmed": 28,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 3368,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 201.5,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "no primary source cited"
+    ]
+   }
+  },
+  {
+   "id": "uni-manchester-viva-pass-rate",
+   "category": "university",
+   "kind": "unanswerable",
+   "question": "What percentage of PhD vivas at the University of Manchester ended in outright failure last year?",
+   "answer": "The University of Manchester's current PhD regulations were last modified on 5 August 2026. 🎓 The University's doctoral examination policy says the examination normally consists of thesis assessment followed by an oral defence. Today's date is 3 October 2026.",
+   "why": "3 pages we opened, from 3 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [
+    "(no model verifier active: verifier returned unparsable output)",
+    "verifier model unavailable (verifier returned unparsable output); verdicts come from the evidence ledger, not from a language model"
+   ],
+   "sources": [
+    "https://tesify.uk/manchester-university-phd-thesis-regulations-2026/",
+    "https://www.mmu.ac.uk/study/postgraduate/research-study/phd/research-regulations-and-guidance",
+    "https://www.manchester.ac.uk/study/postgraduate-research/funding/phd-by-enterprise/index.htm",
+    "https://www.doctoral-academy.bmh.manchester.ac.uk/essential-information/handbook/",
+    "https://theesk.org/2026/09/24/the-analysis-series-manchester-united-plc-annual-report-financial-year-ended-30-june-2025/",
+    "https://ncses.nsf.gov/surveys/earned-doctorates/2025"
+   ],
+   "primary_domains": [
+    "manchester.ac.uk"
+   ],
+   "primary_opened": [
+    "https://documents.manchester.ac.uk/display.aspx?DocID=31475",
+    "https://documents.manchester.ac.uk/display.aspx?DocID=79249",
+    "https://www.regulations.manchester.ac.uk/postgraduate-research-students/",
+    "https://www.regulations.manchester.ac.uk/ordinances-and-regulations-degree-of-doctor-of-philosophy--phd)/",
+    "https://www.manchester.ac.uk/study/postgraduate-research/funding/phd-by-enterprise/index.htm",
+    "https://www.manchester.ac.uk/study/postgraduate-research/funding/phd-by-enterprise/index.htm"
+   ],
+   "primary_cited": [
+    "https://www.manchester.ac.uk/study/postgraduate-research/funding/phd-by-enterprise/index.htm",
+    "https://www.doctoral-academy.bmh.manchester.ac.uk/essential-information/handbook/"
+   ],
+   "pages_opened": 35,
+   "pages_confirmed": 27,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 6898,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 463.8,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "answered a question that has no public answer"
+    ]
+   }
+  },
+  {
+   "id": "res-wiles-poincare",
+   "category": "research",
+   "kind": "false_premise",
+   "question": "Explain the main steps of Andrew Wiles's 1995 proof of the Poincare conjecture.",
+   "answer": "Andrew Wiles did not prove the Poincaré conjecture in 1995. 👍 Andrew Wiles proved Fermat's Last Theorem in work published in 1995. Wiles's 1995 proof concerned Fermat's Last Theorem, not the Poincaré conjecture.",
+   "why": "1 page we opened, from an independent site, state this.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "Only one independent site backs this.",
+    "(no model verifier active: verifier returned unparsable output)",
+    "verifier model unavailable (verifier returned unparsable output); verdicts come from the evidence ledger, not from a language model"
+   ],
+   "sources": [
+    "https://en.wikipedia.org/wiki/Modularity_theorem",
+    "https://tesify.app/can-you-fail-your-phd-viva-outcomes-odds-what-happens-next-2026/",
+    "https://arxiv.org/abs/math/0607607"
+   ],
+   "primary_domains": [
+    "arxiv.org"
+   ],
+   "primary_opened": [
+    "https://arxiv.org/pdf/2510.23435v1",
+    "https://arxiv.org/abs/math/0607607"
+   ],
+   "primary_cited": [
+    "https://arxiv.org/abs/math/0607607"
+   ],
+   "pages_opened": 29,
+   "pages_confirmed": 17,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 6235,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 625.9,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "res-ten-percent-brain",
+   "category": "research",
+   "kind": "myth",
+   "question": "Is it true that humans only use 10 percent of their brains?",
+   "answer": "The 10% brain myth is false. 👍 Humans use essentially all of their brain. Different brain regions and networks are more or less active depending on the task.",
+   "why": "5 pages we opened, from 5 independent sites, state this.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "None of the pages we opened is a primary source, though several independent sites agree.",
+    "(no model verifier active: escalation rules did not require the adversarial pass)",
+    "verifier model unavailable (escalation rules did not require the adversarial pass); verdicts come from the evidence ledger, not from a language model"
+   ],
+   "sources": [
+    "https://mythsundone.com/ten-percent-brain-myth-neuroscience-debunked/",
+    "https://www.sfn.org/sitecore/content/Home/BrainFacts2/Thinking-Sensing-and-Behaving/Thinking-and-Awareness/2019/Debunked-The-10-Percent-Brain-Myth-061719",
+    "https://thinkagaindaily.com/ten-percent-brain-myth-neuroscience-origin/",
+    "https://brainhealthuniversity.com/brain-health-insights/is-the-10-of-your-brain-myth-actually-false/",
+    "https://freebrain.net/where-did-the-10-brain-myth-come-from-origin/",
+    "https://brainmatters.org/myths-vs-facts"
+   ],
+   "primary_domains": [
+    "nih.gov",
+    "ncbi.nlm.nih.gov",
+    "pubmed.ncbi.nlm.nih.gov"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 84,
+   "pages_confirmed": 72,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt"
+   ],
+   "providers_failed": [],
+   "rounds": 1,
+   "verifier_model": "deterministic ledger (no verifier call)",
+   "unsupported_figures": [],
+   "claim_text_len": 1000,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 65.0,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "no primary source cited"
+    ]
+   }
+  }
+ ]
+}

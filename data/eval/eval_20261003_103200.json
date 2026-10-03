@@ -1,0 +1,224 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "search"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "uk-dpa-age",
+   "category": "uk-law",
+   "kind": "answer",
+   "question": "Under the Data Protection Act 2018, what is the minimum age at which a child can consent to information society services in the UK?",
+   "answer": "Under the Data Protection Act 2018, the minimum age at which a child can consent to information society services in the UK is 13 years old. ⚖️",
+   "why": "Section 9 of the DPA 2018 modifies Article 8(1) of the UK GDPR by replacing the '16 years' threshold with '13 years' for information society services where consent is the lawful basis. This is confirmed by the primary legislation on legislation.gov.uk and supported by ICO guidance and expert commentary.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The 13‑year threshold applies only when a service is offered directly to a child and the controller relies on consent as the lawful basis; other lawful bases (e.g., contract, legitimate interests) may have different requirements."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 69,
+   "pages_confirmed": 54,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 1,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 2541,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 177.3,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "no primary source cited"
+    ]
+   }
+  },
+  {
+   "id": "uk-vpn-ban",
+   "category": "uk-law",
+   "kind": "false_premise",
+   "question": "Which section of the Online Safety Act 2023 bans the use of VPNs in the UK?",
+   "answer": "The Online Safety Act 2023 does not contain any section that bans the use of VPNs in the UK. ⚖️",
+   "why": "The Act's text and explanatory notes show it imposes duties on online platforms to protect children from harmful content, but it does not prohibit individuals from using VPNs. Government guidance explicitly states that VPNs remain legal in the UK, while noting platforms must not facilitate children bypassing safety protections.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The analysis is based on the publicly available version of the Act and guidance; future amendments could change the legal landscape.",
+    "The conclusion rests on multiple confirmed government and legislative sources that detail the Act's provisions and lack any VPN prohibition."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/2023/50/notes/division/1/index.htm",
+    "https://www.legislation.gov.uk/ukpga/2023/50/notes/division/1/index.htm",
+    "https://www.legislation.gov.uk/ukpga/2023/50/notes/division/1/index.htm",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/enacted",
+    "https://www.legislation.gov.uk/ukpga/2023/50/contents",
+    "https://www.legislation.gov.uk/ukpga/2023/50/contents"
+   ],
+   "primary_cited": [],
+   "pages_opened": 46,
+   "pages_confirmed": 38,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 1,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 1769,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 301.6,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "no primary source cited"
+    ]
+   }
+  },
+  {
+   "id": "uk-future-amendment",
+   "category": "uk-law",
+   "kind": "unanswerable",
+   "question": "Which amendments will Parliament make to the Employment Rights Act 1996 during 2028?",
+   "answer": "The Employment Rights Act 2025 amended the Employment Rights Act 1996 through numerous provisions and schedules. ⚖️ Some reforms associated with the Employment Rights Act 2025 have implementation consequences extending beyond 2027.",
+   "why": "4 pages we opened, from 4 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The AI reviewer wasn't available, so this rests only on the pages I could open and check."
+   ],
+   "sources": [
+    "https://www.legislation.gov.uk/ukpga/1996/18/introduction/2025-01-17",
+    "https://uklabourlawblog.com/2026/08/25/unfair-dismissal-and-the-continuing-of-continuity-the-employment-rights-act-2025-and-section-108-of-the-employment-rights-act-1996-by-james-hand/",
+    "https://www.theemploymentlawsolicitors.co.uk/news/2026/07/05/2027-employment-law-changes/",
+    "https://www.acas.org.uk/employment-rights-act-2025"
+   ],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/1996/18/introduction/2025-01-17",
+    "https://www.legislation.gov.uk/ukpga/1996/18/contents"
+   ],
+   "primary_cited": [
+    "https://www.legislation.gov.uk/ukpga/1996/18/introduction/2025-01-17"
+   ],
+   "pages_opened": 16,
+   "pages_confirmed": 14,
+   "refutation": {
+    "refuting_pages": 2,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt"
+   ],
+   "providers_failed": [
+    "gemini"
+   ],
+   "rounds": 2,
+   "verifier_model": "nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 1954,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 470.6,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "answered a question that has no public answer"
+    ]
+   }
+  },
+  {
+   "id": "ua-marriage-age",
+   "category": "ua-law",
+   "kind": "answer",
+   "question": "Under the Family Code of Ukraine, what is the minimum marriageable age and can a court allow it earlier?",
+   "answer": "I couldn't verify this reliably. None of the pages I opened confirms an answer, so I won't guess.",
+   "why": "",
+   "confidence": "Insufficient evidence",
+   "caveats": [
+    "The AI answers said Based on the sources that could be accessed, it is not possible to confirm the minimum marriageable age under the Family Code of Ukraine or whether a court can permit marriage earlier than 18. but none of the pages I opened confirmed it.",
+    "The primary Ukrainian legislation source (zakon.rada.gov.ua) was unreachable, and the cited Free Legal Aid publications were not fetched to verify their content.",
+    "minimum marriageable age under the Family Code of Ukraine",
+    "whether a court can allow marriage earlier than 18 and under what conditions"
+   ],
+   "sources": [],
+   "primary_domains": [
+    "zakon.rada.gov.ua"
+   ],
+   "primary_opened": [
+    "https://zakon.rada.gov.ua/laws/show/2947-14"
+   ],
+   "primary_cited": [],
+   "pages_opened": 43,
+   "pages_confirmed": 37,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "gemini"
+   ],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 4450,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 466.6,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "said it could not answer an answerable question"
+    ]
+   }
+  }
+ ]
+}
