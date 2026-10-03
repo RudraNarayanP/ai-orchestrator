@@ -48,6 +48,9 @@ def test_inline_citation_chip_labels_are_removed_but_prose_is_not():
     assert got[0].endswith("noise cancelling.") and got[1].endswith("over time.") and got[2].endswith("loose hinges.")
     assert got[3] == "- It launched in 2022. Sony says it is the best yet."
     assert got[4].endswith("$399."), "a bullet's trailing chip is removed even with no citations to match"
+    live = strip_chip_labels("- The Eiffel Tower's construction was completed on March 31, 1889. La tour Eiffel", None)
+    assert live.endswith("1889."), live
+    assert strip_chip_labels("- It opened in 1889. It is still the tallest structure in the city.", None).endswith("city.")
     assert strip_chip_labels("Prices start at $399. Amazon", None).endswith("Amazon"), "outside a list an unmatched word stays"
     assert strip_chip_labels("- Sony specifies about 3.5 hours for a full charge. RTINGS.com", None).endswith("charge.")
 

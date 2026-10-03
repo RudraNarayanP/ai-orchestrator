@@ -223,3 +223,36 @@ async def test_model_output_is_fenced_as_data_for_the_verifier(settings, net):
     assert "IGNORE ALL PREVIOUS INSTRUCTIONS" in material, "the attempt itself must be visible as evidence"
     assert "untrusted" in material.lower() and "not a fact" in verifier._system().lower()
 
+
+async def test_a_provider_that_hit_a_login_wall_is_not_asked_again_in_later_rounds(net):
+    """Live run: Copilot (login wall) and Google AI (broken) were retried in every round, ~90 s each time."""
+    from tests.conftest import base_settings
+    from tests.test_ledger import _run
+
+    names = ["chatgpt", "gemini", "copilot", "google_ai", "search"]
+    settings = base_settings(providers={n: {"enabled": True, "label": n.title(), "url": f"https://{n}.test/"} for n in names})
+
+    wrong = "KEY CLAIMS\n1. The Acme Bolt costs $499."
+    scripts = {name: {"answer": wrong} for name in ["chatgpt", "gemini"]}
+    scripts["copilot"] = {"status": ProviderStatus.LOGGED_OUT, "answer": "", "error": "readiness=login_wall"}
+    scripts["google_ai"] = {"status": ProviderStatus.BROKEN, "answer": "", "error": "no-response-element: AI Mode"}
+    scripts["search"] = {"answer": "results", "citations": []}
+    job, adapters, _ = await _run(settings, scripts, "How much does the Acme Bolt cost?", max_rounds=3)
+    assert max(c["round"] for name in ("chatgpt", "gemini") for c in adapters[name].calls) >= 2, "a later round must have happened"
+    for dead in ("copilot", "google_ai"):
+        assert [c["round"] for c in adapters[dead].calls] == [1], (dead, adapters[dead].calls)
+
+
+def test_unusable_this_job_means_every_response_was_a_wall_or_a_break():
+    def r(provider, status, error=None):
+        return ProviderResponse(job_id='j', provider=provider, prompt='', status=status, error=error)
+
+    seen = [
+        r('copilot', ProviderStatus.LOGGED_OUT, 'readiness=login_wall'),
+        r('google_ai', ProviderStatus.BROKEN, 'no-response-element'),
+        r('qwen', ProviderStatus.FAILED, 'readiness=blocked'),
+        r('gemini', ProviderStatus.FAILED, 'TargetClosedError'),
+        r('chatgpt', ProviderStatus.COMPLETED),
+        r('chatgpt', ProviderStatus.LOGGED_OUT),
+    ]
+    assert ResearchRunner._unusable_this_job(seen) == {'copilot', 'google_ai', 'qwen'}

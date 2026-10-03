@@ -89,6 +89,10 @@ _CHIP_TAIL_RE = re.compile(
 )
 
 
+_BULLET_RE = re.compile(r"\s*(?:[-*\u2022]|\d+[.)])\s")
+_BULLET_TAIL_RE = re.compile(r"^(?P<body>.{20,}?[.!?])[ \t]+(?P<label>[A-Z0-9][^.!?]{0,48})$")
+
+
 def _squash(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (text or "").lower())
 
@@ -113,6 +117,12 @@ def strip_chip_labels(text: str, citations: list[Any] | None = None) -> str:
                 names.append(n)
     out = []
     for line in (text or "").split("\n"):
+        # A list item is one sentence ending in punctuation. If a short unpunctuated tail follows its full stop
+        # ("... March 31, 1889. La tour Eiffel"), that tail is a source chip whatever its capitalisation.
+        tail = _BULLET_TAIL_RE.match(line.rstrip()) if _BULLET_RE.match(line) else None
+        if tail and len(tail.group("label").split()) <= 4 and not re.search(r"\d", tail.group("label")):
+            out.append(tail.group("body"))
+            continue
         m = _CHIP_TAIL_RE.match(line.rstrip())
         if m:
             label = _squash(m.group("label"))

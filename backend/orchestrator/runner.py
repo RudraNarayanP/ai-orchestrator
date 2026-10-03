@@ -379,9 +379,12 @@ class ResearchRunner:
                 round_no=next_round,
                 job=job,
             )
+            # A site that already hit a login wall, a block or a broken page in this job will do so again; do not
+            # spend another round (up to 90 s for Google AI Mode) finding that out.
+            unusable = self._unusable_this_job(responses)
             targets = router.select_secondaries(
                 analysis,
-                enabled,
+                [p for p in enabled if p not in unusable],
                 exclude=[primary] if round_no == 1 else [],
                 count=max(2, self.settings.research.follow_up_providers),
                 health=self.health,
@@ -600,6 +603,22 @@ class ResearchRunner:
             if item is not None:
                 out.append(item)  # type: ignore[arg-type]
         return out
+
+    @staticmethod
+    def _unusable_this_job(responses: list[ProviderResponse]) -> set[str]:
+        """Providers whose every response so far was a login wall, a block or a broken page."""
+        dead_status = {ProviderStatus.LOGGED_OUT, ProviderStatus.BROKEN}
+        by_provider: dict[str, list[ProviderResponse]] = {}
+        for response in responses:
+            by_provider.setdefault(response.provider, []).append(response)
+        dead: set[str] = set()
+        for provider, items in by_provider.items():
+            if all(
+                r.status in dead_status or (r.status == ProviderStatus.FAILED and (r.error or "").startswith("readiness=blocked"))
+                for r in items
+            ):
+                dead.add(provider)
+        return dead
 
     async def _targeted_round(self, job: Job, follow_ups: list[FollowUp], targets: list[str], *, round_no: int) -> list[ProviderResponse]:
         """Give each unresolved point to a specific agent. One agent, one point."""
