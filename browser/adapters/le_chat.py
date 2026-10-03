@@ -42,11 +42,3 @@ class LeChatAdapter(ChatAdapter):
             state["browsing_enabled"] = toggled[0]
             await emit("provider", "le_chat: web browsing toggled on", self.provider, round_no)
         return state
-
-    def _assess_web_research(self, response: ProviderResponse) -> None:
-        super()._assess_web_research(response)
-        if getattr(self, "_last_browsing", False):
-            from backend.models import WebResearchStatus
-
-            if response.web_research_status == WebResearchStatus.FAILED_OR_UNCLEAR:
-                response.web_research_status = WebResearchStatus.UNKNOWN

@@ -471,7 +471,6 @@ class FinalAnswer(BaseModel):
     confidence_label: str = "Low confidence"
     sources: list[Citation] = Field(default_factory=list)
     caveats: list[str] = Field(default_factory=list)
-    tone_note: str | None = None
     rounds_run: int = 1
     providers_used: list[str] = Field(default_factory=list)
     providers_failed: list[str] = Field(default_factory=list)

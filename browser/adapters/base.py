@@ -453,7 +453,6 @@ class ChatAdapter:
                 except json.JSONDecodeError:
                     result = {}
             ok = bool((result or {}).get("ok")) or await self._verify_composer(page, prompt)
-            self._typing_tried = (result or {}).get("tried")
         if not ok:
             # Last resort: real keystrokes. Slow but indistinguishable to the page.
             try:

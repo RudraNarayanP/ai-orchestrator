@@ -259,7 +259,7 @@ def test_doctor_shape_with_nothing_reachable(client, monkeypatch):
     assert d["vision"] == {"ok": True, "state": "configured", "detail": "openai_compatible / vis"}
     assert SECRET not in res.text
     chatgpt = d["providers"]["chatgpt"]
-    assert set(chatgpt) == {"enabled", "label", "url", "last_status"} and chatgpt["last_status"] == "unknown"
+    assert set(chatgpt) == {"enabled", "label", "url", "requires_login", "last_status"} and chatgpt["last_status"] == "unknown"
     browser = d["browser"]
     assert browser["automation_visible"] is True and "never attached to" in browser["isolation"]
     assert {"channel", "window_mode", "reuse_tabs", "cdp_url", "profiles_dir"} <= set(browser)

@@ -8,6 +8,7 @@ and the exact source that produced it.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import time
 from pathlib import Path
@@ -65,6 +66,9 @@ CREATE TABLE IF NOT EXISTS provider_health (
 """
 
 
+ALWAYS_KEPT_EVENTS = {"final", "done", "error"}
+
+
 class Store:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -75,6 +79,8 @@ class Store:
         self._conn.executescript(SCHEMA)
         self._migrate()
         self._conn.commit()
+        self._event_counts: dict[str, int] = {}
+        self._event_cap_warned: set[str] = set()
 
     def _migrate(self) -> None:
         """Additive migrations for databases created by an older build."""
@@ -224,12 +230,29 @@ class Store:
         rows = self._conn.execute("SELECT provider, status FROM provider_health").fetchall()
         return {row["provider"]: row["status"] for row in rows}
 
-    def add_event(self, job_id: str, event: JobEvent) -> None:
+    def add_event(self, job_id: str, event: JobEvent) -> bool:
+        """Persist one event, honouring ``storage.max_events_per_job``.
+
+        Past the cap, routine chatter is dropped (and counted once in the log) so a
+        runaway job cannot fill the database; the events that close a job -- the
+        final answer, errors, ``done`` -- are always kept.
+        """
+        limit = int(self.settings.storage.max_events_per_job)
+        count = self._event_counts.get(job_id)
+        if count is None:
+            count = self._conn.execute("SELECT COUNT(*) FROM events WHERE job_id=?", (job_id,)).fetchone()[0]
+        if limit > 0 and count >= limit and event.kind not in ALWAYS_KEPT_EVENTS:
+            if job_id not in self._event_cap_warned:
+                self._event_cap_warned.add(job_id)
+                logging.getLogger("omnibrain.store").warning("job %s hit max_events_per_job=%d; dropping routine events", job_id, limit)
+            return False
+        self._event_counts[job_id] = count + 1
         self._conn.execute(
             "INSERT INTO events (job_id, ts, kind, message, provider, round, payload_json) VALUES (?,?,?,?,?,?,?)",
             (job_id, event.ts, event.kind, event.message, event.provider, event.round, json.dumps(event.payload, ensure_ascii=False)),
         )
         self._conn.commit()
+        return True
 
     # ------------------------------------------------------------------ reads
 

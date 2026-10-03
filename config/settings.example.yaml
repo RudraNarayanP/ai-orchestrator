@@ -80,13 +80,11 @@ research:
   claim_batch_size: 12
   response_stability_poll_ms: 700
   response_stable_rounds: 3
-  hard_response_timeout_s: 180
 
 search:
   engines: [duckduckgo, google]
   max_results: 8
   fetch_body_chars: 12000
-  http_fallback: true
   refutation_queries: 3      # claims per round that also get a "who says this is wrong?" search; 0 = off
   review_queries: 3          # product/service questions: review-site searches (Reddit, G2, app stores); 0 = off
   per_query_timeout_s: 40
@@ -102,16 +100,12 @@ providers:
     label: ChatGPT
     url: https://chatgpt.com/
     new_chat_url: https://chatgpt.com/
-    timeout_s: 180
-    weight: 1.0
 
   gemini:
     enabled: true
     label: Gemini
     url: https://gemini.google.com/app
     new_chat_url: https://gemini.google.com/app
-    timeout_s: 180
-    weight: 1.0
 
   google_ai:
     # Google's consumer AI search overlay ("AI Mode"), i.e. the AI answer layer
@@ -119,9 +113,6 @@ providers:
     enabled: true
     label: Google AI
     url: https://www.google.com/search?udm=50
-    tab_role: own_window
-    timeout_s: 150
-    weight: 0.9
     notes: Uses Google AI Mode; no login needed but a consent wall can appear.
 
   copilot:
@@ -129,32 +120,24 @@ providers:
     label: Microsoft Copilot
     url: https://copilot.microsoft.com/
     new_chat_url: https://copilot.microsoft.com/
-    timeout_s: 180
-    weight: 1.0
 
   meta_ai:
     enabled: true
     label: Meta AI
     url: https://meta.ai/
     new_chat_url: https://meta.ai/
-    timeout_s: 150
-    weight: 0.8
 
   le_chat:
     enabled: true
     label: Le Chat
     url: https://chat.mistral.ai/chat
     new_chat_url: https://chat.mistral.ai/chat
-    timeout_s: 150
-    weight: 0.8
 
   pi:
     enabled: true
     label: Pi
     url: https://pi.ai/
     new_chat_url: https://pi.ai/
-    timeout_s: 120
-    weight: 0.6
     requires_login: true
     notes: Pi keeps no searchable history in some regions; capture is live-only.
 
@@ -164,9 +147,6 @@ providers:
     enabled: true
     label: Google Search
     url: https://www.google.com/search?q=
-    tab_role: shared_tab
-    timeout_s: 60
-    weight: 1.2
     requires_login: false
     notes: Doubles as the citation-fetching transport.
 
@@ -176,8 +156,6 @@ providers:
     url: https://chat.qwen.ai/
     new_chat_url: https://chat.qwen.ai/
     adapter: generic_chat
-    timeout_s: 180
-    weight: 0.8
     notes: Selectors not yet probed; uses candidate scoring. Sign in once in its window.
 
   deepseek:
@@ -186,8 +164,6 @@ providers:
     url: https://chat.deepseek.com/
     new_chat_url: https://chat.deepseek.com/
     adapter: generic_chat
-    timeout_s: 180
-    weight: 0.8
     notes: Consumer web chat at chat.deepseek.com; needs a one-time sign-in in its window.
 
   # ---- further examples of config-only providers (adapter inherited from the
@@ -197,13 +173,9 @@ providers:
     label: Perplexity
     url: https://www.perplexity.ai/
     adapter: generic_chat
-    timeout_s: 180
-    weight: 1.0
 
   grok:
     enabled: false
     label: Grok
     url: https://grok.com/
     adapter: generic_chat
-    timeout_s: 150
-    weight: 0.7

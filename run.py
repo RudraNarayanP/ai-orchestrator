@@ -91,7 +91,8 @@ def cmd_doctor(_: argparse.Namespace) -> int:
             continue
         from backend.browser.engine import profile_dir
 
-        signed = (profile_dir(f"omnibrain_{name}") / "Preferences").exists()
+        # a provider that needs no account (Google Search) is never "not signed in"
+        signed = not cfg.requires_login or (profile_dir(f"omnibrain_{name}") / "Preferences").exists()
         print(f"  {'●' if signed else '○'} {cfg.label:<18} {cfg.url}" + ("" if signed else "   (not signed in yet)"))
     print()
     print("note: automation is not hidden from these sites -- navigator.webdriver stays true.")

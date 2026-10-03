@@ -108,6 +108,7 @@ class ResearchRunner:
         self.analysis_endpoint = analysis_endpoint
         self.store = store
         self._sem = asyncio.Semaphore(max(1, settings.research.max_workers))
+        self._provider_sems: dict[str, asyncio.Semaphore] = {}
         self.cancel = cancel or CancelToken()
         for adapter in adapters.values():
             if hasattr(adapter, "cancel_token"):
@@ -420,6 +421,13 @@ class ResearchRunner:
 
     # ------------------------------------------------------------ components
 
+    def _provider_slot(self, provider: str) -> asyncio.Semaphore:
+        """``research.per_provider_concurrency`` simultaneous questions to one site (default 1)."""
+        slot = self._provider_sems.get(provider)
+        if slot is None:
+            slot = self._provider_sems[provider] = asyncio.Semaphore(max(1, int(self.settings.research.per_provider_concurrency)))
+        return slot
+
     @staticmethod
     def _q(job: Job) -> str:
         """The question as research should see it: a follow-up with its references resolved."""
@@ -507,7 +515,8 @@ class ResearchRunner:
         if adapter is None:
             return None
         self.cancel.raise_if_cancelled()
-        async with self._sem:
+        # per-provider first, then the global pool: waiting on one busy site must not hold a global slot
+        async with self._provider_slot(provider), self._sem:
             await self._emit("provider", f"{provider}: opening dedicated window ({role})", provider=provider, round_no=round_no)
             try:
                 response = await adapter.ask("job", prompt, round_no, emit=self._adapter_emit)

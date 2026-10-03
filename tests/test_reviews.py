@@ -47,6 +47,7 @@ def review_world(net, monkeypatch):
     fetched: list[str] = []
 
     async def fake_fetch(url, **kwargs):
+        assert kwargs.get("max_chars") == 12000  # search.fetch_body_chars reaches the fetch
         fetched.append(url)
         return page_for(url)
 

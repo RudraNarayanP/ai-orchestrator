@@ -506,8 +506,12 @@ async def gather_from_links(
     browser_fetch: Any | None = None,
     round_no: int = 1,
     origin: str = "provider",
+    max_chars: int = 12000,
 ) -> list[Evidence]:
-    """Fetch many cited pages without letting one slow server serialise us."""
+    """Fetch many cited pages without letting one slow server serialise us.
+
+    ``max_chars`` is ``search.fetch_body_chars``: how much of each page is read and kept.
+    """
     sem = asyncio.Semaphore(max(1, concurrency))
     unique: dict[str, dict[str, Any]] = {}
     for link in links:
@@ -519,7 +523,7 @@ async def gather_from_links(
     async def one(link: dict[str, Any]) -> Evidence | None:
         url = link.get("href") or link.get("url")
         async with sem:
-            page = await fetch_page(url, browser_fetch=browser_fetch)
+            page = await fetch_page(url, browser_fetch=browser_fetch, max_chars=max_chars)
         claim = link.get("claim_text")
         polarity = link.get("polarity", "support")
         refutation: dict[str, Any] | None = None

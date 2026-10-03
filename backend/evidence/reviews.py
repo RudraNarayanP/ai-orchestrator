@@ -171,7 +171,7 @@ async def gather_reviews(
     async def read(url: str) -> sources.FetchedPage:
         async with gate:
             try:
-                return await fetch_page(url, browser_fetch=browser_fetch)
+                return await fetch_page(url, browser_fetch=browser_fetch, max_chars=settings.search.fetch_body_chars)
             except Exception as exc:  # noqa: BLE001
                 return sources.FetchedPage(url=url, ok=False, error=type(exc).__name__)
 

@@ -262,6 +262,7 @@ async def build_pool(
         concurrency=min(6, max(2, settings.research.max_workers)),
         browser_fetch=browser_fetch,
         round_no=round_no,
+        max_chars=settings.search.fetch_body_chars,
     )
 
     # Look for the other side. Nothing above ever asks "who says this is wrong?",
@@ -280,6 +281,7 @@ async def build_pool(
                 browser_fetch=browser_fetch,
                 round_no=round_no,
                 origin="search",
+                max_chars=settings.search.fetch_body_chars,
             )
         )
 

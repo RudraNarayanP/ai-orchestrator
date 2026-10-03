@@ -60,7 +60,6 @@ def browser_settings() -> Settings:
                 "label": "Fixture",
                 "url": "about:blank",
                 "adapter": "generic_chat",
-                "timeout_s": 60,
                 "max_retries": 0,
             }
         },
@@ -79,7 +78,7 @@ def browser_settings() -> Settings:
 async def adapter(browser_settings, fixture_server):
     engine = BrowserEngine(browser_settings)
     cfg = ProviderConfig(
-        enabled=True, label="Fixture", url=fixture_server, adapter="generic_chat", timeout_s=90, max_retries=0
+        enabled=True, label="Fixture", url=fixture_server, adapter="generic_chat", max_retries=0
     )
     built = build_adapter("fixture", engine, browser_settings, cfg)
     # tighten the fixture's timings so the test is seconds, not minutes

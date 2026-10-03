@@ -416,6 +416,7 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
                 "enabled": cfg.enabled,
                 "label": cfg.label,
                 "url": cfg.url,
+                "requires_login": cfg.requires_login,
                 "last_status": store.health().get(name, "unknown"),
             }
             for name, cfg in settings.providers.items()

@@ -44,13 +44,3 @@ class GeminiAdapter(ChatAdapter):
                 await emit("provider", f"gemini: mode -> {clicked[0]}", self.provider, round_no)
                 break
         return state
-
-    def _assess_web_research(self, response: ProviderResponse) -> None:
-        super()._assess_web_research(response)
-        # Gemini's grounding chip is the reliable tell that it actually searched.
-        if response.web_research_status.value in {"failed_or_unclear", "unknown"} and getattr(
-            self, "_grounding_seen", False
-        ):
-            from backend.models import WebResearchStatus
-
-            response.web_research_status = WebResearchStatus.PERFORMED

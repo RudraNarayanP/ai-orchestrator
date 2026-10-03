@@ -27,15 +27,12 @@ class ProviderConfig(BaseModel):
     """Name of the dedicated Chrome profile for this provider. Defaults to the
     provider key, so each site gets its own isolated window + login state."""
 
-    tab_role: Literal["own_window", "shared_tab"] = "own_window"
     adapter: str | None = None
     """Adapter class name in browser/adapters/. Defaults to the provider key,
     then falls back to the generic chat adapter -- so a new site that behaves
     like a normal chat UI needs config only, no new code."""
-    timeout_s: int = 150
     max_retries: int = 1
     new_chat_url: str | None = None
-    weight: float = 1.0
     requires_login: bool = True
     notes: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
@@ -72,7 +69,6 @@ class BrowserConfig(BaseModel):
     profile, so that Chrome must be launched by you with a non-default
     --user-data-dir. Nothing here copies or reads your cookies."""
 
-    user_agent_seed: str | None = None
     nav_timeout_ms: int = 45000
     settle_ms: int = 900
     locale: str = "en-US"
@@ -152,7 +148,6 @@ class ResearchConfig(BaseModel):
     claim_batch_size: int = 12
     response_stability_poll_ms: int = 700
     response_stable_rounds: int = 3
-    hard_response_timeout_s: int = 180
 
 
 class SearchConfig(BaseModel):
@@ -162,7 +157,6 @@ class SearchConfig(BaseModel):
     engines: list[str] = Field(default_factory=lambda: ["google", "duckduckgo"])
     max_results: int = 8
     fetch_body_chars: int = 12000
-    http_fallback: bool = True
     review_queries: int = 3
     """Product/service questions: review-site searches per job (Reddit, G2, app stores...). 0 disables."""
     refutation_queries: int = 3

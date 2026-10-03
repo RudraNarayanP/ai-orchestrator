@@ -16,7 +16,7 @@ import hashlib
 import re
 from typing import Any, Iterable
 
-from backend.models import Claim, ClaimStatus, Confidence, ProviderResponse
+from backend.models import Claim, ClaimStatus, ProviderResponse
 from backend.verification.llm import Endpoint, LLMClient, extract_json
 
 NUMBER_RE = re.compile(r"(?<![\w.])(-?\$?\s?\d[\d,]*\.?\d*\s?(?:%|percent|billion|million|thousand|bn|m|k|x)?)(?![\w])", re.I)
@@ -34,7 +34,6 @@ OPINION_RE = re.compile(
     re.I,
 )
 FUTURE_RE = re.compile(r"\b(reportedly|said to be|expected to|rumou?red|alleged(?:ly)?|purportedly|unconfirmed)\b", re.I)
-NO_WEB_RE = re.compile(r"\bno web access\b", re.I)
 
 CLAIMS_HEADING_RE = re.compile(r"^\s*(?:#+\s*)?key claims\b", re.I | re.M)
 LIST_ITEM_RE = re.compile(r"^\s*(?:\d{1,2}[\).\:\-]|[-*•])\s+(.*)$", re.M)
@@ -521,13 +520,3 @@ def find_contradictions(claims: list[Claim]) -> list[dict[str, Any]]:
                 }
             )
     return conflicts
-
-
-def downgrade_unsupported(claims: list[Claim], response: ProviderResponse) -> None:
-    """Section 17: no research performed means the claims carry no evidentiary weight."""
-    if NO_WEB_RE.search(response.answer_text or ""):
-        for claim in claims:
-            if response.provider in claim.provider_sources and not claim.web_sources:
-                claim.status = ClaimStatus.UNVERIFIED
-                claim.confidence = Confidence.LOW
-                claim.rationale = f"{response.provider} stated NO WEB ACCESS"
