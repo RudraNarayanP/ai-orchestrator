@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from backend.browser.engine import BrowserEngine
 from backend.cancel import CancelToken
+from backend.logs import get_logger
 from backend.models import (
     EscalationLevel,
     Job,
@@ -36,6 +37,7 @@ from backend.settings import Settings, load_settings, reload_settings, save_sett
 from backend.storage.db import Store
 from backend.verification.llm import LLMClient
 
+log = get_logger("jobs")
 FRONTEND = Path(__file__).resolve().parent.parent.parent / "frontend"
 CONVERSATION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 MAX_QUESTION_CHARS = 4000
@@ -115,6 +117,7 @@ class JobManager:
             **payload: Any,
         ) -> None:
             event = JobEvent(kind=kind, message=message, provider=provider, round=round_no, payload=payload)
+            log.info("[%s] %s%s: %s", job_id, f"{provider} " if provider else "", kind, message[:600])
             self.broker.publish(job_id, event)
             try:
                 self.store.add_event(job_id, event)
@@ -177,12 +180,14 @@ class JobManager:
                     self.store.record_health(provider, status)
                 self.health = self.store.health()
             except asyncio.CancelledError:
+                log.info("[%s] cancelled", job.id)
                 job.status = JobStatus.CANCELLED
                 job.stop_reason = "cancelled"
                 await emit("status", "cancelled")
             except Exception as exc:  # noqa: BLE001
                 job.status = JobStatus.FAILED
                 job.error = f"{type(exc).__name__}: {exc}"
+                log.exception("[%s] job failed", job.id)
                 await emit("error", job.error)
             finally:
                 job.updated_at = time.time()

@@ -176,6 +176,8 @@ class StorageConfig(BaseModel):
     artifacts_dir: str = str(DATA_DIR / "artifacts")
     keep_raw_responses: bool = True
     max_events_per_job: int = 4000
+    log_path: str = str(DATA_DIR / "omnibrain.log")
+    """Rotating log file (2 MB x 3). `run.py serve|ask --log-file PATH` overrides it."""
 
 
 class Settings(BaseModel):

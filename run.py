@@ -99,25 +99,44 @@ def cmd_doctor(_: argparse.Namespace) -> int:
     return 0
 
 
+def setup_file_logging(args: argparse.Namespace, settings) -> Path:
+    """Start the rotating log. ``--log-file`` wins over ``storage.log_path``."""
+    from backend.logs import setup_logging
+
+    path = Path(getattr(args, "log_file", None) or settings.storage.log_path)
+    setup_logging(path, verbose=bool(getattr(args, "verbose", False)))
+    return path
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
+    from backend.logs import uvicorn_log_config
+
     settings = load()
+    log_path = setup_file_logging(args, settings)
     print(BANNER)
     print(f"  http://{args.host}:{args.port}")
+    print(f"  log file: {log_path}")
     print("  sign in once per provider from the settings panel, then ask a question.")
     uvicorn.run(
         "backend.api.app:app",
         host=args.host,
         port=args.port,
         log_level="info" if not args.verbose else "debug",
+        log_config=uvicorn_log_config(log_path, verbose=args.verbose),
         reload=False,
     )
     return 0
 
 
-async def _one_shot(question: str, mode: str | None, rounds: int | None) -> int:
+async def _one_shot(question: str, mode: str | None, rounds: int | None, args: argparse.Namespace | None = None) -> int:
     settings = load()
+    if args is not None:
+        setup_file_logging(args, settings)
+    from backend.logs import get_logger
+
+    log = get_logger("cli")
     from backend.browser.engine import BrowserEngine
     from backend.models import Job, ResearchMode
     from backend.orchestrator.runner import ResearchRunner
@@ -138,6 +157,7 @@ async def _one_shot(question: str, mode: str | None, rounds: int | None) -> int:
             "disagreement": "\033[33m",
             "error": "\033[31m",
         }.get(kind, "")
+        log.info("[%s] %s%s: %s", job.id, f"{provider} " if provider else "", kind, message[:600])
         print(f"  {colour}[{time.time() - started:5.1f}s] {kind}: {message}\033[0m")
 
     class ConsoleBus:
@@ -188,7 +208,7 @@ async def _one_shot(question: str, mode: str | None, rounds: int | None) -> int:
 
 
 def cmd_ask(args: argparse.Namespace) -> int:
-    return asyncio.run(_one_shot(args.question, args.mode, args.rounds))
+    return asyncio.run(_one_shot(args.question, args.mode, args.rounds, args))
 
 
 def cmd_login(args: argparse.Namespace) -> int:
@@ -287,19 +307,21 @@ def cmd_jobs(_: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="omnibrain", description=BANNER)
     sub = parser.add_subparsers(dest="command", required=True)
+    logging_args = argparse.ArgumentParser(add_help=False)
+    logging_args.add_argument("--log-file", metavar="PATH", help="write the rotating log here (default: storage.log_path, data/omnibrain.log)")
 
     sub.add_parser("doctor", help="check models, profiles and providers").set_defaults(func=cmd_doctor)
 
-    serve = sub.add_parser("serve", help="start the web app")
+    serve = sub.add_parser("serve", help="start the web app", parents=[logging_args])
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8730)
     serve.add_argument("--verbose", action="store_true")
     serve.set_defaults(func=cmd_serve)
 
-    ask = sub.add_parser("ask", help="run one research job in the terminal")
+    ask = sub.add_parser("ask", help="run one research job in the terminal", parents=[logging_args])
     ask.add_argument("question")
     ask.add_argument("--mode", choices=["QUICK", "STANDARD", "DEEP_RESEARCH"])
     ask.add_argument("--rounds", type=int)
@@ -319,7 +341,11 @@ def main() -> int:
     sub.add_parser("close", help="close leftover OmniBrain browser windows").set_defaults(func=cmd_close)
     sub.add_parser("jobs", help="list stored research jobs").set_defaults(func=cmd_jobs)
 
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
     return int(args.func(args) or 0)
 
 

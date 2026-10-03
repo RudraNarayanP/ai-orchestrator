@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import time
 from dataclasses import dataclass, field
@@ -141,6 +142,7 @@ class BrowserEngine:
 
     def _note(self, message: str) -> None:
         line = f"{time.strftime('%H:%M:%S')} {message}"
+        logging.getLogger("omnibrain.engine").info(message)
         self.log.append(line)
         if len(self.log) > 500:
             del self.log[: len(self.log) - 500]
