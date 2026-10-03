@@ -16,8 +16,8 @@ from browser.adapters.base import ChatAdapter
 class MetaAIAdapter(ChatAdapter):
     name = "meta_ai"
 
-    async def ask(self, job_id: str, prompt: str, round_no: int = 1, emit=None) -> ProviderResponse:
-        response = await super().ask(job_id, prompt, round_no, emit)
+    async def ask(self, job_id: str, prompt: str, round_no: int = 1, emit=None, continue_thread: bool = False) -> ProviderResponse:
+        response = await super().ask(job_id, prompt, round_no, emit, continue_thread=continue_thread)
         if response.status.value == "logged_out":
             response.detail = (
                 "Meta AI requires a login in its own window. Open the OmniBrain Meta AI "

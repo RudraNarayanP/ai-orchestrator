@@ -194,6 +194,18 @@ class ProviderResponse(BaseModel):
     ui_url: str | None = None
     """Direct link to the conversation in the provider's own web UI."""
 
+    conversation_url: str | None = None
+    """The chat's URL after the answer arrived (where a follow-up continues)."""
+
+    thread_id: str | None = None
+    """research id + provider: one conversation per AI per research."""
+
+    turn: int = 1
+    """Position in that conversation (1 = first prompt)."""
+
+    continued: bool = False
+    """True when this prompt went into an existing conversation (a follow-up)."""
+
     fingerprint: str | None = None
     """Stable hash of the captured answer, used to detect duplicated content."""
 

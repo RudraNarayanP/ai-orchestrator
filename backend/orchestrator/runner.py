@@ -111,6 +111,7 @@ class ResearchRunner:
         self.store = store
         self._sem = asyncio.Semaphore(max(1, settings.research.max_workers))
         self._provider_sems: dict[str, asyncio.Semaphore] = {}
+        self._turns: dict[tuple[str, str], int] = {}
         self.cancel = cancel or CancelToken()
         self.politeness = politeness or PolitenessGate(settings.research)
         for adapter in adapters.values():
@@ -171,7 +172,7 @@ class ResearchRunner:
             # banter with no model configured: one provider, no research framing.
             primary = router.select_primary(analysis, enabled, self.health)
             if primary:
-                response = await self._ask(primary, self._banter_prompt(job, analysis), 1, role="primary", needs_web=False)
+                response = await self._ask(primary, self._banter_prompt(job, analysis), 1, role="primary", needs_web=False, job_id=job.id)
                 if response and response.status.value == "completed":
                     job.status = JobStatus.COMPLETED
                     job.final = FinalAnswer(
@@ -232,7 +233,7 @@ class ResearchRunner:
             needs_web=analysis.needs_web_research,
             history=job.history if analysis.follow_up else None,
         )
-        response = await self._ask(primary, prompt, round_no, role="primary")
+        response = await self._ask(primary, prompt, round_no, role="primary", job_id=job.id)
         responses: list[ProviderResponse] = [r for r in [response] if r]
         job.responses.extend(responses)
         record.response_ids = [r.id for r in responses]
@@ -516,11 +517,18 @@ class ResearchRunner:
         role: str = "secondary",
         needs_web: bool = True,
         escalation_reason: str | None = None,
+        job_id: str = "job",
+        continue_thread: bool = False,
     ) -> ProviderResponse | None:
         adapter = self.adapters.get(provider)
         if adapter is None:
             return None
         self.cancel.raise_if_cancelled()
+        # One conversation per AI per research id. A follow-up goes into the thread
+        # that AI already has for this research; everything else opens a new chat.
+        thread_key = (job_id, provider)
+        turn = self._turns.get(thread_key, 0) + 1
+        continue_thread = bool(continue_thread and turn > 1)
         # per-provider first, then the global pool: waiting on one busy site must not hold a global slot
         async with self._provider_slot(provider), self._sem:
             declined = await self.politeness.before(provider, sleep=self.cancel.sleep)
@@ -532,7 +540,8 @@ class ResearchRunner:
             else:
                 await self._emit("provider", f"{provider}: opening dedicated window ({role})", provider=provider, round_no=round_no)
                 try:
-                    response = await adapter.ask("job", prompt, round_no, emit=self._adapter_emit)
+                    extra = {"continue_thread": True} if continue_thread else {}
+                    response = await adapter.ask(job_id, prompt, round_no, emit=self._adapter_emit, **extra)
                 except Exception as exc:  # noqa: BLE001
                     self.cancel.raise_if_cancelled()
                     response = ProviderResponse(id=f"resp_err_{provider}_{round_no}", job_id="", round=round_no, provider=provider, prompt=prompt)
@@ -548,6 +557,11 @@ class ResearchRunner:
             response.answer_text = ""
             response.citations = []
         response.role = role
+        response.thread_id = f"{job_id}:{provider}"
+        response.turn = turn
+        response.continued = continue_thread
+        if response.status.value in {"completed", "timeout"}:
+            self._turns[thread_key] = turn
         response.escalation_reason = escalation_reason
         response.pages_visited = [c.url for c in response.citations if c.url][:20]
         response.failure_signals = router.is_failure_phrase(response.answer_text or response.raw_text or "")
@@ -599,6 +613,7 @@ class ResearchRunner:
                     round_no,
                     role="secondary",
                     escalation_reason=f"primary ({exclude}) left {len(context['unresolved'])} point(s) unresolved",
+                    job_id=job.id,
                 )
             )
         done = await asyncio.gather(*tasks, return_exceptions=True)
@@ -636,7 +651,7 @@ class ResearchRunner:
                 break
             provider = pool[index % len(pool)]
             prompt = follow_up_prompt(self._q(job), follow_up)
-            tasks.append(self._ask(provider, prompt, round_no, role="targeted", escalation_reason=follow_up.reason))
+            tasks.append(self._ask(provider, prompt, round_no, role="targeted", escalation_reason=follow_up.reason, job_id=job.id))
         done = await asyncio.gather(*tasks, return_exceptions=True)
         return [item for item in done if isinstance(item, ProviderResponse)]
 

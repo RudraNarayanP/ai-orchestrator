@@ -59,8 +59,8 @@ class FakeAdapter:
         self.settings = settings
         self.calls: list[dict[str, Any]] = []
 
-    async def ask(self, job_id: str, prompt: str, round_no: int = 1, emit: Any = None) -> ProviderResponse:
-        self.calls.append({"prompt": prompt, "round": round_no, "job_id": job_id})
+    async def ask(self, job_id: str, prompt: str, round_no: int = 1, emit: Any = None, continue_thread: bool = False) -> ProviderResponse:
+        self.calls.append({"prompt": prompt, "round": round_no, "job_id": job_id, "continue_thread": continue_thread})
         if self.script.get("raises"):
             raise RuntimeError(self.script["raises"])
         if emit is not None:

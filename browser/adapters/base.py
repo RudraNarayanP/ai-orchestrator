@@ -157,6 +157,13 @@ class ChatAdapter:
         self._sel_dict = asdict(self.sel)
         self._pages_with_library: set[int] = set()
         self._prompt_sent = False
+        # research id -> URL of that research's conversation on this site. One
+        # question never shares a chat with another question; follow-ups within
+        # one research continue the thread recorded here.
+        self._threads: dict[str, str] = {}
+        self._continue_thread = False
+        self._research_id = ""
+        self._tab_dirty = False
         self.cancel_token: CancelToken | None = None  # shared with the job; set by the runner
         self.vision_client = None  # tests inject a scripted client; otherwise built from settings.vision
 
@@ -273,10 +280,18 @@ class ChatAdapter:
         prompt: str,
         round_no: int = 1,
         emit: EventHook | None = None,
+        continue_thread: bool = False,
     ) -> ProviderResponse:
-        """DOM path first; the vision fallback only if that path ends BROKEN."""
+        """DOM path first; the vision fallback only if that path ends BROKEN.
+
+        ``job_id`` is the research id. Without ``continue_thread`` the prompt goes
+        into a brand-new conversation; with it, into the conversation this
+        research already has on this site (a new one if there is none).
+        """
         emit = emit or (lambda *a, **k: asyncio.sleep(0))
         self._prompt_sent = False
+        self._research_id = job_id
+        self._continue_thread = bool(continue_thread and job_id in self._threads)
         response = await self._ask_dom(job_id, prompt, round_no, emit)
         if self._vision_eligible(response):
             response = await self._vision_fallback(response, prompt, round_no, emit)
@@ -362,6 +377,7 @@ class ChatAdapter:
         self._check_cancel()
         page = await self._page(fresh=page_setup)
         await self._settle(page)
+        page = await self._open_conversation(page)
         response.ui_url = page.url
 
         ready = await self.prepare(page, emit, round_no)
@@ -438,10 +454,41 @@ class ChatAdapter:
             response.note(ProviderStatus.TIMEOUT, error="timed out with only a fragment")
             return False
         response.status = status if status.terminal else ProviderStatus.COMPLETED
+        self._remember_thread(page, response)
         if status == ProviderStatus.TIMEOUT and len(response.answer_text) >= 200:
             response.detail = "answer truncated by timeout but usable"
             response.status = ProviderStatus.COMPLETED
         return True
+
+    async def _open_conversation(self, page):
+        """New research -> new chat; follow-up -> back to this research's own chat.
+
+        Reusing the provider's tab is fine, but typing the next question into the
+        previous question's conversation is not: the old answer is still on screen
+        and can be read back as the new one.
+        """
+        new_url = self.cfg.new_chat_url or self.cfg.url
+        try:
+            if self._continue_thread:
+                target = self._threads.get(self._research_id) or ""
+                if target and target != new_url and page.url != target:
+                    await page.goto(target, wait_until="domcontentloaded", timeout=self.settings.browser.nav_timeout_ms)
+                    await self._settle(page)
+            elif self._tab_dirty or (page.url or "").rstrip("/") != (new_url or "").rstrip("/"):
+                await page.goto(new_url, wait_until="domcontentloaded", timeout=self.settings.browser.nav_timeout_ms)
+                await self._settle(page)
+                self._tab_dirty = False
+        except Exception:  # noqa: BLE001 -- a failed navigation is reported by the readiness check that follows
+            pass
+        return page
+
+    def _remember_thread(self, page, response: ProviderResponse) -> None:
+        self._tab_dirty = True
+        response.conversation_url = page.url
+        response.continued = self._continue_thread
+        self._threads[self._research_id] = page.url
+        while len(self._threads) > 20:
+            self._threads.pop(next(iter(self._threads)))
 
     def _finish(self, response: ProviderResponse) -> ProviderResponse:
         if response.status == ProviderStatus.COMPLETED and response.answer_text:
