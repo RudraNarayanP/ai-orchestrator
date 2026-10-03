@@ -1,0 +1,5 @@
+# Optional: neural embedder for memory (bge-small-en-v1.5). Without it a hash embedder is used.
+fastembed==0.8.1
+onnxruntime
+# Only for scripts/memory_bench_engines.py:
+# sqlite-vec==0.1.9

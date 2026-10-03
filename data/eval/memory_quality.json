@@ -19,7 +19,7 @@
      "general_suppressed": 1.0,
      "distractor_suppressed": 1.0,
      "avg_injected_tokens": 4.5,
-     "p50_ms": 1.25
+     "p50_ms": 1.37
     },
     {
      "floor": 0.18,
@@ -30,7 +30,7 @@
      "general_suppressed": 1.0,
      "distractor_suppressed": 1.0,
      "avg_injected_tokens": 4.5,
-     "p50_ms": 1.25
+     "p50_ms": 1.37
     },
     {
      "floor": 0.22,
@@ -41,7 +41,7 @@
      "general_suppressed": 1.0,
      "distractor_suppressed": 1.0,
      "avg_injected_tokens": 4.4,
-     "p50_ms": 1.27
+     "p50_ms": 1.37
     },
     {
      "floor": 0.26,
@@ -52,7 +52,7 @@
      "general_suppressed": 1.0,
      "distractor_suppressed": 1.0,
      "avg_injected_tokens": 4.1,
-     "p50_ms": 1.17
+     "p50_ms": 1.33
     },
     {
      "floor": 0.3,
@@ -63,7 +63,7 @@
      "general_suppressed": 1.0,
      "distractor_suppressed": 1.0,
      "avg_injected_tokens": 4.1,
-     "p50_ms": 1.25
+     "p50_ms": 1.38
     },
     {
      "floor": 0.35,
@@ -74,14 +74,14 @@
      "general_suppressed": 1.0,
      "distractor_suppressed": 1.0,
      "avg_injected_tokens": 4.1,
-     "p50_ms": 1.22
+     "p50_ms": 1.36
     }
    ]
   },
   "fastembed": {
    "name": "BAAI/bge-small-en-v1.5",
    "load_s": 0.71,
-   "default_floor": 0.5,
+   "default_floor": 0.52,
    "sweep": [
     {
      "floor": 0.45,
@@ -90,20 +90,20 @@
      "precision_of_returned": 0.542,
      "project_recall": 1.0,
      "general_suppressed": 1.0,
-     "distractor_suppressed": 0.25,
+     "distractor_suppressed": 0.5,
      "avg_injected_tokens": 15.6,
-     "p50_ms": 6.16
+     "p50_ms": 6.11
     },
     {
      "floor": 0.5,
      "recall@budget": 0.861,
      "MRR": 0.819,
-     "precision_of_returned": 0.583,
+     "precision_of_returned": 0.597,
      "project_recall": 1.0,
      "general_suppressed": 1.0,
      "distractor_suppressed": 0.875,
-     "avg_injected_tokens": 13.7,
-     "p50_ms": 6.3
+     "avg_injected_tokens": 13.4,
+     "p50_ms": 6.44
     },
     {
      "floor": 0.55,
@@ -114,7 +114,7 @@
      "general_suppressed": 1.0,
      "distractor_suppressed": 1.0,
      "avg_injected_tokens": 9.4,
-     "p50_ms": 6.21
+     "p50_ms": 8.3
     },
     {
      "floor": 0.58,
@@ -125,7 +125,7 @@
      "general_suppressed": 1.0,
      "distractor_suppressed": 1.0,
      "avg_injected_tokens": 8.2,
-     "p50_ms": 42.77
+     "p50_ms": 41.36
     },
     {
      "floor": 0.62,
@@ -136,7 +136,7 @@
      "general_suppressed": 1.0,
      "distractor_suppressed": 1.0,
      "avg_injected_tokens": 6.8,
-     "p50_ms": 42.76
+     "p50_ms": 40.58
     },
     {
      "floor": 0.66,
@@ -147,7 +147,7 @@
      "general_suppressed": 1.0,
      "distractor_suppressed": 1.0,
      "avg_injected_tokens": 5.2,
-     "p50_ms": 45.3
+     "p50_ms": 46.98
     },
     {
      "floor": 0.7,
@@ -158,7 +158,7 @@
      "general_suppressed": 1.0,
      "distractor_suppressed": 1.0,
      "avg_injected_tokens": 4.1,
-     "p50_ms": 42.98
+     "p50_ms": 42.14
     }
    ]
   }

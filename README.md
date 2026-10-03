@@ -428,6 +428,12 @@ gitignored `config/settings.yaml` or the environment; never commit it.** A test 
 key-shaped string appears in tracked files, and logs redact `sk-...` strings. `run.py doctor`
 reports the key, model and fallbacks honestly. Ollama still works: set `provider: ollama`.
 
+## Memory
+
+Optional local memory of the user's own preferences, projects and decisions, so repeated context does not have to be retyped. It is stored in SQLite on this PC (`data/`), never leaves it, and never counts as evidence: memory text is injected into provider prompts as context only and is never added to claims, evidence, sources or the verifier. Facts the user states are stored as facts; opinions and feelings are stored as the user's own view and labelled that way. Sensitive topics (finance, family, health, legal, ...) are flagged, injected only when relevant, and can be switched off. Learning comes from the user's own message only (never from provider output); secrets are filtered; delete is physical; "forget everything" needs confirmation.
+
+Settings: `inject` (use memory as context), `capture` (learn from my messages), `sensitive` (allow sensitive memories). API `/api/memory*`; UI: the Memory panel, the "Memory used as context" expander under an answer, and the optional Project field. Embedder: `pip install -r requirements-memory.txt` for bge-small; without it a hash embedder is used (lower semantic recall). Results and benchmarks: `data/MEMORY_RESULTS.md`; design: `data/MEMORY_DESIGN.md`.
+
 ## Hard-question evaluation
 
 One command re-runs it (starts its own server on a free port, trimmed provider set):

@@ -79,7 +79,7 @@
    "group": "evidence",
    "name": "memory never reaches claims/evidence/final answer; all providers get the same block",
    "pass": true,
-   "detail": "9 passed in 0.22s"
+   "detail": "9 passed in 0.23s"
   }
  ]
 }

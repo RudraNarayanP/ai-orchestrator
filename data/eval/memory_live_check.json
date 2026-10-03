@@ -1,0 +1,177 @@
+{
+ "embedder": "BAAI/bge-small-en-v1.5",
+ "cases": [
+  {
+   "case": "general",
+   "question": "Who won the 2022 FIFA World Cup final and what was the score?",
+   "project": null,
+   "expect_memory_block": false,
+   "memory_kind": "general",
+   "memory_used": [],
+   "prompts_sent": 6,
+   "prompts_with_block": 0,
+   "prompt_flags": [
+    [
+     "chatgpt",
+     1,
+     false,
+     false
+    ],
+    [
+     "chatgpt",
+     2,
+     true,
+     false
+    ],
+    [
+     "gemini",
+     3,
+     false,
+     false
+    ],
+    [
+     "copilot",
+     3,
+     false,
+     false
+    ],
+    [
+     "le_chat",
+     3,
+     false,
+     false
+    ],
+    [
+     "gemini",
+     3,
+     false,
+     false
+    ]
+   ],
+   "providers": [
+    "chatgpt",
+    "copilot",
+    "gemini",
+    "le_chat"
+   ],
+   "fresh_prompts": 5,
+   "fresh_prompts_with_block": 0,
+   "thread_followups_with_block": 0,
+   "block_matches_expectation": true,
+   "memory_text_in_claims_evidence_or_answer": false,
+   "status": "completed",
+   "answer_chars": 158,
+   "answer_head": "Argentina won the 2022 FIFA World Cup final against France Argentina and France drew 3\u20133 after 120 minutes (extra time) Argentina won the penalty shootout 4\u20132",
+   "confidence": "Moderate confidence",
+   "sources": 4,
+   "error": null,
+   "prompt_samples": [
+    {
+     "provider": "chatgpt",
+     "round": 1,
+     "continue_thread": false,
+     "has_memory_block": false,
+     "mentions_atlas_fact": false,
+     "mentions_kyiv": false,
+     "head": "Who won the 2022 FIFA World Cup final and what was the score?\n\nYou are the researcher here, so do the research yourself with your own\nweb search and browsing. Do not answer from memory. Run the searches, find the\nsources yourself, prefer primary sources (the l"
+    },
+    {
+     "provider": "chatgpt",
+     "round": 2,
+     "continue_thread": true,
+     "has_memory_block": false,
+     "mentions_atlas_fact": false,
+     "mentions_kyiv": false,
+     "head": "Please re-investigate this specific point from your answer above, using your own web search again:\n\n- Argentina won the 2022 FIFA World Cup final against France\n- Argentina and France drew 3\u20133 after 120 minutes (extra time)\n- Argentina won the penalty shootout"
+    }
+   ]
+  },
+  {
+   "case": "project",
+   "question": "Which is better for my Atlas project: PostgreSQL or MongoDB? Give the main trade-offs.",
+   "project": "Atlas",
+   "expect_memory_block": true,
+   "memory_kind": "project",
+   "memory_used": [
+    "Project Atlas database is PostgreSQL 16 on a single VPS"
+   ],
+   "prompts_sent": 6,
+   "prompts_with_block": 5,
+   "prompt_flags": [
+    [
+     "chatgpt",
+     1,
+     false,
+     true
+    ],
+    [
+     "chatgpt",
+     2,
+     true,
+     false
+    ],
+    [
+     "gemini",
+     3,
+     false,
+     true
+    ],
+    [
+     "qwen",
+     3,
+     false,
+     true
+    ],
+    [
+     "deepseek",
+     3,
+     false,
+     true
+    ],
+    [
+     "gemini",
+     3,
+     false,
+     true
+    ]
+   ],
+   "providers": [
+    "chatgpt",
+    "deepseek",
+    "gemini",
+    "qwen"
+   ],
+   "fresh_prompts": 5,
+   "fresh_prompts_with_block": 5,
+   "thread_followups_with_block": 0,
+   "block_matches_expectation": true,
+   "memory_text_in_claims_evidence_or_answer": true,
+   "status": "completed",
+   "answer_chars": 252,
+   "answer_head": "PostgreSQL is the better default for Atlas. Atlas is already running on PostgreSQL 16 on a single VPS. PostgreSQL gives Atlas both strong relational constraints and joins for structured data, while js",
+   "confidence": "Moderate confidence",
+   "sources": 6,
+   "error": null,
+   "prompt_samples": [
+    {
+     "provider": "chatgpt",
+     "round": 1,
+     "continue_thread": false,
+     "has_memory_block": true,
+     "mentions_atlas_fact": true,
+     "mentions_kyiv": false,
+     "head": "Relevant context about the user:\n- Project Atlas database is PostgreSQL 16 on a single VPS\nUse when relevant. Don't mention it was supplied. Don't assume irrelevant memories apply. The user's current instructions override this context.\n\nWhich is better for my "
+    },
+    {
+     "provider": "chatgpt",
+     "round": 2,
+     "continue_thread": true,
+     "has_memory_block": false,
+     "mentions_atlas_fact": true,
+     "mentions_kyiv": false,
+     "head": "Please re-investigate this specific point from your answer above, using your own web search again:\n\n- Atlas is already running on PostgreSQL 16 on a single VPS.\n\nWhy I am asking: 1 material claim(s) still unconfirmed; an explicit inability to verify appeared i"
+    }
+   ]
+  }
+ ]
+}
