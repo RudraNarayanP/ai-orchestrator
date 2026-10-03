@@ -103,3 +103,9 @@ def test_temp_config_never_contains_the_api_key(tmp_path, monkeypatch):
     assert eval_hard.SECRET_FOR_CHILD["key"] == fake, "the key is passed to the child through the environment instead"
     eval_hard.SECRET_FOR_CHILD["key"] = ""
     assert real_root.exists()
+
+def test_a_computed_level_zero_answer_is_not_flagged_for_having_no_pages():
+    q = {"id": "t", "category": "trivial", "kind": "answer", "question": "What is 2 + 2?", "expect": {"must_match": ["\\b4\\b"]}}
+    snap = {"final": {"answer": "4"}, "browser_sessions": 0, "verifier_calls": 0, "stop_reason": "question answered at level 0; no investigation earned", "evidence": []}
+    rec = eval_hard.analyse(q, snap, 1.0)
+    assert rec["unsupported_figures"] == [] and rec["judgement"]["verdict"] == "PASS" and rec["browser_sessions"] == 0

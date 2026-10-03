@@ -142,7 +142,9 @@ def analyse(q: dict[str, Any], snapshot: dict[str, Any], runtime_s: float) -> di
     )
     claim_text = " ".join(c.get("claim", "") for c in live.get("claims") or [])
     # only text from pages we opened counts as support; provider answers are what we are checking
-    unsupported = unsupported_figures(answer, confirmed_text, q["question"])
+    # a level-0 answer (arithmetic, no browser, no verifier) has no pages by design; its figure is computed, not sourced
+    computed = (live.get("browser_sessions", live.get("browser_sessions_used")) == 0) and not live.get("verifier_calls") and "level 0" in str(live.get("stop_reason") or "")
+    unsupported = [] if computed else unsupported_figures(answer, confirmed_text, q["question"])
     reports = live.get("reports") or []
     verdicts = (reports[-1].get("verdicts") if reports else []) or []
     refuting = [e for e in evidence if e.get("polarity") == "refute"]
