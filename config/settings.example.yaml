@@ -87,6 +87,8 @@ search:
   max_results: 8
   fetch_body_chars: 12000
   http_fallback: true
+  refutation_queries: 3      # claims per round that also get a "who says this is wrong?" search; 0 = off
+  review_queries: 3          # product/service questions: review-site searches (Reddit, G2, app stores); 0 = off
   per_query_timeout_s: 40
 
 storage:

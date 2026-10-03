@@ -477,6 +477,29 @@ class FinalAnswer(BaseModel):
     providers_failed: list[str] = Field(default_factory=list)
 
 
+class Complaint(BaseModel):
+    """A complaint that recurs across independent review pages (community tier, never a fact)."""
+
+    theme: str
+    mentions: int = 0
+    sources: int = 0
+    domains: list[str] = Field(default_factory=list)
+    example: str = ""
+    example_url: str = ""
+
+
+class ReviewFindings(BaseModel):
+    """What owners say, gathered separately from the fact ledger (product/service questions)."""
+
+    attempted: bool = False
+    subject: str = ""
+    queries: list[str] = Field(default_factory=list)
+    sources: list[dict[str, Any]] = Field(default_factory=list)
+    pages_read: int = 0
+    complaints: list[Complaint] = Field(default_factory=list)
+    note: str = ""
+
+
 class Job(BaseModel):
     id: str = Field(default_factory=lambda: new_id("job"))
     question: str
@@ -495,6 +518,7 @@ class Job(BaseModel):
     active_round: int = 0
 
     plan: ResearchPlan | None = None
+    reviews: ReviewFindings | None = None
     analysis: QuestionAnalysis | None = None
     level: EscalationLevel = EscalationLevel.DIRECT
     escalation_log: list[EscalationStep] = Field(default_factory=list)

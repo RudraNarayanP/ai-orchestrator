@@ -40,6 +40,9 @@ from backend.models import (
 )
 from backend.research import claims as claim_ops
 from backend.research import router
+from backend.evidence.pool import browser_fetch_factory
+from backend.evidence.reviews import caveat_lines as review_caveats
+from backend.evidence.reviews import gather_reviews, subject_for
 from backend.research import memory
 from backend.research.prompts import angle_for, escalation_prompt, follow_up_prompt, research_prompt
 from backend.research.style import style_prompt
@@ -227,6 +230,7 @@ class ResearchRunner:
 
         claims = await self._extract(responses, job)
         evidence, trace = await self._pool(job, claims, responses, round_no)
+        await self._gather_reviews(job, analysis)
         disagreements = await self._disagreements(job, claims, round_no)
         assessment = self._assess(job, analysis, claims, evidence, disagreements, round_no, focus="primary")
         job.assessments.append(assessment)
@@ -417,6 +421,25 @@ class ResearchRunner:
         if analysis is not None and getattr(analysis, "follow_up", False) and analysis.standalone_question:
             return analysis.standalone_question
         return job.question
+
+    async def _gather_reviews(self, job: Job, analysis: Any) -> None:
+        """Product/service questions: what owners say, kept apart from the fact ledger (spec 8)."""
+        if (
+            job.reviews is not None
+            or getattr(analysis, "intent", "") != "product"
+            or job.mode == ResearchMode.QUICK
+            or int(self.settings.search.review_queries) <= 0
+        ):
+            return
+        await self._emit("status", "product question -- reading owner reviews (kept separate from the facts)", job=job)
+        browser_fetch = browser_fetch_factory(self.engine, self.settings) if self.engine is not None else None
+        job.reviews = await gather_reviews(
+            subject_for(job.question, list(getattr(analysis, "key_entities", []) or [])),
+            self.settings,
+            deep=job.mode == ResearchMode.DEEP_RESEARCH,
+            browser_fetch=browser_fetch,
+            emit=self._adapter_emit,
+        )
 
     @staticmethod
     def _banter_prompt(job: Job, analysis: Any) -> str:
@@ -944,7 +967,8 @@ class ResearchRunner:
             job.stop_reason = stop
             return job
         final = build_final_answer(report, responses, rounds)
-        final.caveats = [c for c in final.caveats if c][:6]
+        # community-sourced owner reports are a labelled caveat of their own, never part of the answer
+        final.caveats = [c for c in final.caveats if c][:5] + review_caveats(job.reviews)
         job.final = final
         job.status = JobStatus.COMPLETED
         job.stop_reason = stop

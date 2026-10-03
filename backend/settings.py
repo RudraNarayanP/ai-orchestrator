@@ -163,6 +163,8 @@ class SearchConfig(BaseModel):
     max_results: int = 8
     fetch_body_chars: int = 12000
     http_fallback: bool = True
+    review_queries: int = 3
+    """Product/service questions: review-site searches per job (Reddit, G2, app stores...). 0 disables."""
     refutation_queries: int = 3
     """Material claims per round that get a counter-query (claim + correction / rebuttal / contradicts / actually). 0 disables."""
 

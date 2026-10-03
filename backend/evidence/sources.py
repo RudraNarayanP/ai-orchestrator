@@ -59,7 +59,9 @@ INDUSTRY_RE = re.compile(
 COMMUNITY_RE = re.compile(
     r"(reddit\.com|news\.ycombinator\.com|hn\.a|"
     r"quora\.com|stackexchange\.com|discuss\.[a-z0-9-]+\.[a-z]{2,}|forum[s]?\.[a-z0-9-]+\.[a-z]{2,}|"
-    r"github\.com/.*/discussions|lobste\.rs)",
+    r"github\.com/.*/discussions|lobste\.rs|"
+    r"(?:^|\.)(?:g2|capterra|trustpilot|producthunt|softwareadvice|sitejabber)\.com|"
+    r"apps\.apple\.com|play\.google\.com)",
     re.I,
 )
 SOCIAL_RE = re.compile(

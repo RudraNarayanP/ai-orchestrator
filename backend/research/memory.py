@@ -27,7 +27,7 @@ _NOT_ENTITY = {
     "is", "was", "are", "were", "can", "could", "would", "should", "will", "the", "this", "that", "these", "those",
     "there", "they", "their", "it", "its", "his", "her", "he", "she", "you", "your", "we", "our", "i", "if", "do",
     "has", "have", "had", "tell", "give", "show", "explain", "compare", "list", "according", "yes", "no", "sure",
-    "however", "also", "while", "after", "before", "in", "on", "at", "for", "to", "of",
+    "however", "any", "some", "my", "please", "anything", "everything", "while", "after", "before", "in", "on", "at", "for", "to", "of",
 }
 _ENTITY_RE = re.compile(r"\b[A-Z][A-Za-z0-9.'-]{1,}(?:\s+[A-Z][A-Za-z0-9.'-]{1,})*\b")
 IDK_RE = re.compile(r"^\s*i (don'?t know|couldn'?t verify)", re.I)

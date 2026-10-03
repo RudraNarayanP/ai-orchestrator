@@ -79,7 +79,7 @@ class Store:
     def _migrate(self) -> None:
         """Additive migrations for databases created by an older build."""
         have = {row["name"] for row in self._conn.execute("PRAGMA table_info(jobs)").fetchall()}
-        for column, ddl in (("conversation_id", "TEXT"), ("confirmed_json", "TEXT")):
+        for column, ddl in (("conversation_id", "TEXT"), ("confirmed_json", "TEXT"), ("reviews_json", "TEXT")):
             if column not in have:
                 self._conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} {ddl}")
         self._conn.execute("CREATE INDEX IF NOT EXISTS jobs_conversation ON jobs(conversation_id, created_at)")
@@ -95,15 +95,16 @@ class Store:
             """INSERT INTO jobs (id, question, mode, status, created_at, updated_at, finished_at, level,
                                  rounds_run, max_rounds, stop_reason, browser_sessions, verifier_calls,
                                  final_json, analysis_json, plan_json, error, answer_text, confidence,
-                                 conversation_id, confirmed_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                 conversation_id, confirmed_json, reviews_json)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(id) DO UPDATE SET status=excluded.status, updated_at=excluded.updated_at,
                  finished_at=excluded.finished_at, level=excluded.level, rounds_run=excluded.rounds_run,
                  stop_reason=excluded.stop_reason, browser_sessions=excluded.browser_sessions,
                  verifier_calls=excluded.verifier_calls, final_json=excluded.final_json,
                  analysis_json=excluded.analysis_json, plan_json=excluded.plan_json,
                  error=excluded.error, answer_text=excluded.answer_text, confidence=excluded.confidence,
-                  conversation_id=excluded.conversation_id, confirmed_json=excluded.confirmed_json""",
+                  conversation_id=excluded.conversation_id, confirmed_json=excluded.confirmed_json,
+                  reviews_json=excluded.reviews_json""",
             (
                 job.id,
                 job.question,
@@ -126,6 +127,7 @@ class Store:
                 (job.final.confidence.value if job.final else None),
                 job.conversation_id,
                 json.dumps(turn.confirmed_claims, ensure_ascii=False) if (turn := memory.turn_from_job(job)) else None,
+                json.dumps(job.reviews.model_dump(mode="json"), ensure_ascii=False) if job.reviews else None,
             ),
         )
         self._conn.commit()
@@ -280,7 +282,7 @@ class Store:
         if not job:
             return None
         out = dict(job)
-        for key in ("final_json", "analysis_json", "plan_json"):
+        for key in ("final_json", "analysis_json", "plan_json", "reviews_json"):
             out[key.replace("_json", "")] = json.loads(out.pop(key) or "null")
         out["responses"] = [
             _json_fields(dict(row), ("citations_json", "failure_json", "pages_json"))
