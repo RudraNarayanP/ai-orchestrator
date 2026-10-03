@@ -625,7 +625,11 @@ class Verifier:
                     continue
                 claim_id = str(item.get("claim_id") or "")
                 if claim_id not in {c.id for c in claims}:
-                    continue
+                    # Live: the model wrote "clm_answer" for the headline claim; every verdict was dropped and a
+                    # supported 13-year answer became "I couldn't verify this". Re-attach by wording, else skip.
+                    claim_id = self._nearest_claim_id(str(item.get("claim") or ""), claims)
+                    if not claim_id:
+                        continue
                 verdicts.append(
                     ClaimVerdict(
                         claim_id=claim_id,
@@ -679,6 +683,22 @@ class Verifier:
             )
         except Exception:  # noqa: BLE001
             return None
+
+    @staticmethod
+    def _nearest_claim_id(text: str, claims: list[Claim]) -> str:
+        def words(s: str) -> set[str]:
+            return {w for w in re.findall(r"[a-z0-9]+", s.lower()) if len(w) > 2}
+
+        target = words(text)
+        if len(target) < 4:
+            return ""
+        best, best_score = "", 0.0
+        for c in claims:
+            other = words(c.claim)
+            score = len(target & other) / max(1, len(target | other))
+            if score > best_score:
+                best, best_score = c.id, score
+        return best if best_score >= 0.6 else ""
 
     def _reconcile(self, report: VerifierReport, claims: list[Claim], evidence: list[Evidence], question: str = "") -> None:
         """A model cannot promote a claim our own ledger does not support."""

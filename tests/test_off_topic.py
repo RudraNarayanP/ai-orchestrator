@@ -108,3 +108,25 @@ def test_verifier_judges_at_most_twelve_claims_and_keeps_the_ones_with_pages():
     assert {e.claim_id for e in ev if e.claim_id} == backed
     small, ev_small = Verifier.focus(claims[:5], evidence)
     assert len(small) == 5 and len(ev_small) == len(evidence)
+
+def test_a_verdict_with_an_invented_claim_id_is_reattached_by_wording():
+    """Live: nemotron answered with claim_id 'clm_answer'; every verdict was dropped and a supported answer became a don't-know."""
+    from backend.models import Claim
+    from backend.verification.llm import Endpoint
+    from backend.verification.verifier import Verifier
+
+    claims = [
+        Claim(job_id="j", id="clm_real1", claim="Under the Data Protection Act 2018 the minimum age at which a child can consent to information society services is 13 years.", kind="legal"),
+        Claim(job_id="j", id="clm_real2", claim="Preventive and counselling services are excluded from Article 8.", kind="legal"),
+    ]
+    v = Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)
+    parsed = {
+        "verdicts": [
+            {"claim_id": "clm_answer", "claim": "Under the Data Protection Act 2018, the minimum age at which a child can consent to information society services in the UK is 13 years.", "verdict": "supported", "confidence": "moderate"},
+            {"claim_id": "clm_nonsense", "claim": "Totally unrelated statement about whales", "verdict": "supported", "confidence": "high"},
+        ],
+        "answer": "A child must be 13.",
+        "confidence": "moderate",
+    }
+    report = v._from_model(parsed, job_id="j", round_no=1, claims=claims, evidence=[])
+    assert [x.claim_id for x in report.verdicts] == ["clm_real1"], "re-attached by wording; the unrelated one is dropped"
