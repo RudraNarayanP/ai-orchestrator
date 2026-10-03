@@ -117,7 +117,10 @@ def strip_chip_labels(text: str, citations: list[Any] | None = None) -> str:
         if m:
             label = _squash(m.group("label"))
             known = len(label) >= 4 and any(label in n or n in label for n in names)
-            if m.group("plus") or known:
+            # A list item is one sentence; a short capitalised tail after its full stop is a chip, even when the
+            # site gave us no links to match it against (logged-out ChatGPT renders chips as bare text).
+            bullet = bool(re.match(r"\s*(?:[-*\u2022]|\d+[.)])\s", line)) and len(m.group("label").split()) <= 2
+            if m.group("plus") or known or bullet:
                 line = m.group("body")
         out.append(line)
     return "\n".join(out)

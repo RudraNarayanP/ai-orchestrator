@@ -47,7 +47,9 @@ def test_inline_citation_chip_labels_are_removed_but_prose_is_not():
     got = strip_chip_labels(raw, cites).split("\n")
     assert got[0].endswith("noise cancelling.") and got[1].endswith("over time.") and got[2].endswith("loose hinges.")
     assert got[3] == "- It launched in 2022. Sony says it is the best yet."
-    assert got[4].endswith("Amazon"), "an unknown trailing word without a matching citation or +N stays"
+    assert got[4].endswith("$399."), "a bullet's trailing chip is removed even with no citations to match"
+    assert strip_chip_labels("Prices start at $399. Amazon", None).endswith("Amazon"), "outside a list an unmatched word stays"
+    assert strip_chip_labels("- Sony specifies about 3.5 hours for a full charge. RTINGS.com", None).endswith("charge.")
 
 
 def test_real_headings_survive():
