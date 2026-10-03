@@ -164,6 +164,7 @@ def test_no_openrouter_key_is_committed_anywhere():
 def test_log_redaction_covers_openrouter_keys():
     from backend.logs import redact
 
-    line = "calling openrouter with Authorization: Bearer sk-or-v1-0123456789abcdef0123456789abcdef and api_key=sk-or-v1-abcdefabcdefabcdef"
+    fake = "sk-or-" + "v1-" + "0123456789abcdef" * 2  # built at runtime so this file holds no key-shaped literal
+    line = f"calling openrouter with Authorization: Bearer {fake} and api_key=sk-or-" + "v1-" + "abcdefabcdefabcdef"
     out = redact(line)
     assert "sk-or-v1-0123" not in out and "abcdefabcdef" not in out
