@@ -737,6 +737,28 @@ class Verifier:
             elif count and len(domains_by_claim.get(verdict.claim_id, set())) < 2 and verdict.confidence == Confidence.HIGH:
                 verdict.confidence = Confidence.MODERATE
                 verdict.problems.append("downgraded: all confirmations came from one domain")
+        promoted = False
+        for verdict in report.verdicts:
+            claim = claims_by_id.get(verdict.claim_id)
+            if claim is None or verdict.verdict not in {ClaimStatus.INSUFFICIENT_EVIDENCE, ClaimStatus.UNVERIFIED}:
+                continue
+            ledger = self._verdict_for(claim, by_claim.get(claim.id, []))
+            if ledger.verdict == ClaimStatus.SUPPORTED and ledger.confidence in {Confidence.HIGH, Confidence.MODERATE}:
+                # Live: a free model called a claim "unverifiable" while two statute pages we opened said it word for word.
+                # The ledger can lift a claim the model under-rated, on the same rules it uses to cap one it over-rated.
+                verdict.verdict, verdict.confidence = ledger.verdict, ledger.confidence
+                verdict.strong_evidence = ledger.strong_evidence
+                verdict.problems = [p for p in verdict.problems if p not in {"unverifiable", "citation_mismatch"}] + ["raised: opened pages confirm this claim"]
+                promoted = True
+        if promoted:
+            weak_answer = not (report.answer or "").strip() or report.answer.lower().startswith(("i don't know", "i couldn't", "i could not", "i cannot", "i can't"))
+            if weak_answer:
+                best = self._best_supported(claims, report.verdicts, evidence, question)
+                if best["confidence"] != Confidence.NONE:
+                    report.answer, report.why, report.sources = best["answer"], best["why"], best["sources"]
+                    report.confidence = best["confidence"]
+                    report.important_disagreement = best["disagreement"]
+                    report.caveats = list(best["caveats"])
         overall = report.confidence
         supported = [v for v in report.verdicts if v.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED}]
         if not supported and overall in {Confidence.HIGH, Confidence.MODERATE}:

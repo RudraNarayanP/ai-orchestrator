@@ -130,3 +130,34 @@ def test_a_verdict_with_an_invented_claim_id_is_reattached_by_wording():
     }
     report = v._from_model(parsed, job_id="j", round_no=1, claims=claims, evidence=[])
     assert [x.claim_id for x in report.verdicts] == ["clm_real1"], "re-attached by wording; the unrelated one is dropped"
+
+def test_ledger_lifts_a_claim_the_model_under_rated_and_rebuilds_the_answer():
+    """Live: nemotron marked Theft Act s.1 'unverifiable' although opened legislation pages quoted it; the answer became a don't-know."""
+    from backend.models import Claim, ClaimStatus, ClaimVerdict, Confidence, Evidence, SourceCheckStatus, SourceTier, VerifierReport
+    from backend.verification.llm import Endpoint
+    from backend.verification.verifier import Verifier
+
+    q = "How does section 1 of the Theft Act 1968 define theft?"
+    claim = Claim(job_id="j", id="c1", claim="Section 1 of the Theft Act 1968 defines theft as dishonestly appropriating property belonging to another with the intention of permanently depriving the other of it.", kind="legal")
+    evs = [
+        Evidence(job_id="j", claim_id="c1", url=u, domain=d, tier=SourceTier.GOVERNMENT, check_status=SourceCheckStatus.CONFIRMED)
+        for u, d in (("https://www.legislation.gov.uk/ukpga/1968/60/section/1", "www.legislation.gov.uk"), ("https://www.gov.uk/theft-act", "www.gov.uk"))
+    ]
+    verdict = ClaimVerdict(claim_id="c1", claim=claim.claim, verdict=ClaimStatus.INSUFFICIENT_EVIDENCE, confidence=Confidence.NONE, reasoning="r", problems=["unverifiable"])
+    report = VerifierReport(job_id="j", round=1, verdicts=[verdict], answer="I don't know.", confidence=Confidence.LOW)
+    Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)._reconcile(report, [claim], evs, q)
+    assert verdict.verdict == ClaimStatus.SUPPORTED and "unverifiable" not in verdict.problems
+    assert report.answer.startswith("Section 1 of the Theft Act 1968") and report.sources
+    assert report.confidence in {Confidence.HIGH, Confidence.MODERATE}
+
+
+def test_ledger_does_not_lift_a_claim_with_no_confirmed_pages():
+    from backend.models import Claim, ClaimStatus, ClaimVerdict, Confidence, VerifierReport
+    from backend.verification.llm import Endpoint
+    from backend.verification.verifier import Verifier
+
+    claim = Claim(job_id="j", id="c1", claim="Section 1 of the Theft Act 1968 defines theft as appropriation.", kind="legal")
+    verdict = ClaimVerdict(claim_id="c1", claim=claim.claim, verdict=ClaimStatus.INSUFFICIENT_EVIDENCE, confidence=Confidence.NONE, reasoning="r")
+    report = VerifierReport(job_id="j", round=1, verdicts=[verdict], answer="I don't know.", confidence=Confidence.LOW)
+    Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)._reconcile(report, [claim], [], "How does section 1 of the Theft Act 1968 define theft?")
+    assert verdict.verdict == ClaimStatus.INSUFFICIENT_EVIDENCE
