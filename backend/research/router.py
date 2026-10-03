@@ -419,19 +419,33 @@ def is_failure_phrase(text: str) -> list[str]:
     return hits
 
 
-def select_primary(analysis: QuestionAnalysis, enabled: list[str], health: dict[str, str] | None = None) -> str | None:
+BLOCKED_STATES = {"logged_out", "broken", "rate_limited", "failed"}
+
+
+def _prior_blocked(prior: dict[str, str] | None) -> set[str]:
+    """Sites that were walled in an EARLIER run. They go last, never off the list: access changes."""
+    return {name for name, state in (prior or {}).items() if state in BLOCKED_STATES}
+
+
+def select_primary(
+    analysis: QuestionAnalysis,
+    enabled: list[str],
+    health: dict[str, str] | None = None,
+    prior: dict[str, str] | None = None,
+) -> str | None:
     health = health or {}
+    late = _prior_blocked(prior)
 
     def usable(name: str) -> bool:
         state = health.get(name, "unknown")
         return state not in {"logged_out", "broken", "rate_limited", "failed"} and name in enabled
 
     key = analysis.stakes.value if analysis.high_stakes and analysis.stakes.value in PRIMARY_FOR else analysis.intent
-    for candidate in PRIMARY_FOR.get(key, []) + PRIMARY_FOR["factual"] + SECONDARY_ORDER:
-        if usable(candidate):
-            return candidate
-    for candidate in enabled:
-        if usable(candidate):
+    order = PRIMARY_FOR.get(key, []) + PRIMARY_FOR["factual"] + SECONDARY_ORDER + list(enabled)
+    # stable: previously walled sites only after every site that worked last time
+    order = [n for n in order if n not in late] + [n for n in order if n in late]
+    for candidate in order:
+        if usable(candidate) and candidate != "search":
             return candidate
     return enabled[0] if enabled else None
 
@@ -444,6 +458,8 @@ def select_secondaries(
     count: int = 4,
     health: dict[str, str] | None = None,
     search_always: bool = False,
+    prior: dict[str, str] | None = None,
+    reprobe: bool = False,
 ) -> list[str]:
     """Pick *different families*, not just different names.
 
@@ -458,10 +474,13 @@ def select_secondaries(
     exclude = set(exclude) | (set() if search_always else {"search"})
     chosen: list[str] = []
     families: set[str] = set()
-    for name in SECONDARY_ORDER + [n for n in enabled if n not in SECONDARY_ORDER]:
+    late = _prior_blocked(prior)
+    ordered = SECONDARY_ORDER + [n for n in enabled if n not in SECONDARY_ORDER]
+    ordered = [n for n in ordered if n not in late] + [n for n in ordered if n in late]
+    for name in ordered:
         if name in exclude or name not in enabled:
             continue
-        if (health.get(name, "unknown")) in {"logged_out", "broken", "rate_limited", "failed"}:
+        if (health.get(name, "unknown")) in BLOCKED_STATES:
             continue
         fam = FAMILY.get(name, name)
         if fam in families and len(chosen) < count:
@@ -477,7 +496,13 @@ def select_secondaries(
             chosen.append(name)
             if len(chosen) >= count:
                 break
-    return chosen[: max(count, 2)]
+    chosen = chosen[: max(count, 2)]
+    if reprobe and len(chosen) >= 3:
+        # one slot per escalation goes to a site that was walled last time: if access changed, we learn it now
+        again = next((n for n in ordered if n in late and n not in chosen and n not in exclude and n in enabled and health.get(n, "unknown") not in BLOCKED_STATES), None)
+        if again:
+            chosen[-1] = again
+    return chosen
 
 
 def failure_payload(response: ProviderResponse) -> dict[str, Any]:

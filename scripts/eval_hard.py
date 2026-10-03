@@ -41,8 +41,10 @@ from backend.research.style import voice_report  # noqa: E402
 
 QUESTIONS = ROOT / "scripts" / "eval_questions.yaml"
 OUT_DIR = ROOT / "data" / "eval"
-# Walled or broken when logged out in the 2026-10-03 live runs; asking them only burns minutes.
-SKIP_BY_DEFAULT = ["copilot", "meta_ai", "le_chat", "pi", "qwen", "deepseek", "google_ai", "search"]
+# Nothing is switched off because it failed before: a wall can lift, so every chat AI is attempted each run
+# (a site that hits a wall is reported blocked and skipped for that question, never bypassed). "search" is
+# Google Search, the evidence transport, not an AI researcher; --skip NAME,NAME switches sites off on purpose.
+SKIP_BY_DEFAULT = ["search"]
 IDK_RE = re.compile(r"^\s*(i don'?t know|i couldn'?t verify|i can'?t verify|i'?m not sure)", re.I)
 
 # --------------------------------------------------------------------------------------------- scoring
@@ -175,6 +177,10 @@ def analyse(q: dict[str, Any], snapshot: dict[str, Any], runtime_s: float) -> di
         "browser_sessions": live.get("browser_sessions", live.get("browser_sessions_used")),
         "verifier_calls": live.get("verifier_calls"),
         "stop_reason": live.get("stop_reason"),
+        "provider_log": [
+            {"provider": r.get("provider"), "role": r.get("role"), "status": r.get("status"), "error": str(r.get("error") or "")[:90]}
+            for r in (live.get("responses") or [])
+        ],
         "threads": [
             {k: t.get(k) for k in ("provider", "role", "turn", "continued", "superseded")}
             for t in ((snapshot.get("extra") or live.get("extra") or {}).get("threads") or [])
@@ -195,6 +201,26 @@ def analyse(q: dict[str, Any], snapshot: dict[str, Any], runtime_s: float) -> di
     return rec
 
 
+def provider_table(records: list[dict[str, Any]], meta: dict[str, Any]) -> list[str]:
+    """Per-provider status across the run: every enabled site is listed, asked or not."""
+    stats: dict[str, dict[str, Any]] = {p: {"asked": 0, "completed": 0, "walls": {}, "last": "not asked"} for p in meta.get("providers", [])}
+    for r in records:
+        for e in r.get("provider_log") or []:
+            s = stats.setdefault(str(e["provider"]), {"asked": 0, "completed": 0, "walls": {}, "last": "not asked"})
+            s["asked"] += 1
+            status = str(e.get("status"))
+            s["last"] = status + (f" ({e['error']})" if e.get("error") else "")
+            if status == "completed":
+                s["completed"] += 1
+            else:
+                s["walls"][status] = s["walls"].get(status, 0) + 1
+    out = ["", "## Provider status", "", "| provider | asked | completed | not completed | last status |", "|---|---|---|---|---|"]
+    for name, s in stats.items():
+        walls = ", ".join(f"{k} x{v}" for k, v in s["walls"].items()) or "-"
+        out.append(f"| {name} | {s['asked']} | {s['completed']} | {walls} | {str(s['last'])[:110].replace('|', '/')} |")
+    return out + [""]
+
+
 def render_markdown(stamp: str, records: list[dict[str, Any]], meta: dict[str, Any]) -> str:
     lines = [
         f"# OmniBrain hard-question evaluation {stamp}",
@@ -211,6 +237,7 @@ def render_markdown(stamp: str, records: list[dict[str, Any]], meta: dict[str, A
             f"{len(r['primary_opened'])} / {len(r['primary_cited'])} | {', '.join(r['unsupported_figures']) or '-'} | "
             f"{'ok' if r['voice']['ok'] else 'no'} | {int(r['runtime_s'])}s | {ans[:170]} |"
         )
+    lines += provider_table(records, meta)
     tally: dict[str, int] = {}
     for r in records:
         tally[r["judgement"]["verdict"]] = tally.get(r["judgement"]["verdict"], 0) + 1
@@ -290,7 +317,8 @@ def main() -> int:
     ap.add_argument("--mode", default="STANDARD")
     ap.add_argument("--max-rounds", type=int, default=2)
     ap.add_argument("--timeout", type=int, default=900, help="seconds per question")
-    ap.add_argument("--all-providers", action="store_true", help="do not switch off the providers known to be walled logged out")
+    ap.add_argument("--all-providers", action="store_true", help="also keep the 'search' transport enabled")
+    ap.add_argument("--skip", default="", help="comma-separated providers to switch off on purpose")
     ap.add_argument("--questions", default=str(QUESTIONS))
     args = ap.parse_args()
 
@@ -309,7 +337,8 @@ def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d_%H%M%S")
     cfg_file = OUT_DIR / f"_config_{stamp}.yaml"
-    providers = trimmed_config([] if args.all_providers else SKIP_BY_DEFAULT, cfg_file)
+    skip = ([] if args.all_providers else list(SKIP_BY_DEFAULT)) + [x.strip() for x in args.skip.split(",") if x.strip()]
+    providers = trimmed_config(skip, cfg_file)
     port = free_port()
     base = f"http://127.0.0.1:{port}"
     env = dict(os.environ, OMNIBRAIN_CONFIG=str(cfg_file), PYTHONIOENCODING="utf-8")

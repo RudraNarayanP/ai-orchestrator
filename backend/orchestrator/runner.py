@@ -107,7 +107,9 @@ class ResearchRunner:
         self.adapters = adapters
         self.engine = engine
         self.bus = bus or NullBus()
-        self.health = dict(health or {})
+        # what earlier runs saw: it orders the candidates but never removes one (a wall can lift)
+        self.prior_health = dict(health or {})
+        self.health: dict[str, str] = {}
         self.verifier = verifier
         self.analysis_endpoint = analysis_endpoint
         self.store = store
@@ -172,7 +174,7 @@ class ResearchRunner:
 
         if not analysis.needs_web_research and analysis.trivial:
             # banter with no model configured: one provider, no research framing.
-            primary = router.select_primary(analysis, enabled, self.health)
+            primary = router.select_primary(analysis, enabled, self.health, self.prior_health)
             if primary:
                 response = await self._ask(primary, self._banter_prompt(job, analysis), 1, role="primary", needs_web=False, job_id=job.id)
                 if response and response.status.value == "completed":
@@ -201,7 +203,7 @@ class ResearchRunner:
         # QUICK, never in a round whose job is to establish evidence.
         for adapter in self.adapters.values():
             setattr(adapter, "quick_answer_allowed", job.mode == ResearchMode.QUICK)
-        primary = router.select_primary(analysis, enabled, self.health)
+        primary = router.select_primary(analysis, enabled, self.health, self.prior_health)
         if not primary:
             job.status = JobStatus.FAILED
             job.error = "no healthy provider available"
@@ -297,7 +299,7 @@ class ResearchRunner:
             enabled,
             exclude=[primary],
             count=2 if job.mode == ResearchMode.QUICK else self.settings.research.swarm_providers,
-            health=self.health,
+            health=self.health, prior=self.prior_health, reprobe=True,
         )
         # A full swarm is for the case where nothing was established at all.
         # After a targeted expansion, what remains is a conflict for the verifier,
@@ -406,7 +408,7 @@ class ResearchRunner:
                 [p for p in enabled if p not in unusable],
                 exclude=sorted(asked),
                 count=max(2, self.settings.research.follow_up_providers),
-                health=self.health,
+                health=self.health, prior=self.prior_health,
             )
             if len(targets) < 2 or not any(t not in asked for t in targets):
                 targets = router.select_secondaries(
@@ -414,7 +416,7 @@ class ResearchRunner:
                     [p for p in enabled if p not in unusable],
                     exclude=[primary] if round_no == 1 else [],
                     count=max(2, self.settings.research.follow_up_providers),
-                    health=self.health,
+                    health=self.health, prior=self.prior_health,
                 )
             follow_round = RoundRecord(number=next_round, kind="follow_up")
             job.rounds.append(follow_round)
@@ -1012,7 +1014,7 @@ class ResearchRunner:
         follow_ups = self._open_follow_ups(job, assessment, round_no + 1)
         chosen = router.select_secondaries(
             analysis, enabled, exclude=[primary],
-            count=min(3, max(2, len(enabled) - 1)), health=self.health,
+            count=min(3, max(2, len(enabled) - 1)), health=self.health, prior=self.prior_health,
         )
         next_round = round_no + 1
         job.escalation_log.append(

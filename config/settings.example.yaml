@@ -147,6 +147,7 @@ providers:
     enabled: true
     label: Google AI
     url: https://www.google.com/search?udm=50
+    new_chat_url: https://www.google.com/search?udm=50  # AI Mode only (udm=50), never plain Search
     requires_login: false  # no sign-in needed, but logged-out AI Mode often returns no answer block
     notes: Uses Google AI Mode; no login needed but a consent wall can appear.
 
