@@ -32,6 +32,7 @@ from backend.models import (
     WebResearchStatus,
 )
 from backend.research.router import addresses_question, future_year
+from backend.research.lint import evidence_report, is_what_do_we_know, lint_answer
 from backend.research.style import (
     ANSWER_CONTRACT,
     BANNED_PHRASES,
@@ -992,20 +993,39 @@ def _aspect(report: VerifierReport) -> str:
     return ""
 
 
+def _provenance(v: ClaimVerdict) -> str:
+    """Where a documented fact comes from: the strongest source host(s), as the ledger recorded them."""
+    hosts = []
+    for ref in v.strong_evidence or []:
+        m = re.search(r"https?://([^/\s]+)", str(ref))
+        h = (m.group(1) if m else str(ref)).removeprefix("www.")
+        if h and h not in hosts:
+            hosts.append(h)
+    return ", ".join(hosts[:2])
+
+
 def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int, question: str = "") -> FinalAnswer:
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
     state = truth_state(report) if question and (report.verdicts or report.confidence == Confidence.NONE) else ""
-    if state:
-        shown = render_truth(state, question=question, answer=report.answer, aspect=_aspect(report) if state == "PARTLY" else "")
+    S = ClaimStatus
+    settled = {S.SUPPORTED, S.REFUTED, S.PARTIALLY_SUPPORTED, S.CONTESTED}
+    unknowns = [v.claim for v in report.verdicts if v.verdict not in settled]
+    if question and is_what_do_we_know(question) and report.verdicts:
+        # "what do we actually know?": documented facts with provenance, then what is undocumented. No advice, no judgment.
+        documented = [(v.claim, _provenance(v)) for v in report.verdicts if v.verdict in {S.SUPPORTED, S.PARTIALLY_SUPPORTED}]
+        state = ""
+        text = evidence_report(documented, unknowns, [v.claim for v in report.verdicts if v.verdict == S.CONTESTED])
+    elif state:
+        shown = render_truth(state, question=question, answer=lint_answer(report.answer, question=question, unknowns=unknowns).text, aspect=_aspect(report) if state == "PARTLY" else "")
         text = humanize(shown, "high" if state in {"TRUE", "FALSE"} else "low")
     else:
-        text = humanize(tiny(report.answer), report.confidence.value if hasattr(report.confidence, "value") else str(report.confidence))
+        text = humanize(tiny(lint_answer(report.answer, question=question, unknowns=unknowns).text), report.confidence.value if hasattr(report.confidence, "value") else str(report.confidence))
     return FinalAnswer(
         answer=text,
         truth_state=state,
-        why=report.why,
-        important_disagreement=report.important_disagreement,
+        why=lint_answer(report.why, question=question, unknowns=unknowns).text if report.why else report.why,
+        important_disagreement=lint_answer(report.important_disagreement, question=question).text if report.important_disagreement else report.important_disagreement,
         confidence=report.confidence,
         confidence_label=confidence_label(report.confidence),
         sources=report.sources,

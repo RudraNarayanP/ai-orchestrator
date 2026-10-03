@@ -454,6 +454,17 @@ this reliably." never gets an emoji or an apology, and always says why. Internal
 (ledger, scores, claim ids, rounds) are scrubbed from answers and caveats
 (`backend/research/style.py`: `humanize`, `plain_caveats`, `voice_report`).
 
+**Report evidence, do not invent or lecture.** Answers state what the sources establish
+and keep documented facts apart from undocumented ones; an unknown is never turned into
+"probably not" (no "the source doesn't say who paid tuition" -> "parents probably didn't
+pay"). No unrequested advice, "you shouldn't assume" lectures, alternative-explanation
+speculation or boilerplate ("It's important to note", "That being said"...) unless the
+user asks for inference or advice. `backend/research/lint.py` enforces this on every
+final answer (and reports a checklist: answered? facts vs unknowns separated? unknown
+turned negative? invented explanation? unrequested advice? useless disclaimer? shorter
+possible?). Honest "I couldn't verify that one." lines are never touched.
+Tests: `tests/test_evidence_reporting.py`.
+
 ## Testing
 
 ```bash

@@ -139,6 +139,17 @@ BANNED_PHRASES = [
     "evidence score",
     "round 1",
     "round 2",
+    "that being said",
+    "ultimately",
+    "keep in mind",
+    "bear in mind",
+    "worth mentioning",
+    "we cannot definitively say",
+    "cannot definitively say",
+    "several possible explanations",
+    "highlights the importance of",
+    "underscores the importance of",
+    "prudent to",
 ]
 
 # The plain-language equivalents, so the synthesiser has somewhere to go.
@@ -227,6 +238,31 @@ Direct firsthand evidence can outrank an official source. Use judgement, and
 say which tier you actually relied on when it changes the verdict.
 """
 
+EVIDENCE_RULES = """REPORT EVIDENCE. DO NOT INVENT OR LECTURE.
+
+1. Say what the sources establish. Keep documented facts and unknowns apart, in that structure:
+   fact A documented / fact B documented / fact C undocumented. C is never turned into "probably true" or "probably false".
+2. Unknown is not false. Absence of evidence is not evidence of absence. Never write "X didn't happen" unless a source says so.
+   "The sources don't say who paid the tuition" must never become "the parents probably didn't pay". This matters most for
+   private, family, money and life events: not documented means unknown.
+3. For an unknown, say it once, naturally, and stop: "I couldn't find that documented." / "The sources I found don't say." /
+   "That's not publicly documented." / "I couldn't find a public source documenting that." / "The available sources don't specify that." /
+   "I couldn't verify that one." / "The sources disagree."
+4. No unrequested lectures, advice or speculation: no "you shouldn't assume", "it's fair to conclude", "that doesn't prove",
+   no alternative explanations for a gap, no generic uncertainty warnings. Give inference, an assessment or advice only when the
+   user asks for it.
+5. Do not challenge an obvious contextual inference unless the exact point matters. Correct real factual errors only.
+6. Weigh evidence in this order and do not bury a primary-source fact under caveats: primary records and official documents,
+   the person's own statements, official bios/CVs, reputable secondary reporting, other credible sources, weak sources.
+7. Answer the question that was asked. "What do we know?" is not "what can be proven beyond doubt?". "What happened?" is not a
+   request for advice. If asked "what do we actually know?": documented facts, where each comes from, dates, and what remains
+   undocumented - no advice, no judgment.
+8. Never use: "It's important to note", "worth mentioning", "That being said", "Ultimately", "keep in mind",
+   "We cannot definitively say", "several possible explanations", "highlights the importance of", "prudent to".
+9. Research depth and answer length are independent: research thoroughly, answer in as few words as the question needs.
+"""
+VERIFIER_ROLE = VERIFIER_ROLE + "\n\n" + EVIDENCE_RULES
+
 SYNTHESIS_INSTRUCTIONS = """WRITE THE ANSWER
 
 You have: the question, the atomic claims, the evidence we independently
@@ -281,6 +317,7 @@ def style_prompt(include_verifier: bool = False) -> str:
         "ANSWER FORMAT",
         ANSWER_CONTRACT,
         SYNTHESIS_INSTRUCTIONS,
+        EVIDENCE_RULES,
     ]
     if include_verifier:
         parts = [VERIFIER_ROLE, SOURCE_PRIORITY, "OUTPUT DISCIPLINE", ANSWER_CONTRACT, SYNTHESIS_INSTRUCTIONS]
@@ -460,6 +497,11 @@ def voice_report(answer: str) -> dict:
         problems.append("more than one emoji")
     if len(text) > 900:
         problems.append("padded: over 900 characters")
+    from backend.research.lint import lint_report  # noqa: PLC0415 -- lint imports this module
+
+    for f in lint_report(text):
+        if f.action != "flagged":
+            problems.append(f"{f.code}: {f.text[:60]}")
     return {"ok": not problems, "problems": problems, "emojis": emojis}
 
 
