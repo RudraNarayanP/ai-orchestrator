@@ -42,6 +42,7 @@ from backend.research import claims as claim_ops
 from backend.research import router
 from backend.cancel import CancelToken
 from backend.evidence.pool import browser_fetch_factory
+from backend.orchestrator.politeness import PolitenessGate
 from backend.evidence.reviews import caveat_lines as review_caveats
 from backend.evidence.reviews import gather_reviews, subject_for
 from backend.research import memory
@@ -98,6 +99,7 @@ class ResearchRunner:
         analysis_endpoint: Endpoint | None = None,
         store: Any = None,
         cancel: CancelToken | None = None,
+        politeness: PolitenessGate | None = None,
     ) -> None:
         self.settings = settings
         self.adapters = adapters
@@ -110,6 +112,7 @@ class ResearchRunner:
         self._sem = asyncio.Semaphore(max(1, settings.research.max_workers))
         self._provider_sems: dict[str, asyncio.Semaphore] = {}
         self.cancel = cancel or CancelToken()
+        self.politeness = politeness or PolitenessGate(settings.research)
         for adapter in adapters.values():
             if hasattr(adapter, "cancel_token"):
                 adapter.cancel_token = self.cancel
@@ -517,15 +520,23 @@ class ResearchRunner:
         self.cancel.raise_if_cancelled()
         # per-provider first, then the global pool: waiting on one busy site must not hold a global slot
         async with self._provider_slot(provider), self._sem:
-            await self._emit("provider", f"{provider}: opening dedicated window ({role})", provider=provider, round_no=round_no)
-            try:
-                response = await adapter.ask("job", prompt, round_no, emit=self._adapter_emit)
-            except Exception as exc:  # noqa: BLE001
-                self.cancel.raise_if_cancelled()
-                response = ProviderResponse(id=f"resp_err_{provider}_{round_no}", job_id="", round=round_no, provider=provider, prompt=prompt)
-                response.status = ProviderStatus.FAILED
-                response.error = f"{type(exc).__name__}: {exc}"
+            declined = await self.politeness.before(provider, sleep=self.cancel.sleep)
+            if declined:
+                response = ProviderResponse(id=f"resp_skip_{provider}_{round_no}", job_id="", round=round_no, provider=provider, prompt=prompt)
+                response.status = ProviderStatus.RATE_LIMITED
+                response.error = declined
                 response.answer_text = ""
+            else:
+                await self._emit("provider", f"{provider}: opening dedicated window ({role})", provider=provider, round_no=round_no)
+                try:
+                    response = await adapter.ask("job", prompt, round_no, emit=self._adapter_emit)
+                except Exception as exc:  # noqa: BLE001
+                    self.cancel.raise_if_cancelled()
+                    response = ProviderResponse(id=f"resp_err_{provider}_{round_no}", job_id="", round=round_no, provider=provider, prompt=prompt)
+                    response.status = ProviderStatus.FAILED
+                    response.error = f"{type(exc).__name__}: {exc}"
+                    response.answer_text = ""
+                self.politeness.after(provider, response.status.value)
         response.role = role
         response.escalation_reason = escalation_reason
         response.pages_visited = [c.url for c in response.citations if c.url][:20]

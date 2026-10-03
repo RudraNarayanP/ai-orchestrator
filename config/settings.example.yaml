@@ -75,6 +75,10 @@ research:
   max_rounds: 3
   max_workers: 4
   per_provider_concurrency: 1
+  min_provider_spacing_s: 2.0        # pause between two questions to the same site
+  rate_limit_backoff_s: 30.0         # after a rate limit: wait this long, doubling per consecutive limit
+  rate_limit_backoff_max_s: 600.0
+  rate_limit_max_wait_s: 45.0        # a longer backoff is not waited out; the site is skipped for that question
   follow_up_providers: 3
   min_independent_sources: 2
   claim_batch_size: 12

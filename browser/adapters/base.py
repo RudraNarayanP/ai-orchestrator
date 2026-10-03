@@ -287,6 +287,9 @@ class ChatAdapter:
                 return self._finish(response)
             if outcome:
                 return self._finish(response)
+            if response.status == ProviderStatus.RATE_LIMITED:
+                # Never retry straight into a rate limit; the runner backs this site off.
+                return self._finish(response)
             if attempt + 1 >= attempts:
                 # Out of attempts: keep the terminal status the last attempt set
                 # (BROKEN, LOGGED_OUT, ...) instead of resetting it to LAUNCHING.

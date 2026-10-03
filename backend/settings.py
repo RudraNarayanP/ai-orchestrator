@@ -137,6 +137,13 @@ class ResearchConfig(BaseModel):
     max_rounds: int = 3
     max_workers: int = 4
     per_provider_concurrency: int = 1
+    min_provider_spacing_s: float = 2.0
+    """Minimum pause between two questions to the same site."""
+    rate_limit_backoff_s: float = 30.0
+    """After a rate_limited result: wait this long before asking that site again, doubling per consecutive limit."""
+    rate_limit_backoff_max_s: float = 600.0
+    rate_limit_max_wait_s: float = 45.0
+    """A backoff longer than this is not waited out: the site is skipped for this question instead."""
     swarm_providers: int = 5
     """How many independent researchers a level-2 escalation uses. Small because
     each one is a browser session, but large enough that an evidenced minority

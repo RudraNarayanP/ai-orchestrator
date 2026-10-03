@@ -31,6 +31,7 @@ from backend.models import (
     JobStatus,
     ResearchMode,
 )
+from backend.orchestrator.politeness import PolitenessGate
 from backend.orchestrator.runner import ResearchRunner
 from backend.providers.registry import ProviderCatalog, endpoint_for
 from backend.settings import Settings, load_settings, reload_settings, save_settings
@@ -101,6 +102,7 @@ class JobManager:
         self._lock = asyncio.Lock()
         self._queue: asyncio.Semaphore = asyncio.Semaphore(1)
         self.health: dict[str, str] = {}
+        self.politeness = PolitenessGate(settings.research)  # shared by every job, so a backoff outlives one question
 
     async def engine_get(self) -> BrowserEngine:
         if self.engine is None:
@@ -173,6 +175,7 @@ class JobManager:
                     health=self.store.health() or None,
                     analysis_endpoint=endpoint_for(self.settings, "analysis"),
                     cancel=self.cancels.setdefault(job.id, CancelToken()),
+                    politeness=self.politeness,
                 )
                 await emit("status", f"starting with {len(adapters)} enabled providers")
                 await runner.run(job)

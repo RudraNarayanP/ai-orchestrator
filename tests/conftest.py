@@ -79,7 +79,7 @@ def base_settings(**overrides: Any) -> Settings:
         },
         "verifier": {"provider": "disabled", "model": "none", "base_url": ""},
         "analysis": {"provider": "disabled", "model": "none", "base_url": ""},
-        "research": {"mode": "STANDARD", "max_rounds": 3, "max_workers": 4, "min_independent_sources": 2},
+        "research": {"mode": "STANDARD", "max_rounds": 3, "max_workers": 4, "min_independent_sources": 2, "min_provider_spacing_s": 0},
         "search": {"engines": ["google"], "max_results": 5},
     }
     for key, value in overrides.items():
