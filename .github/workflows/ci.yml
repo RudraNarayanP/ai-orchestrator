@@ -1,0 +1,39 @@
+name: tests
+
+# The offline gate: no network, no chat sites, no real model. Mirrors the local command
+#   .venv\Scripts\python.exe -m pytest -q -m "not browser"
+# NOTE: this workflow has not been run by GitHub yet (the repository has no remote).
+on:
+  push:
+  pull_request:
+
+jobs:
+  offline:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pytest -q -m "not browser"
+
+  # Real headless Chromium against local fixtures only (no chat site is contacted).
+  # Allowed to fail until it has been seen green on a runner; it never blocks the offline gate.
+  browser:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - run: python -m playwright install chromium
+      - run: python -m pytest -q -m browser

@@ -74,3 +74,17 @@ def test_pyproject_and_requirements_pin_the_same_playwright():
 
     pinned = lambda text: re.search(r"playwright==([\d.]+)", text).group(1)  # noqa: E731
     assert pinned((ROOT / "pyproject.toml").read_text()) == pinned((ROOT / "requirements.txt").read_text())
+
+def test_ci_workflow_runs_the_offline_gate_on_push():
+    """The workflow is unexercised (no remote), so at least keep it parseable and pointed at the right command."""
+    import yaml
+
+    wf = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    triggers = wf.get("on") or wf.get(True)  # YAML 1.1 reads a bare `on` as True
+    assert "push" in triggers
+    offline = wf["jobs"]["offline"]
+    runs = [s["run"] for s in offline["steps"] if "run" in s]
+    assert 'python -m pytest -q -m "not browser"' in runs
+    assert any("requirements.txt" in r for r in runs)
+    assert not offline.get("continue-on-error"), "the offline gate must be able to fail the build"
+    assert wf["jobs"]["browser"].get("continue-on-error") is True, "the browser job is advisory until it has run on a runner"
