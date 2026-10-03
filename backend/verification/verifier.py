@@ -39,7 +39,9 @@ from backend.research.style import (
     SYNTHESIS_INSTRUCTIONS,
     VERIFIER_ROLE,
     humanize,
+    is_claim_check,
     plain_caveats,
+    render_truth,
     scrub,
     tiny,
 )
@@ -954,11 +956,54 @@ def confidence_label(confidence: Confidence) -> str:
     return CONFIDENCE_LABEL.get(confidence, "Low confidence")
 
 
-def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int) -> FinalAnswer:
+def truth_state(report: VerifierReport) -> str:
+    """TRUE / PARTLY / FALSE / CONFLICT / UNVERIFIED, read off the evidence ledger's verdicts -- never off tone.
+
+    Anything short of settled evidence is UNVERIFIED or CONFLICT; this never rounds uncertainty up.
+    """
+    S = ClaimStatus
+    verdicts = [v.verdict for v in report.verdicts]
+    conf = report.confidence
+    if report.important_disagreement or S.CONTESTED in verdicts:
+        return "CONFLICT"
+    supported = verdicts.count(S.SUPPORTED)
+    refuted = verdicts.count(S.REFUTED)
+    partial = verdicts.count(S.PARTIALLY_SUPPORTED)
+    if conf in (Confidence.NONE, Confidence.LOW) or not (supported or refuted or partial):
+        return "UNVERIFIED"
+    if refuted and not supported and not partial:
+        return "FALSE"
+    if supported and not refuted and not partial:
+        return "TRUE"
+    return "PARTLY"
+
+
+def _aspect(report: VerifierReport) -> str:
+    """Which detail is off, in a word, from the first claim that is not fully supported."""
+    for v in report.verdicts:
+        if v.verdict in (ClaimStatus.PARTIALLY_SUPPORTED, ClaimStatus.REFUTED):
+            problems = " ".join(v.problems).lower()
+            text = v.claim.lower()
+            if "outdated" in problems or re.search(r"\b(19|20)\d\d\b|\b(january|february|march|april|may|june|july|august|september|october|november|december)\b", text):
+                return "date"
+            if re.search(r"\d", text) or "exaggeration" in problems:
+                return "number"
+            return "detail"
+    return ""
+
+
+def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int, question: str = "") -> FinalAnswer:
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
+    state = truth_state(report) if question and (report.verdicts or report.confidence == Confidence.NONE) else ""
+    if state:
+        shown = render_truth(state, question=question, answer=report.answer, aspect=_aspect(report) if state == "PARTLY" else "")
+        text = humanize(shown, "high" if state in {"TRUE", "FALSE"} else "low")
+    else:
+        text = humanize(tiny(report.answer), report.confidence.value if hasattr(report.confidence, "value") else str(report.confidence))
     return FinalAnswer(
-        answer=humanize(tiny(report.answer), report.confidence.value if hasattr(report.confidence, "value") else str(report.confidence)),
+        answer=text,
+        truth_state=state,
         why=report.why,
         important_disagreement=report.important_disagreement,
         confidence=report.confidence,

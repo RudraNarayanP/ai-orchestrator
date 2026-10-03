@@ -1206,7 +1206,7 @@ class ResearchRunner:
             )
             job.stop_reason = stop
             return job
-        final = build_final_answer(report, responses, rounds)
+        final = build_final_answer(report, responses, rounds, self._q(job))
         # community-sourced owner reports are a labelled caveat of their own, never part of the answer
         final.caveats = [c for c in final.caveats if c][:5] + review_caveats(job.reviews)
         if not any(r.status.value == "completed" for r in responses):

@@ -558,6 +558,9 @@ class FinalAnswer(BaseModel):
     providers_used: list[str] = Field(default_factory=list)
     providers_failed: list[str] = Field(default_factory=list)
 
+    truth_state: str = ""
+    """TRUE | PARTLY | FALSE | CONFLICT | UNVERIFIED, from the evidence ledger (empty when nothing was checked)."""
+
     research_status: str = "COMPLETED"
     """NOT_NEEDED (answered at level 0) | COMPLETED (settled) | UNRESOLVED (researched, not settled) | BLOCKED (no AI answered)."""
 

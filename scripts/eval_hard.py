@@ -46,6 +46,8 @@ OUT_DIR = ROOT / "data" / "eval"
 # Google Search, the evidence transport, not an AI researcher; --skip NAME,NAME switches sites off on purpose.
 SKIP_BY_DEFAULT = ["search"]
 IDK_RE = re.compile(r"^\s*(?:hmm,?\s*)?(i don'?t know|i couldn'?t verify|i can'?t verify|couldn'?t verify|can'?t verify|i'?m not sure|not sure)", re.I)
+# The house voice's own don't-know / conflict lines are complete answers: "then stop" -- no reason sentence is owed.
+CONTRACT_IDK_RE = re.compile(r"^\s*(?:couldn'?t verify that one|hmm, i'?m not sure\W+the sources disagree)\.?\s*$", re.I)
 # A reasoned "there is nothing public / no such event" answer to an unanswerable trap question. It is not a bare
 # don't-know, but it is the right outcome *if* it invents no private content and what it asserts is backed by opened pages.
 NO_PUBLIC_RE = re.compile(
@@ -117,7 +119,7 @@ def judge(q: dict[str, Any], rec: dict[str, Any]) -> dict[str, Any]:
         elif not idk:
             reasons.append("answered a question that has no public answer")
             verdict = "FAIL"
-        elif not re.search(r"\w{4,}", answer.split(".", 1)[-1] if "." in answer else ""):
+        elif not CONTRACT_IDK_RE.match(answer) and not re.search(r"\w{4,}", answer.split(".", 1)[-1] if "." in answer else ""):
             reasons.append("don't-know without a reason")
             verdict = "WARN" if verdict == "PASS" else verdict
     else:

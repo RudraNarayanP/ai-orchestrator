@@ -324,7 +324,8 @@ TOPIC_EMOJI = [
     (r"\b(launch(?:ed)?|released?|announced)\b", "\U0001F680"),
 ]
 
-_PLAIN_STARTS = ("i don't know", "i couldn't verify", "i could not verify", "i can't verify", "i'm not sure", "i am not sure")
+_PLAIN_STARTS = ("i don't know", "i couldn't verify", "i could not verify", "i can't verify", "i'm not sure", "i am not sure",
+                 "couldn't verify", "could not verify", "hmm", "yeah, the idea is right")
 
 
 def count_emojis(text: str) -> int:
@@ -353,9 +354,9 @@ def humanize(answer: str, confidence: str = "moderate") -> str:
     low = body.lower()
     if existing:
         mark = existing[0]
-    elif low.startswith(("yes ", "yes,", "yes.", "yes\u2014", "yes \u2014")):
+    elif low.startswith(("yes ", "yes,", "yes.", "yes\u2014", "yes \u2014", "yeah,", "yeah.")):
         mark = "\u2705"
-    elif low.startswith(("no ", "no,", "no.", "no\u2014", "no \u2014", "no -")):
+    elif low.startswith(("no ", "no,", "no.", "no\u2014", "no \u2014", "no -", "nah,", "nah.", "nah ")):
         mark = "\u274C"
     else:
         mark = next((e for pat, e in TOPIC_EMOJI if re.search(pat, low)), "\u2705" if conf == "high" else "\U0001F44D")
@@ -460,3 +461,64 @@ def voice_report(answer: str) -> dict:
     if len(text) > 900:
         problems.append("padded: over 900 characters")
     return {"ok": not problems, "problems": problems, "emojis": emojis}
+
+
+# ------------------------------------------------------------------ truth states -> what the user reads
+# The state comes from the evidence ledger (verifier.truth_state). This is presentation only: tone never decides it.
+TRUTH_STATES = ("TRUE", "PARTLY", "FALSE", "CONFLICT", "UNVERIFIED")
+TRUTH_TRUE = "Yeah, you're right."
+TRUTH_FALSE = "Nah, that doesn't work like that."
+TRUTH_CONFLICT = "Hmm, I'm not sure \u2014 the sources disagree."
+TRUTH_UNVERIFIED = "Couldn't verify that one."
+
+_WH_START = re.compile(r"^\s*(?:so,?\s+)?(what|which|who|whom|whose|when|where|why|how|tell me|explain|list|give me|show me|name)\b", re.I)
+_CASUAL = re.compile(r"\b(bro|bruh|dude|mate)\b", re.I)
+_LEAD_YESNO = re.compile(r"^\s*(?:yes|yeah|yep|no|nope|nah)\b[\s,.\u2014\u2013:-]*", re.I)
+
+
+def is_claim_check(question: str) -> bool:
+    """A yes/no question or a statement the user wants checked ("is X true", "X works like Y, right?") -- not "what is X"."""
+    q = (question or "").strip()
+    return bool(q) and not _WH_START.match(q)
+
+
+def _first_sentence(text: str) -> str:
+    parts = split_sentences(_LEAD_YESNO.sub("", (text or "").strip()))
+    return parts[0].strip() if parts else ""
+
+
+def _ends_clean(sentence: str) -> str:
+    sentence = sentence.strip()
+    return sentence if not sentence or sentence[-1] in ".!?" else sentence + "."
+
+
+def render_truth(state: str, *, question: str = "", answer: str = "", aspect: str = "", correction: str = "") -> str:
+    """The user-facing answer for a truth state: 1-3 casual sentences, then stop. Detail lives behind "why?".
+
+    TRUE / FALSE / PARTLY apply to claim checks; for "what is X" questions the content answer (already tiny) is kept,
+    since "Yeah, you're right" would answer a question nobody asked. CONFLICT and UNVERIFIED always use the fixed line --
+    those admit uncertainty and are never reworded into something that sounds surer.
+    """
+    state = (state or "").upper()
+    claim = is_claim_check(question)
+    bro = ", bro" if _CASUAL.search(question or "") else ""
+    fact = _ends_clean(_first_sentence(correction or answer))
+    if state == "UNVERIFIED":
+        return TRUTH_UNVERIFIED
+    if state == "CONFLICT":
+        return TRUTH_CONFLICT
+    if not claim:
+        return tiny(answer, max_sentences=3, max_chars=280)
+    if state == "TRUE":
+        base = TRUTH_TRUE[:-1] + bro + "."
+        extra = fact if fact and len(fact) > 12 and fact.lower() not in {"it is.", "that is correct."} else ""
+        return tiny(f"{base} {extra}".strip(), max_sentences=2, max_chars=240)
+    if state == "FALSE":
+        base = TRUTH_FALSE[:-1] + bro + "." if bro else TRUTH_FALSE
+        return tiny(f"{base} {fact}".strip(), max_sentences=2, max_chars=240)
+    if state == "PARTLY":
+        part = f"the {aspect.strip()} part" if aspect.strip() else "one detail"
+        fix = fact.rstrip(".") if fact else ""
+        line = f"Yeah, the idea is right, but {part} is a bit off" + (f" \u2014 {fix}." if fix else ".")
+        return tiny(line, max_sentences=3, max_chars=260)
+    return tiny(answer, max_sentences=3, max_chars=280)

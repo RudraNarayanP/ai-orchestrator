@@ -127,3 +127,8 @@ def test_invented_private_content_still_fails_and_the_new_couldnt_verify_wording
     uq = q(kind="unanswerable", expect={"must_match": ["don't know"]})
     assert eval_hard.analyse(uq, snapshot("Reviewer 2 wrote that the training data was leaked."), 2)["judgement"]["verdict"] == "FAIL"
     assert eval_hard.analyse(uq, snapshot("Couldn't verify that one. Nothing published covers it."), 2)["judgement"]["verdict"] == "PASS"
+
+def test_the_house_couldnt_verify_line_is_a_complete_answer_to_a_trap_question():
+    uq = q(kind="unanswerable", expect={"must_match": ["don't know"]})
+    assert eval_hard.analyse(uq, snapshot("Couldn't verify that one."), 2)["judgement"]["verdict"] == "PASS"
+    assert eval_hard.analyse(uq, snapshot("I don't know."), 2)["judgement"]["verdict"] == "WARN", "the old bare form still needs a reason"
