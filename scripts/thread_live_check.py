@@ -37,7 +37,7 @@ async def main() -> int:
     db = ROOT / "data" / "tmp_live_thread.db"
     for ext in ("", "-wal", "-shm"):
         Path(str(db) + ext).unlink(missing_ok=True)
-    svc = ThreadService(ThreadStore(db, HashEmbedder()), context=ContextManager({"chatgpt": 500}, rotate_at=0.5, reply_reserve=20), packet_budget=500)
+    svc = ThreadService(ThreadStore(db, HashEmbedder()), context=ContextManager({"chatgpt": 250}, rotate_at=0.5, reply_reserve=20), packet_budget=500)
     tid = svc.create_thread()
     engine = BrowserEngine(settings)
     await engine.start()
@@ -57,7 +57,8 @@ async def main() -> int:
         by = report["turns"]
         report["checks"] = {
             "rotated_at_least_once": any(t.get("rotated") for t in by),
-            "new_chat_knew_codeword_and_month": any(t.get("rotated") and "TANGERINE" in t.get("reply", "").upper() and "may" in t.get("reply", "").lower() for t in by) or ("TANGERINE" in by[4].get("reply", "").upper() and "may" in by[4].get("reply", "").lower()),
+            "chatgpt_rotations": sum(1 for t in by if t.get("rotated") and t["provider"] == "chatgpt"),
+            "chat_after_rotation_knew_codeword_and_month": any(t.get("rotated") and t.get("reason") == "context_limit" for t in by[:5]) and not by[4].get("continue_thread") and "TANGERINE" in by[4].get("reply", "").upper() and "may" in by[4].get("reply", "").lower(),
             "switch_to_gemini_knew_seat": "window" in by[5].get("reply", "").lower(),
             "raw_messages_kept": svc.store.count(tid),
             "chats": [svc.label(s) for s in svc.store.segments(tid)],

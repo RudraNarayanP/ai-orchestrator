@@ -1,0 +1,77 @@
+{
+ "turns": [
+  {
+   "provider": "chatgpt",
+   "text": "Hi! I'm planning a trip to Lisbon in May, and my codeword for this conversation is TANGERINE-42. Reply in one short sentence.",
+   "chat": "ChatGPT A",
+   "rotated": false,
+   "reason": "start",
+   "continue_thread": false,
+   "packet_tokens": null,
+   "reply": "Absolutely\u2014Lisbon in May sounds wonderful, and I\u2019ll use TANGERINE-42 as our codeword."
+  },
+  {
+   "provider": "chatgpt",
+   "text": "I prefer window seats and I don't want any layover in Frankfurt. Reply in one short sentence.",
+   "chat": "ChatGPT A",
+   "rotated": false,
+   "reason": "",
+   "continue_thread": true,
+   "packet_tokens": null,
+   "reply": "Got it\u2014I\u2019ll prioritize a window seat and avoid any itinerary with a layover in Frankfurt."
+  },
+  {
+   "provider": "chatgpt",
+   "text": "Name one famous tram line in Lisbon. One short sentence.",
+   "chat": "ChatGPT B",
+   "rotated": true,
+   "reason": "context_limit",
+   "continue_thread": false,
+   "packet_tokens": 372,
+   "reply": "Lisbon\u2019s famous Tram 28 is a classic route through the city\u2019s historic neighborhoods."
+  },
+  {
+   "provider": "chatgpt",
+   "text": "Name one pastry Lisbon is known for. One short sentence.",
+   "chat": "ChatGPT B",
+   "rotated": false,
+   "reason": "",
+   "continue_thread": true,
+   "packet_tokens": null,
+   "reply": "Lisbon is famous for past\u00e9is de nata, delicious custard tarts with flaky pastry."
+  },
+  {
+   "provider": "chatgpt",
+   "text": "Which month is my trip, and what is my codeword? One short sentence.",
+   "chat": "ChatGPT C",
+   "rotated": true,
+   "reason": "context_limit",
+   "continue_thread": false,
+   "packet_tokens": 406,
+   "reply": "Your trip is in May, and your codeword is TANGERINE-42."
+  },
+  {
+   "provider": "gemini",
+   "text": "Which seat do I prefer, and which city should I avoid a layover in? One short sentence.",
+   "chat": "Gemini A",
+   "rotated": true,
+   "reason": "provider_switch",
+   "continue_thread": false,
+   "packet_tokens": 438,
+   "reply": "You prefer window seats and want to avoid any layover in Frankfurt."
+  }
+ ],
+ "checks": {
+  "rotated_at_least_once": true,
+  "chatgpt_rotations": 2,
+  "chat_after_rotation_knew_codeword_and_month": true,
+  "switch_to_gemini_knew_seat": true,
+  "raw_messages_kept": 12,
+  "chats": [
+   "ChatGPT A",
+   "ChatGPT B",
+   "ChatGPT C",
+   "Gemini A"
+  ]
+ }
+}
