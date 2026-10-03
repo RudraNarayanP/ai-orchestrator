@@ -38,6 +38,18 @@ from backend.verification.llm import LLMClient
 
 FRONTEND = Path(__file__).resolve().parent.parent.parent / "frontend"
 CONVERSATION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
+MAX_QUESTION_CHARS = 4000
+
+
+async def _json_object(request: Request) -> dict[str, Any]:
+    """A request body that must be a JSON object; anything else is the caller's mistake, not a 500."""
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="body must be valid JSON") from None
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body must be a JSON object")
+    return body
 
 
 class EventBroker:
@@ -254,13 +266,23 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/jobs")
     async def create_job(request: Request) -> JSONResponse:
-        body = await request.json()
-        job = await manager.start(
-            body.get("question", ""),
-            body.get("mode"),
-            body.get("max_rounds"),
-            body.get("conversation_id"),
-        )
+        body = await _json_object(request)
+        question = body.get("question", "")
+        if not isinstance(question, str):
+            raise HTTPException(status_code=400, detail="question must be a string")
+        if len(question) > MAX_QUESTION_CHARS:
+            raise HTTPException(status_code=400, detail=f"question is too long (max {MAX_QUESTION_CHARS} characters)")
+        max_rounds = body.get("max_rounds")
+        if max_rounds is not None:
+            if isinstance(max_rounds, bool) or not isinstance(max_rounds, int) or not 1 <= max_rounds <= 8:
+                raise HTTPException(status_code=400, detail="max_rounds must be an integer from 1 to 8")
+        mode = body.get("mode")
+        if mode is not None and not isinstance(mode, str):
+            raise HTTPException(status_code=400, detail="mode must be a string")
+        conversation_id = body.get("conversation_id")
+        if conversation_id is not None and not isinstance(conversation_id, str):
+            raise HTTPException(status_code=400, detail="conversation_id must be a string")
+        job = await manager.start(question, mode, max_rounds, conversation_id)
         return JSONResponse({"job_id": job.id, "status": job.status.value, "conversation_id": job.conversation_id})
 
     @app.get("/api/conversations/{conversation_id}")
@@ -306,8 +328,12 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
 
         async def pump():
             try:
+                replayed_done = False
                 for record in broker.since(job_id, 0):
                     yield f"data: {json.dumps(record, ensure_ascii=False)}\n\n"
+                    replayed_done = replayed_done or record.get("kind") == "done"
+                if replayed_done:
+                    return  # a finished job has nothing more to say; don't hold the connection open
                 while True:
                     if await request.is_disconnected():
                         break
@@ -337,12 +363,14 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/config")
     async def patch_config(request: Request) -> Any:
-        body = await request.json()
+        body = await _json_object(request)
         current = app.state.settings.model_dump(mode="json")
         _deep_merge(current, body or {})
         # an empty or masked api_key means "leave the stored one alone"
-        for section in ("verifier", "analysis"):
+        for section in ("verifier", "analysis", "vision"):
             incoming = (body or {}).get(section, {}) or {}
+            if not isinstance(incoming, dict):
+                raise HTTPException(status_code=400, detail=f"{section} must be an object")
             key = incoming.get("api_key", "")
             if key in ("", "***configured***"):
                 current[section]["api_key"] = app.state.settings.__dict__[section].api_key
@@ -371,6 +399,12 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
             await LLMClient(analysis_endpoint).health()
             if analysis_endpoint
             else {"ok": False, "state": "unconfigured", "detail": "claims fall back to the deterministic extractor"}
+        )
+        vision = settings.vision
+        checks["vision"] = (
+            {"ok": False, "state": "disabled", "detail": "vision fallback is off (vision.provider = disabled)"}
+            if vision.provider == "disabled"
+            else {"ok": bool(vision.model), "state": "configured" if vision.model else "unconfigured", "detail": f"{vision.provider} / {vision.model or 'no model set'}"}
         )
         checks["providers"] = {
             name: {
