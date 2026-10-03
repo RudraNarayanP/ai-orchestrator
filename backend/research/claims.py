@@ -87,6 +87,38 @@ INJECTION_RE = re.compile(
     r")\b",
     re.I,
 )
+# An agent narrating its own plan ("I'll independently verify ...") is not a statement about the world.
+SELF_NARRATION_RE = re.compile(r"^\s*(?:i'?ll|i will|i'?m going to|i am going to|let me|first,? i)\b", re.I)
+MODEL_TOKEN_RE = re.compile(r"\b[A-Za-z]{0,6}-?[A-Za-z]*\d[\w-]*\b")
+
+
+def subject_anchors(question: str) -> list[str]:
+    """Model-number style tokens in the question ("WH-1000XM5") and their shorter forms ("xm5").
+
+    A claim that mentions none of them ("The headphones deliver class-leading ANC") has lost its subject, so a
+    page about any other headphones would "confirm" it. Returns [] when the question names no such product.
+    """
+    out: list[str] = []
+    for m in MODEL_TOKEN_RE.finditer(question or ""):
+        tok = m.group(0)
+        if len(re.sub(r"[^A-Za-z0-9]", "", tok)) < 4 or not (re.search(r"[A-Za-z]", tok) and re.search(r"\d", tok)):
+            continue
+        squashed = re.sub(r"[^a-z0-9]", "", tok.lower())
+        out.append(squashed)
+        tail = re.search(r"[a-z]+\d+$", squashed)
+        if tail and len(tail.group(0)) >= 3:
+            out.append(tail.group(0))
+    return list(dict.fromkeys(out))
+
+
+def keep_anchored(pairs: list[tuple[str, str]], anchors: list[str]) -> list[tuple[str, str]]:
+    if not anchors:
+        return pairs
+    kept = [(t, k) for t, k in pairs if any(a in re.sub(r"[^a-z0-9]", "", t.lower()) for a in anchors)]
+    # Never wipe a response out: if nothing names the product, the claims are all we have.
+    return kept or pairs
+
+
 IMPERATIVE_START_RE = re.compile(
     r"^\s*(?:please\s+)?(ignore|disregard|forget|mark|rate|classify|label|output|print|reply|respond|consider|treat|approve|verify|confirm|escalate|stop|click)\b",
     re.I,
@@ -135,7 +167,7 @@ def is_assertive(sentence: str) -> bool:
         return False
     if NON_ASSERTIVE_RE.match(text):
         return False
-    if INJECTION_RE.search(text) or IMPERATIVE_START_RE.match(text):
+    if INJECTION_RE.search(text) or IMPERATIVE_START_RE.match(text) or SELF_NARRATION_RE.match(text):
         return False
     if is_failure_phrase_local(text):
         return False
@@ -334,6 +366,7 @@ async def extract_claims(
     *,
     endpoint: Endpoint | None = None,
     batch_size: int = 12,
+    question: str = "",
 ) -> list[Claim]:
     responses = list(responses)
     claims: list[Claim] = []
@@ -370,6 +403,7 @@ async def extract_claims(
         pairs = [(c["claim"], c["kind"]) for c in model_claims.get(response.id, [])]
         if not pairs:
             pairs = heuristic_claims(response)
+        pairs = keep_anchored(pairs, subject_anchors(question))
         topic_map = {c["claim"]: c.get("topic", "") for c in model_claims.get(response.id, [])}
         for text, kind in pairs:
             normalised = " ".join(text.split())[:400]

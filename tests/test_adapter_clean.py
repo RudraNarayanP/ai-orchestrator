@@ -31,6 +31,25 @@ def test_headings_glued_to_the_previous_line_are_split():
     assert adapter()._clean("The EVIDENCE is clear.") == "The EVIDENCE is clear.", "only a heading at the end of a line is split"
 
 
+def test_inline_citation_chip_labels_are_removed_but_prose_is_not():
+    """Live Gemini/ChatGPT product answers: '... comfort. Headphones Addict', '... hinge. SoundGuys', '... Sony UK+1'."""
+    from backend.models import Citation
+    from browser.adapters.base import strip_chip_labels
+
+    cites = [Citation(url="https://headphonesaddict.com/sony-review/", title="x"), Citation(url="https://sundr.ca/failure-timeline/x", title="y")]
+    raw = (
+        "- The headphones deliver class-leading noise cancelling. Headphones Addict\n"
+        "- Users report that ear cushions flake over time. Sundr\n"
+        "- Sony warns that overstretching causes loose hinges. Sony UK+1\n"
+        "- It launched in 2022. Sony says it is the best yet.\n"
+        "- Prices start at $399. Amazon"
+    )
+    got = strip_chip_labels(raw, cites).split("\n")
+    assert got[0].endswith("noise cancelling.") and got[1].endswith("over time.") and got[2].endswith("loose hinges.")
+    assert got[3] == "- It launched in 2022. Sony says it is the best yet."
+    assert got[4].endswith("Amazon"), "an unknown trailing word without a matching citation or +N stays"
+
+
 def test_real_headings_survive():
     assert adapter()._clean("## Details\n- one") == "## Details\n- one"
 

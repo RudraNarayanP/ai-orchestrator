@@ -227,6 +227,23 @@ def test_bare_dates_and_glued_headings_are_not_claims():
     assert [t for t, _ in pairs] == ["The Eiffel Tower is 330 metres tall including antennas."], pairs
 
 
+def test_self_narration_and_subjectless_claims_are_dropped_for_a_named_product():
+    """Live product run: 'I'll independently verify ...' became a claim, and 'The headphones deliver class-leading
+    ANC' (no product named) was 'confirmed' by an Apple AirPods page."""
+    assert not claim_ops.is_assertive("I'll independently verify the unresolved durability claims, prioritizing owner reports.")
+    assert claim_ops.is_assertive("Sony does not publish a failure rate for the WH-1000XM5.")
+    anchors = claim_ops.subject_anchors("Is the Sony WH-1000XM5 worth buying, and what do owners complain about most?")
+    assert "wh1000xm5" in anchors and "xm5" in anchors
+    assert claim_ops.subject_anchors("When was the Eiffel Tower completed and how tall is it?") == []
+    assert claim_ops.subject_anchors("Who won in 2022?") == []
+    pairs = [("The headphones deliver class-leading noise cancellation.", "fact"),
+             ("A SoundGuys poll of 2,000 XM5 owners found 24% had a broken hinge.", "statistic")]
+    assert [t for t, _ in claim_ops.keep_anchored(pairs, anchors)] == [pairs[1][0]]
+    vague = pairs[:1]
+    assert claim_ops.keep_anchored(vague, anchors) == vague, "a response is never wiped out entirely"
+    assert claim_ops.keep_anchored(pairs, []) == pairs
+
+
 def test_malformed_arithmetic_is_refused_not_evaluated():
     for evil in ["__import__('os').system('calc')", "1; import socket", "open('C:/Windows/win.ini').read()"]:
         computed, _ = router.try_arithmetic(evil)

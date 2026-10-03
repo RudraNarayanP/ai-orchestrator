@@ -623,6 +623,7 @@ class ResearchRunner:
             job.id,
             endpoint=self.analysis_endpoint if self.analysis_endpoint and self.analysis_endpoint.enabled else None,
             batch_size=self.settings.research.claim_batch_size,
+            question=job.question,
         )
         job.claims = extracted
         return extracted

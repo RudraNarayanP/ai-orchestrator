@@ -84,6 +84,45 @@ def _now() -> float:
     return time.time()
 
 
+_CHIP_TAIL_RE = re.compile(
+    r"^(?P<body>.*?[.!?)\]])[ \t]+(?P<label>[A-Z][\w&'.-]*(?:[ \t]+[A-Z0-9][\w&'.-]*){0,3})(?P<plus>[ \t]*\+\d+)?[ \t]*$"
+)
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
+
+
+def strip_chip_labels(text: str, citations: list[Any] | None = None) -> str:
+    """Remove inline citation-chip labels the site renders after a sentence ("... comfort. Headphones Addict").
+
+    They are UI, not prose, and left in they get glued onto claims. A trailing capitalised label is dropped only
+    when it is a "+N" overflow chip, or when it names one of the response's own citations (domain or title).
+    """
+    from urllib.parse import urlsplit
+
+    names: list[str] = []
+    for c in citations or []:
+        url = getattr(c, "url", None) or (c.get("url") if isinstance(c, dict) else "") or ""
+        title = getattr(c, "title", None) or (c.get("title") if isinstance(c, dict) else "") or ""
+        host = (urlsplit(url).hostname or "").lower()
+        host = re.sub(r"^www\.", "", host)
+        stem = host.split(".")[0] if host else ""
+        for n in (_squash(stem), _squash(title)):
+            if len(n) >= 4:
+                names.append(n)
+    out = []
+    for line in (text or "").split("\n"):
+        m = _CHIP_TAIL_RE.match(line.rstrip())
+        if m:
+            label = _squash(m.group("label"))
+            known = len(label) >= 4 and any(label in n or n in label for n in names)
+            if m.group("plus") or known:
+                line = m.group("body")
+        out.append(line)
+    return "\n".join(out)
+
+
 class ChatAdapter:
     name = "generic"
     #: chat UIs use ask(); the search adapter overrides this to False.
@@ -392,6 +431,8 @@ class ChatAdapter:
         return True
 
     def _finish(self, response: ProviderResponse) -> ProviderResponse:
+        if response.status == ProviderStatus.COMPLETED and response.answer_text:
+            response.answer_text = strip_chip_labels(response.answer_text, response.citations)
         response.finished_at = _now()
         response.duration_s = round((response.finished_at - (response.started_at or response.finished_at)), 2)
         return response
