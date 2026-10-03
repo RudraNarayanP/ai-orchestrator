@@ -1,0 +1,85 @@
+{
+ "embedder": "hash-v1",
+ "passed": 13,
+ "total": 13,
+ "results": [
+  {
+   "group": "correction",
+   "name": "newest statement replaces the old one",
+   "pass": true,
+   "detail": "['Lives in Lviv']"
+  },
+  {
+   "group": "correction",
+   "name": "never two ACTIVE in one slot (invariants)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "temporal",
+   "name": "current question gets only the current fact",
+   "pass": true,
+   "detail": "['Lives in Lviv']"
+  },
+  {
+   "group": "temporal",
+   "name": "history question can see the superseded fact",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "temporal",
+   "name": "finished goal is no longer injected",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "source",
+   "name": "inferred never overrides explicit",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "source",
+   "name": "explicit outranks inferred at equal relevance",
+   "pass": true,
+   "detail": "['user_explicit', 'model_inferred']"
+  },
+  {
+   "group": "isolation",
+   "name": "Atlas question never sees Borealis memory",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "isolation",
+   "name": "no-project question sees no project memory",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "privacy",
+   "name": "opt-out and secrets store nothing",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "privacy",
+   "name": "deleted memory is gone from rows, FTS, vectors and export",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "consistency",
+   "name": "identical context block on repeated calls (every provider receives the same text)",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "group": "evidence",
+   "name": "memory never reaches claims/evidence/final answer; all providers get the same block",
+   "pass": true,
+   "detail": "9 passed in 0.23s"
+  }
+ ]
+}

@@ -160,3 +160,32 @@ def test_consolidate_merges_near_duplicates(store):
     assert merged >= 1
     assert len(store.list(status="ACTIVE")) == 1
     assert store.check_invariants() == []
+
+# ---------------------------------------------------------------- scale regressions (found by the 10k benchmark)
+
+def test_keyword_index_survives_reopen_and_rebuilds_a_legacy_file(tmp_path):
+    p = tmp_path / "legacy.db"
+    s = MemoryStore(p)
+    s.add("Owns a kayak stored in the garage")
+    s.db.execute("delete from memory_fts_map")  # a file written before the rowid map existed
+    s.db.execute("delete from memory_fts")
+    s.db.commit()
+    s.close()
+    s2 = MemoryStore(p)
+    assert s2.fts_search(["kayak"]), "the keyword index is rebuilt on open"
+    r = s2.add("Owns a canoe")
+    s2.update(r.memory.memory_id, content="Owns a sailboat")
+    assert s2.fts_search(["sailboat"]) and not s2.fts_search(["canoe"])
+    s2.close()
+
+
+def test_entity_and_project_lookup_is_by_name_not_by_scanning(store):
+    svc = MemoryService(store)
+    store.add("Works at Acme Robotics", entities=["Acme Robotics"])
+    kind, proj, ents, _h = svc.retriever.understand("what does Acme Robotics build?")
+    assert ents == ["acme robotics"]
+    assert svc.retriever.understand("tell me about atlas")[1] is None
+    store.add("Project Atlas uses Postgres", memory_type=MemoryType.PROJECT, project="Atlas")
+    assert svc.retriever.understand("tell me about atlas")[1] == "atlas"  # project cache is invalidated by the write
+    store.delete_all()
+    assert svc.retriever.understand("tell me about atlas")[1] is None

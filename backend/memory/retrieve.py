@@ -72,8 +72,9 @@ class Retriever:
         projects = self.store.known_projects()
         mentioned = next((p for p in sorted(projects, key=len, reverse=True) if re.search(r"(?<![\w-])" + re.escape(p) + r"(?![\w-])", ql)), None)
         proj = project or mentioned
-        ents = self.store.known_entities()
-        ent_hits = sorted(e for e in ents if len(e) > 2 and re.search(r"(?<![\w-])" + re.escape(e) + r"(?![\w-])", ql))
+        words = re.findall(r"[\w'-]+", ql)
+        grams = {" ".join(words[i : i + n]) for n in (1, 2, 3, 4) for i in range(len(words) - n + 1)}
+        ent_hits = sorted(e for e in self.store.match_entities(grams) if len(e) > 2)
         personal = bool(PERSONAL_RE.search(q))
         advice = bool(ADVICE_RE.search(q))
         work = bool(WORK_RE.search(q))

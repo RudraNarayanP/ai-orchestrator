@@ -36,6 +36,7 @@ create table if not exists memories (
 create index if not exists ix_mem_status on memories(status, memory_type);
 create index if not exists ix_mem_project on memories(project, status);
 create index if not exists ix_mem_slot on memories(slot, scope, project, status);
+create table if not exists memory_fts_map (memory_id text primary key, rid integer not null);
 create virtual table if not exists memory_fts using fts5(memory_id unindexed, content, entities, topics, tokenize='porter unicode61');
 create table if not exists memory_entities (memory_id text not null, entity text not null, primary key (memory_id, entity));
 create index if not exists ix_ent on memory_entities(entity);
@@ -76,6 +77,12 @@ class MemoryStore:
         self._row: dict[str, int] = {}
         self._live: np.ndarray | None = None  # bool mask: row is a searchable (ACTIVE or history) memory
         self._loaded = False
+        self._gen, self._proj_gen, self._projects = 0, -1, set()
+        if self.db.execute("select count(*) from memory_fts_map").fetchone()[0] == 0 and self.count() > 0:
+            self.db.execute("delete from memory_fts")
+            for row in self.db.execute("select * from memories").fetchall():
+                self._fts_put(self._from_row(row), replace=False)
+            self.db.commit()
         model = self.get_setting("embed_model")
         if model and model != self.embedder.name:
             self.reindex()
@@ -114,6 +121,7 @@ class MemoryStore:
         self.db.execute("insert into memory_events(memory_id, action, at, detail) values (?,?,?,?)", (memory_id, action, time.time(), detail[:300]))
 
     def _write(self, m: Memory, *, insert: bool) -> None:
+        self._gen += 1
         vals = (
             m.memory_id, m.content, m.memory_type.value, m.scope, m.project, json.dumps(m.entities), json.dumps(m.topics), m.source_conversation,
             m.created_at, m.updated_at, m.last_accessed_at, m.access_count, m.importance, m.confidence, m.status.value, m.supersedes,
@@ -124,11 +132,24 @@ class MemoryStore:
             self.db.execute(f"insert into memories({','.join(COLS)}) values ({','.join('?' * len(COLS))})", vals)
         else:
             self.db.execute(f"update memories set {','.join(c + '=?' for c in COLS[1:])} where memory_id=?", vals[1:] + (m.memory_id,))
-        self.db.execute("delete from memory_fts where memory_id=?", (m.memory_id,))
-        self.db.execute("insert into memory_fts(memory_id, content, entities, topics) values (?,?,?,?)", (m.memory_id, m.content, " ".join(m.entities), " ".join(m.topics)))
+        self._fts_put(m, replace=not insert)
         self.db.execute("delete from memory_entities where memory_id=?", (m.memory_id,))
         for e in {x.lower() for x in m.entities}:
             self.db.execute("insert or ignore into memory_entities(memory_id, entity) values (?,?)", (m.memory_id, e))
+
+    def _fts_put(self, m: Memory, *, replace: bool) -> None:
+        """Keyword index entry. Deleting by the unindexed memory_id column would scan the whole FTS table (quadratic
+        bulk loads), so every entry's rowid is remembered in memory_fts_map and removed by rowid."""
+        if replace:
+            self._fts_drop(m.memory_id)
+        cur = self.db.execute("insert into memory_fts(memory_id, content, entities, topics) values (?,?,?,?)", (m.memory_id, m.content, " ".join(m.entities), " ".join(m.topics)))
+        self.db.execute("insert or replace into memory_fts_map(memory_id, rid) values (?,?)", (m.memory_id, cur.lastrowid))
+
+    def _fts_drop(self, memory_id: str) -> None:
+        r = self.db.execute("select rid from memory_fts_map where memory_id=?", (memory_id,)).fetchone()
+        if r:
+            self.db.execute("delete from memory_fts where rowid=?", (r["rid"],))
+            self.db.execute("delete from memory_fts_map where memory_id=?", (memory_id,))
 
     # ---------------------------------------------------------------- vector cache
     def _ensure_loaded(self) -> None:
@@ -234,11 +255,24 @@ class MemoryStore:
                 out.setdefault(r["entity"], set()).add(r["memory_id"])
         return out
 
+    def match_entities(self, candidates: Iterable[str]) -> set[str]:
+        """Which of these strings are stored entities? Indexed lookup - cost does not grow with the number of memories."""
+        cands = sorted({c.lower() for c in candidates if c})
+        found: set[str] = set()
+        for s in range(0, len(cands), 500):
+            chunk = cands[s : s + 500]
+            found |= {r["entity"] for r in self.db.execute(f"select distinct entity from memory_entities where entity in ({','.join('?' * len(chunk))})", chunk)}
+        return found
+
     def known_entities(self, kind: str | None = None) -> set[str]:
         return {r["entity"] for r in self.db.execute("select distinct entity from memory_entities")}
 
     def known_projects(self) -> set[str]:
-        return {r["project"].lower() for r in self.db.execute("select distinct project from memories where project is not null and status='ACTIVE'")}
+        """Distinct project names (cached; invalidated by any write - the set is tiny, the scan is not)."""
+        if self._proj_gen != self._gen:
+            self._projects = {r["project"].lower() for r in self.db.execute("select distinct project from memories where project is not null and status='ACTIVE'")}
+            self._proj_gen = self._gen
+        return self._projects
 
     def fts_search(self, query_terms: list[str], k: int = 50, *, statuses: tuple[str, ...] = ("ACTIVE",)) -> list[tuple[str, float, int]]:
         """BM25 over content+entities+topics. Returns (id, score>0, matched_term_count)."""
@@ -454,12 +488,13 @@ class MemoryStore:
         with self._lock:
             if not self.db.execute("select 1 from memories where memory_id=?", (memory_id,)).fetchone():
                 return False
+            self._gen += 1
             # what this one had replaced is not resurrected (the user may have deleted it on purpose) -- it is archived
             for r in self.db.execute("select memory_id from memories where superseded_by=?", (memory_id,)).fetchall():
                 self._cache_drop(r["memory_id"])
             self.db.execute("update memories set status='ARCHIVED' where superseded_by=? and status='SUPERSEDED'", (memory_id,))
             self.db.execute("delete from memories where memory_id=?", (memory_id,))
-            self.db.execute("delete from memory_fts where memory_id=?", (memory_id,))
+            self._fts_drop(memory_id)
             self.db.execute("delete from memory_entities where memory_id=?", (memory_id,))
             self.db.execute("delete from memory_links where src=? or dst=?", (memory_id, memory_id))
             self.db.execute("update memories set supersedes=null where supersedes=?", (memory_id,))
@@ -472,7 +507,8 @@ class MemoryStore:
     def delete_all(self) -> int:
         with self._lock:
             n = self.count()
-            for t in ("memories", "memory_fts", "memory_entities", "memory_links"):
+            self._gen += 1
+            for t in ("memories", "memory_fts", "memory_fts_map", "memory_entities", "memory_links"):
                 self.db.execute(f"delete from {t}")
             self._event(None, "delete_all", f"{n} memories")
             self.db.commit()
