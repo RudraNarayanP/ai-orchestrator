@@ -1,0 +1,120 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "search"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "uk-dpa-age",
+   "category": "uk-law",
+   "kind": "answer",
+   "question": "Under the Data Protection Act 2018, what is the minimum age at which a child can consent to information society services in the UK?",
+   "answer": "The minimum age at which a child can consent to information society services under the UK Data Protection Act 2018 is 13 years old. ⚖️",
+   "why": "The primary legislation (Data Protection Act 2018, section 9) sets the age at 13, and this is confirmed by current ICO guidance and recent legal summaries.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The age could be altered by future regulations under the Children's Wellbeing and Schools Act 2026, but as of the latest available information it remains 13.",
+    "While some peripheral claims lack specific sources, the core age threshold is well‑supported by primary and recent secondary evidence.",
+    "Whether a specific commencement regulation changes the age threshold as of 3 October 2026",
+    "Whether the ICO guidance was updated on 15 May 2026 to confirm the 13‑year threshold"
+   ],
+   "sources": [],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/enacted",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/enacted",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/enacted",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/enacted",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/enacted"
+   ],
+   "primary_cited": [],
+   "pages_opened": 58,
+   "pages_confirmed": 33,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 1,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 2991,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 220.5,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "no primary source cited"
+    ]
+   }
+  },
+  {
+   "id": "uk-theft-s1",
+   "category": "uk-law",
+   "kind": "answer",
+   "question": "How does section 1 of the Theft Act 1968 define theft?",
+   "answer": "Under section 1(1) of the Theft Act 1968, theft is committed when a person dishonestly appropriates property belonging to another with the intention of permanently depriving the other of it, and section 1(2) clarifies that it is immaterial whether the appropriation is made for gain or the thief's own benefit. ⚖️",
+   "why": "The legislation.gov.uk official text of the Theft Act 1968 contains the exact wording of section 1(1) and section 1(2), confirming the definition and the immateriality clause, while the contents page shows the headings of sections 2‑6 that interpret those terms.",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft",
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft",
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft",
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft",
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft",
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft"
+   ],
+   "primary_cited": [],
+   "pages_opened": 96,
+   "pages_confirmed": 66,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "unsupported_figures": [],
+   "claim_text_len": 3193,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 417.4,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "no primary source cited"
+    ]
+   }
+  }
+ ]
+}
