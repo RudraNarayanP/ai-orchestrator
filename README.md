@@ -108,7 +108,7 @@ Two consequences worth stating plainly:
 
 Honest status, because "it should work" is not a status:
 
-**Verified by automated tests (285 passing: 262 offline + 23 that drive a real headless
+**Verified by automated tests (422 passing: 395 offline + 27 that drive a real headless
 Chrome against local fixtures; none contacts a chat site or a real model):**
 - Escalation architecture, tests A–F from the spec: trivial questions answer at
   level 0 with **zero** browser sessions and zero verifier calls; a primary
@@ -172,9 +172,9 @@ Also covered offline since the first build (each has its own test file):
 
 | Provider | Result | What was observed |
 |---|---|---|
-| ChatGPT | worked | Guest composer `#mobile-composer-prompt` answers in ~8-60 s. Citations are bare chip text, not links, so its answers arrive with no URLs. |
+| ChatGPT | worked | Guest composer answers in ~8-60 s. Its source chips are bare text, not links, so the URLs it lists in its answer (with OPENED / MENTIONED ONLY) are recorded as its citations (`origin=text`). |
 | Gemini | worked | Long structured answers with real source links. |
-| Google AI Mode | broken logged out | Page loads, then animated dots and no answer block; adapter now gives up after 90 s and does not retry. |
+| Google AI Mode (`udm=50`) | broken logged out | Re-probed 2026-10-03: the page loads, accepts the prompt, says "AI Mode response is ready" but shows only animated dots, no answer text for 40+ s; no robot check appeared. Reported broken and skipped per job; re-probed every run. |
 | Copilot | blocked | Only "Sign in with Microsoft/Apple/Google"; no composer. |
 | Meta AI | blocked | Probe saw an input, but "Sign in to get started" appears on use. |
 | Le Chat | blocked | Cookie banner, then a redirect to `auth.mistral.ai/login` on submit. |
@@ -467,3 +467,12 @@ The non-browser suites need no network: adapters are scripted and the evidence
 ledger is stubbed with a per-URL "what happens when we open this page" table. LLM
 calls go over real HTTP to `tests/fake_openai.py` (scripted replies, an error
 status, or a callable that sees the request), so nothing needs Ollama.
+
+
+## Early stop, provenance, status fields (2026-10-04)
+- **Early stop:** a primary AI that opened a primary/official page supporting the claims that answer the question ends the research (1 round, no follow-up, no parallel AIs, at most one curator pass). Weak -> same-thread follow-up -> parallel independents. The curator cannot keep asking: strong primary evidence or two stalled targeted rounds stop it.
+- **Provenance:** every source carries MENTIONED -> OPENED -> INSPECTED -> CITED -> CLAIM_SUPPORTED (highest reached) and a separate `omnibrain_opened` flag; a page only OmniBrain opened never counts as the AI's research.
+- **State fields:** `research_status`, `reviewer_status` (COMPLETED/UNAVAILABLE/INVALID_OUTPUT/NOT_RUN), `synthesis_status` (CURATED/FALLBACK/DETERMINISTIC/DIRECT), `fallback_reason`. "The AI reviewer wasn't available" appears only when the reviewer really was unavailable.
+- **Answers are tiny:** 1-2 sentences, at most one caveat, emoji only at the very end of a confident answer.
+- **All providers are tried:** nothing is hard-coded out. A wall in an earlier run only lowers a site's rank and one escalation slot re-probes it; `python scripts/provider_status.py` probes every AI and writes a status table; the eval prints one per run. Results: `data/eval/ARCH_RESULTS.md`.
+- **Not verified live:** other sites' obedience to the OPENED / MENTIONED ONLY labels; the early-stop path on real sites beyond the runs listed in ARCH_RESULTS.md.
