@@ -82,6 +82,7 @@ def base_settings(**overrides: Any) -> Settings:
         "research": {"mode": "STANDARD", "max_rounds": 3, "max_workers": 4, "min_independent_sources": 2, "min_provider_spacing_s": 0},
         "search": {"engines": ["google"], "max_results": 5, "own_discovery": True},  # legacy tests exercise the optional discovery path
         "memory": {"enabled": False},  # tests never touch the real memory file; memory tests build their own store
+        "threads": {"enabled": False},  # nor the real thread file
     }
     for key, value in overrides.items():
         if isinstance(value, dict) and isinstance(raw.get(key), dict):

@@ -611,6 +611,9 @@ class Job(BaseModel):
     """Which memories were offered to the AIs for this question and why (never evidence)."""
     memory_kind: str = ""
     memory_context: str = Field(default="", exclude=True)
+    thread_id: str | None = None
+    """The OmniBrain thread this question belongs to (context only; see backend/thread)."""
+    thread_used: dict[str, Any] = Field(default_factory=dict)
     max_rounds: int = 3
     stop_note: str = ""
     """Why the loop ended early when a stop rule (not the round limit) ended it."""

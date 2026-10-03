@@ -103,8 +103,10 @@ class ResearchRunner:
         cancel: CancelToken | None = None,
         politeness: PolitenessGate | None = None,
         memory: Any = None,
+        threads: Any = None,
     ) -> None:
         self.settings = settings
+        self.threads = threads  # ThreadService | None -- the canonical thread; its packet is context only, never evidence
         self.memory = memory  # MemoryService | None -- personalisation context only; never evidence
         self.adapters = adapters
         self.engine = engine
@@ -130,6 +132,7 @@ class ResearchRunner:
         try:
             finished = await self._run(job)
             await self._learn(finished)
+            await self._record_thread(finished)
             return finished
         except asyncio.CancelledError:
             job.status = JobStatus.CANCELLED
@@ -180,6 +183,7 @@ class ResearchRunner:
             return job
 
         await self._prepare_memory(job)
+        await self._prepare_thread(job)
 
         if not analysis.needs_web_research and analysis.trivial:
             # banter with no model configured: one provider, no research framing.
@@ -608,6 +612,36 @@ class ResearchRunner:
         job.memory_used = [h.public() for h in res.hits]
         if res.hits:
             await self._emit("memory", f"using {len(res.hits)} remembered thing(s) as context (not evidence)", job=job, memory_kind=res.kind, ids=[h.memory.memory_id for h in res.hits])
+
+    async def _prepare_thread(self, job: Job) -> None:
+        """Questions asked inside an OmniBrain thread start their fresh provider chats with the thread's continuation context.
+
+        Same rules as memory: prompt context only, never a claim, evidence, source or verifier input. A job without a thread_id
+        gets nothing, and a thread's context is built from that thread's own messages only.
+        """
+        job.thread_used = {}
+        if self.threads is None or not job.thread_id:
+            return
+        try:
+            packet = self.threads.context_for_job(job.thread_id, job.question, with_user_lines=False, include_task=False)
+        except Exception as exc:  # noqa: BLE001 -- a broken thread store must never break research
+            await self._emit("status", f"thread context unavailable ({type(exc).__name__}); researching without it", job=job)
+            return
+        if packet is None:
+            return
+        job.memory_context = packet.text + (("\n\n" + job.memory_context) if job.memory_context else "")
+        job.thread_used = {"tokens": packet.tokens, "sections": packet.sections}
+        await self._emit("memory", "continuing the thread: earlier conversation supplied as context (not evidence)", job=job, thread_tokens=packet.tokens)
+
+    async def _record_thread(self, job: Job) -> None:
+        """The user's message always joins the canonical thread; the final answer joins it when there is one."""
+        if self.threads is None or not job.thread_id:
+            return
+        try:
+            answer = job.final.answer if (job.final and job.status == JobStatus.COMPLETED) else ""
+            self.threads.record_job(job.thread_id, job.question, answer, job_id=job.id)
+        except Exception:  # noqa: BLE001
+            pass
 
     async def _learn(self, job: Job) -> None:
         """After the conversation: keep what the USER said (never what an AI answered), subject to their settings."""

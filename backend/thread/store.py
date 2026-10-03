@@ -91,6 +91,7 @@ class SummaryFound:
     segment_id: str
     text: str
     score: float
+    summary: dict[str, Any] | None = None
 
 
 class _VecIndex:
@@ -266,6 +267,11 @@ class ThreadStore:
             return [self._msg(r) for r in reversed(rows)]
         return [self._msg(r) for r in self.db.execute(q + " order by seq", args)]
 
+    def add_segment_tokens(self, sid: str, n: int) -> None:
+        with self._lock:
+            self.db.execute("update segments set tokens=max(0,tokens+?) where segment_id=?", (n, sid))
+            self.db.commit()
+
     def count(self, tid: str) -> int:
         return self.db.execute("select count(*) from messages where thread_id=?", (tid,)).fetchone()[0]
 
@@ -325,7 +331,8 @@ class ThreadStore:
         out = []
         for n, r in enumerate(rows):
             seg = self.db.execute("select segment_id from segments where thread_id=? and idx=?", (tid, int(r["segment"]))).fetchone()
-            out.append(SummaryFound(int(r["segment"]), seg[0] if seg else "", r["content"], 1.0 / (30 + n)))
+            full = self.segment(seg[0]) if seg else None
+            out.append(SummaryFound(int(r["segment"]), seg[0] if seg else "", r["content"], 1.0 / (30 + n), full.summary if full else None))
         return out
 
     def search(self, tid: str, query: str, *, k: int = 12, window: tuple[float, float] | None = None) -> tuple[list[Found], list[SummaryFound]]:

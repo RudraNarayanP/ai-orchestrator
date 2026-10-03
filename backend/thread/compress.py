@@ -25,6 +25,7 @@ FIELDS = ("decisions", "facts", "arguments", "open_questions", "preferences", "k
           "conclusions", "rejected", "direction")
 CAPS = {"decisions": 8, "facts": 10, "arguments": 6, "open_questions": 6, "preferences": 8, "key_terms": 12, "project_state": 6, "entities": 12,
         "corrections": 6, "conclusions": 6, "rejected": 6, "direction": 2}
+HISTORY_KEEP = 60
 STATE_CAPS = {k: int(v * 2.5) for k, v in CAPS.items()}
 
 _S = re.IGNORECASE
@@ -59,6 +60,25 @@ def sentences(text: str) -> list[str]:
         elif len(s) > 300:
             out.append(s[:297].rstrip() + "...")
     return out
+
+
+_ACK = re.compile(r"^(understood|noted|great|sure|okay|ok|got it|thanks|thank you|of course|certainly|absolutely|sorry|right|good|yes|no problem)\b[\s,:;.!\-]*", re.I)
+
+
+def _strip_ack(sent: str) -> str:
+    return _ACK.sub("", sent, count=1).strip() or sent
+
+
+def render_summary(summary: dict[str, Any], max_chars: int = 600) -> str:
+    """A short human-readable form of an L2 summary (for packets and recall)."""
+    parts = [summary.get("narrative", "")]
+    items = summary.get("items", {})
+    for label, key in (("Decided", "decisions"), ("Established", "facts"), ("Corrected", "corrections"), ("Open", "open_questions")):
+        vals = [i["t"] for i in items.get(key, [])[:2]]
+        if vals:
+            parts.append(f"{label}: " + " / ".join(vals))
+    text = " ".join(p for p in parts if p)
+    return text if len(text) <= max_chars else text[: max_chars - 3] + "..."
 
 
 def _toks(s: str) -> set[str]:
@@ -119,11 +139,13 @@ def deterministic_summary(messages: Sequence[Any]) -> dict[str, Any]:
         for g in _IDENT.finditer(_CODE.sub(" ", m.content or "")):
             _add(items, "key_terms", g.group(1), m.seq, 0.5)
         for sent in sentences(m.content):
-            body = sent
-            for g in _ENTITY.finditer(sent):
+            body = _strip_ack(sent)
+            if len(body) < 12:
+                continue
+            for g in _ENTITY.finditer(body):
                 e = g.group(1)
-                if e.split()[0] in _NOT_ENTITY or len(e) < 3:
-                    continue
+                if e.split()[0] in _NOT_ENTITY or len(e) < 3 or (g.start() == 0 and " " not in e):
+                    continue  # a capitalised first word is just the start of a sentence
                 ent_count[e] += 1
                 if is_user:
                     ent_user.add(e)
@@ -266,6 +288,11 @@ def consolidate(state: dict[str, Any], summary: dict[str, Any], *, label: str, i
             items[k] = items[k][-cap:]
     state["history"].append({"idx": idx, "label": label, "span": span, "line": (summary.get("narrative") or "")[:220]})
     state["n_segments"] = state.get("n_segments", 0) + 1
+    if len(state["history"]) > HISTORY_KEEP:  # older segment lines fold into an archive so the state stays small however long the thread gets
+        drop, state["history"] = state["history"][:-HISTORY_KEEP], state["history"][-HISTORY_KEEP:]
+        arch = state.setdefault("archive", {"segments": 0, "sample": []})
+        arch["segments"] += len(drop)
+        arch["sample"] = (arch["sample"] + [d["line"][:90] for d in drop])[-3:]
     return state
 
 

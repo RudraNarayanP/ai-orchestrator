@@ -41,6 +41,7 @@ from backend.verification.llm import Endpoint, LLMClient
 
 log = get_logger("jobs")
 FRONTEND = Path(__file__).resolve().parent.parent.parent / "frontend"
+THREAD_ID_RE = re.compile(r"thr[0-9a-f]{12}")
 CONVERSATION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 MAX_QUESTION_CHARS = 4000
 
@@ -120,6 +121,27 @@ class JobManager:
                 self._memory = None
         return self._memory
 
+    def thread_service(self) -> Any:
+        """The canonical OmniBrain thread store (None when switched off in settings or if it cannot open)."""
+        cfg = self.settings.threads
+        if not cfg.enabled:
+            return None
+        if getattr(self, "_threads", None) is None:
+            try:
+                from backend.thread.service import ContextManager, ThreadService, endpoint_curator
+                from backend.thread.store import ThreadStore
+
+                mem = self.memory_service()
+                embedder = mem.store.embedder if mem is not None else None
+                self._threads = ThreadService(
+                    ThreadStore(cfg.path, embedder), curator=endpoint_curator(endpoint_for(self.settings, "analysis")), memory=mem,
+                    context=ContextManager(cfg.limits, cfg.rotate_at), packet_budget=cfg.packet_budget_tokens, recent_messages=cfg.recent_messages,
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("threads unavailable: %s", exc)
+                self._threads = None
+        return self._threads
+
     async def engine_get(self) -> BrowserEngine:
         if self.engine is None:
             self.engine = BrowserEngine(self.settings)
@@ -151,6 +173,7 @@ class JobManager:
         max_rounds: int | None,
         conversation_id: str | None = None,
         project: str | None = None,
+        thread_id: str | None = None,
     ) -> Job:
         question = (question or "").strip()
         if not question:
@@ -169,6 +192,12 @@ class JobManager:
             conversation_id=cid or f"conv_{uuid.uuid4().hex[:12]}",
             project=(project or "").strip()[:64] or None,
         )
+        tid = (thread_id or "").strip()
+        if tid:
+            svc = self.thread_service()
+            if svc is None or svc.store.get_thread(tid) is None:
+                raise HTTPException(status_code=404, detail="no such thread")
+            job.thread_id = tid
         # earlier finished turns of this thread; the runner decides whether this question leans on them
         job.history = self.store.conversation_turns(job.conversation_id, exclude_job_id=job.id, limit=3)
         self.jobs[job.id] = job
@@ -195,6 +224,7 @@ class JobManager:
                     cancel=self.cancels.setdefault(job.id, CancelToken()),
                     politeness=self.politeness,
                     memory=self.memory_service(),
+                    threads=self.thread_service(),
                 )
                 await emit("status", f"starting with {len(adapters)} enabled providers")
                 await runner.run(job)
@@ -312,7 +342,10 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
         project = body.get("project")
         if project is not None and not isinstance(project, str):
             raise HTTPException(status_code=400, detail="project must be a string")
-        job = await manager.start(question, mode, max_rounds, conversation_id, project)
+        thread_id = body.get("thread_id")
+        if thread_id is not None and not isinstance(thread_id, str):
+            raise HTTPException(status_code=400, detail="thread_id must be a string")
+        job = await manager.start(question, mode, max_rounds, conversation_id, project, thread_id)
         return JSONResponse({"job_id": job.id, "status": job.status.value, "conversation_id": job.conversation_id})
 
     # ------------------------------------------------------------------ memory (local only; see backend/memory)
@@ -415,6 +448,81 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
         if m is None:
             raise HTTPException(status_code=404, detail="no such memory")
         return {**m.public(), "events": s.events(memory_id)}
+
+    # ------------------------------------------------------------------ the unlimited OmniBrain thread (local only; see backend/thread)
+    def _threads() -> Any:
+        svc = manager.thread_service()
+        if svc is None:
+            raise HTTPException(status_code=503, detail="threads are switched off in settings (threads.enabled)")
+        return svc
+
+    def _thread_or_404(tid: str) -> Any:
+        svc = _threads()
+        if not THREAD_ID_RE.fullmatch(tid) or svc.store.get_thread(tid) is None:
+            raise HTTPException(status_code=404, detail="no such thread")
+        return svc
+
+    @app.post("/api/threads")
+    async def thread_create(request: Request) -> Any:
+        body = await _json_object(request)
+        title, project = body.get("title") or "", body.get("project")
+        if not isinstance(title, str) or (project is not None and not isinstance(project, str)):
+            raise HTTPException(status_code=400, detail="title and project must be strings")
+        return {"thread_id": _threads().create_thread(title[:120], (project or "").strip()[:64] or None)}
+
+    @app.get("/api/threads")
+    async def thread_list() -> Any:
+        return {"threads": _threads().store.list_threads()}
+
+    @app.get("/api/threads/{tid}")
+    async def thread_get(tid: str, last: int = 200) -> Any:
+        """One thread, as the user sees it: messages in order. Segments (the provider chats underneath) are not part of the view."""
+        svc = _thread_or_404(tid)
+        th = svc.store.get_thread(tid)
+        return {"thread_id": tid, "title": th["title"], "project": th["project"], "messages": svc.view(tid, last=max(1, min(last, 1000))), "total": svc.store.count(tid)}
+
+    @app.get("/api/threads/{tid}/segments")
+    async def thread_segments(tid: str) -> Any:
+        svc = _thread_or_404(tid)
+        return {"segments": [{"label": svc.label(s), "provider": s.provider, "tokens": s.tokens, "open": s.open, "reason": s.reason, "method": s.method,
+                              "first_seq": s.first_seq, "last_seq": s.last_seq} for s in svc.store.segments(tid)]}
+
+    @app.post("/api/threads/{tid}/recall")
+    async def thread_recall(tid: str, request: Request) -> Any:
+        body = await _json_object(request)
+        q = body.get("query")
+        if not isinstance(q, str) or not q.strip():
+            raise HTTPException(status_code=400, detail="query is required")
+        found, sums = _thread_or_404(tid).recall(tid, q)
+        return {"messages": [{**f.message.public(), "why": f.why} for f in sorted(found, key=lambda f: f.message.seq)],
+                "summaries": [{"segment": s.segment_idx, "text": s.text[:500]} for s in sums]}
+
+    @app.post("/api/threads/{tid}/chat")
+    async def thread_chat(tid: str, request: Request) -> Any:
+        """Plain conversation inside the thread through ONE provider (switch `provider` at any time; the thread carries over)."""
+        from backend.thread.service import adapter_ask
+
+        svc = _thread_or_404(tid)
+        body = await _json_object(request)
+        text, provider = body.get("text"), body.get("provider")
+        if not isinstance(text, str) or not text.strip() or not isinstance(provider, str) or not provider.strip():
+            raise HTTPException(status_code=400, detail="text and provider are required")
+        if len(text) > MAX_QUESTION_CHARS:
+            raise HTTPException(status_code=400, detail=f"message is too long (max {MAX_QUESTION_CHARS} characters)")
+        engine = await manager.engine_get()
+        adapters = ProviderCatalog(manager.settings, engine).all()
+        if provider not in adapters:
+            raise HTTPException(status_code=400, detail=f"unknown or disabled provider {provider!r}")
+        try:
+            turn = await svc.chat(tid, text.strip(), provider, adapter_ask(adapters))
+        except Exception as exc:  # noqa: BLE001 -- the user's message is already stored; say what failed
+            raise HTTPException(status_code=502, detail=f"{type(exc).__name__}: {exc}") from None
+        return {"reply": turn.reply, "rotated": turn.plan.rotated, "reason": turn.plan.reason, "chat": turn.plan.segment_label}
+
+    @app.delete("/api/threads/{tid}")
+    async def thread_delete(tid: str) -> Any:
+        svc = _thread_or_404(tid)
+        return {"deleted": svc.store.delete_thread(tid)}
 
     @app.get("/api/conversations/{conversation_id}")
     async def get_conversation(conversation_id: str) -> Any:

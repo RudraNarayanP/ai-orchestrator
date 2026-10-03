@@ -208,6 +208,19 @@ class MemoryConfig(BaseModel):
     model: str = "BAAI/bge-small-en-v1.5"
 
 
+class ThreadConfig(BaseModel):
+    """The unlimited OmniBrain thread (backend/thread). Local only."""
+
+    enabled: bool = True
+    path: str = str(DATA_DIR / "threads.db")
+    rotate_at: float = 0.8
+    """Rotate a provider chat when it reaches this share of its (approximate) context limit."""
+    packet_budget_tokens: int = 6000
+    recent_messages: int = 10
+    limits: dict[str, int] = Field(default_factory=dict)
+    """Per-provider context limit in approximate tokens, e.g. {chatgpt: 32000}. Missing providers use backend/thread/service.py DEFAULT_LIMITS."""
+
+
 class Settings(BaseModel):
     providers: dict[str, ProviderConfig] = Field(default_factory=dict)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
@@ -218,6 +231,7 @@ class Settings(BaseModel):
     search: SearchConfig = Field(default_factory=SearchConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    threads: ThreadConfig = Field(default_factory=ThreadConfig)
     tone: str = (
         "casual, short, light humour -- never forced. Use past context when it "
         "is genuinely relevant. Never guess, never invent a statistic, never "
