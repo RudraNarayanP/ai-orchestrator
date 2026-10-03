@@ -155,4 +155,4 @@ def test_uvicorn_output_lands_in_the_same_file(tmp_path):
     text = read(target)
     assert text.count("Uvicorn running") == 1, "uvicorn.error propagates to uvicorn; each line must be written once"
     assert text.count("GET /api/doctor") == 1
-    assert len(logging.getLogger("uvicorn.error").handlers) >= 1
+    assert logs.shared_file_handler() in logging.getLogger("uvicorn").handlers
