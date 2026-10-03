@@ -324,9 +324,9 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/memory")
     async def memory_list(status: str | None = None, type: str | None = None, source: str | None = None, project: str | None = None,
-                          q: str | None = None, limit: int = 100, offset: int = 0) -> Any:
+                          q: str | None = None, limit: int = 100, offset: int = 0, sensitivity: str | None = None) -> Any:
         svc = _mem()
-        items = svc.store.list(status=status, memory_type=type, source=source, project=project, q=q, limit=max(1, min(limit, 500)), offset=max(0, offset))
+        items = svc.store.list(status=status, memory_type=type, source=source, project=project, q=q, limit=max(1, min(limit, 500)), offset=max(0, offset), sensitivity=sensitivity)
         return {"items": [m.public() for m in items], "stats": svc.store.stats()}
 
     @app.get("/api/memory/stats")
@@ -352,18 +352,18 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/memory/settings")
     async def memory_get_settings() -> Any:
         s = _mem().store
-        return {"inject": s.inject_enabled, "capture": s.capture_enabled, "embedder": s.embedder.name}
+        return {"inject": s.inject_enabled, "capture": s.capture_enabled, "sensitive": s.sensitive_enabled, "embedder": s.embedder.name}
 
     @app.post("/api/memory/settings")
     async def memory_set_settings(request: Request) -> Any:
         body = await _json_object(request)
         s = _mem().store
-        for key in ("inject", "capture"):
+        for key in ("inject", "capture", "sensitive"):
             if key in body:
                 if not isinstance(body[key], bool):
                     raise HTTPException(status_code=400, detail=f"{key} must be true or false")
                 s.set_setting(key, "1" if body[key] else "0")
-        return {"inject": s.inject_enabled, "capture": s.capture_enabled, "embedder": s.embedder.name}
+        return {"inject": s.inject_enabled, "capture": s.capture_enabled, "sensitive": s.sensitive_enabled, "embedder": s.embedder.name}
 
     @app.post("/api/memory")
     async def memory_add(request: Request) -> Any:
@@ -377,12 +377,12 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
             res = _mem().remember(content, memory_type=mtype, project=project)
         except ValueError:
             raise HTTPException(status_code=400, detail="unknown memory_type") from None
-        return {"action": res.action, "memory": res.memory.public() if res.memory else None, "reason": res.reason}
+        return {"action": res.action, "memory": res.memory.public() if res.memory else None, "reason": res.reason, "notes": res.notes}
 
     @app.patch("/api/memory/{memory_id}")
     async def memory_edit(memory_id: str, request: Request) -> Any:
         body = await _json_object(request)
-        fields = {k: body[k] for k in ("content", "importance", "confidence", "status", "project", "goal_active") if k in body}
+        fields = {k: body[k] for k in ("content", "importance", "confidence", "status", "project", "goal_active", "sensitivity") if k in body}
         try:
             m = _mem().store.update(memory_id, **fields)
         except ValueError:

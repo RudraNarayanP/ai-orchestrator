@@ -22,6 +22,7 @@ from typing import Any, Iterable
 import numpy as np
 
 from backend.memory.embed import Embedder, HashEmbedder, content_tokens
+from backend.memory.topics import is_interpretation, is_sensitive, topics_for, view_text
 from backend.memory.schema import Memory, MemoryType, Source, Status
 
 DDL = """
@@ -31,7 +32,7 @@ create table if not exists memories (
   created_at real not null, updated_at real not null, last_accessed_at real, access_count integer not null default 0,
   importance real not null default 0.5, confidence real not null default 0.8, status text not null default 'ACTIVE',
   supersedes text, superseded_by text, embedding blob, metadata text not null default '{}', source text not null,
-  slot text, valid_from real, valid_to real, goal_active integer
+  slot text, valid_from real, valid_to real, goal_active integer, sensitivity text not null default 'normal'
 );
 create index if not exists ix_mem_status on memories(status, memory_type);
 create index if not exists ix_mem_project on memories(project, status);
@@ -41,13 +42,15 @@ create virtual table if not exists memory_fts using fts5(memory_id unindexed, co
 create virtual table if not exists memory_fts_vocab using fts5vocab(memory_fts, 'row');
 create table if not exists memory_entities (memory_id text not null, entity text not null, primary key (memory_id, entity));
 create index if not exists ix_ent on memory_entities(entity);
+create table if not exists memory_topics (memory_id text not null, topic text not null, primary key (memory_id, topic));
+create index if not exists ix_topic on memory_topics(topic);
 create table if not exists memory_links (src text not null, dst text not null, kind text not null, weight real default 1.0, primary key (src, dst, kind));
 create table if not exists memory_events (id integer primary key autoincrement, memory_id text, action text not null, at real not null, detail text);
 create table if not exists memory_settings (key text primary key, value text not null);
 """
 
 COLS = ("memory_id content memory_type scope project entities topics source_conversation created_at updated_at last_accessed_at access_count "
-        "importance confidence status supersedes superseded_by embedding metadata source slot valid_from valid_to goal_active").split()
+        "importance confidence status supersedes superseded_by embedding metadata source slot valid_from valid_to goal_active sensitivity").split()
 
 
 def norm_text(text: str) -> str:
@@ -73,6 +76,8 @@ class MemoryStore:
         self.db = sqlite3.connect(self.path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(DDL)
+        if "sensitivity" not in {r[1] for r in self.db.execute("pragma table_info(memories)")}:
+            self.db.execute("alter table memories add column sensitivity text not null default 'normal'")
         self._ids: list[str] = []
         self._mat: np.ndarray | None = None
         self._row: dict[str, int] = {}
@@ -84,6 +89,14 @@ class MemoryStore:
             self.db.execute("delete from memory_fts")
             for row in self.db.execute("select * from memories").fetchall():
                 self._fts_put(self._from_row(row), replace=False)
+            self.db.commit()
+        if self.db.execute("select count(*) from memory_topics").fetchone()[0] == 0 and self.count() > 0:
+            for row in self.db.execute("select * from memories").fetchall():
+                mm = self._from_row(row)
+                mm.topics = sorted(set(mm.topics) | set(topics_for(mm.content)))
+                if is_sensitive(mm.topics) and mm.sensitivity == "normal":
+                    mm.sensitivity = "sensitive"
+                self._write(mm, insert=False)
             self.db.commit()
         model = self.get_setting("embed_model")
         if model and model != self.embedder.name:
@@ -128,13 +141,16 @@ class MemoryStore:
             m.memory_id, m.content, m.memory_type.value, m.scope, m.project, json.dumps(m.entities), json.dumps(m.topics), m.source_conversation,
             m.created_at, m.updated_at, m.last_accessed_at, m.access_count, m.importance, m.confidence, m.status.value, m.supersedes,
             m.superseded_by, m.embedding, json.dumps(m.metadata), m.source.value, m.slot, m.valid_from, m.valid_to,
-            None if m.goal_active is None else int(m.goal_active),
+            None if m.goal_active is None else int(m.goal_active), m.sensitivity,
         )
         if insert:
             self.db.execute(f"insert into memories({','.join(COLS)}) values ({','.join('?' * len(COLS))})", vals)
         else:
             self.db.execute(f"update memories set {','.join(c + '=?' for c in COLS[1:])} where memory_id=?", vals[1:] + (m.memory_id,))
         self._fts_put(m, replace=not insert)
+        self.db.execute("delete from memory_topics where memory_id=?", (m.memory_id,))
+        for tp in set(m.topics):
+            self.db.execute("insert or ignore into memory_topics(memory_id, topic) values (?,?)", (m.memory_id, tp))
         self.db.execute("delete from memory_entities where memory_id=?", (m.memory_id,))
         for e in {x.lower() for x in m.entities}:
             self.db.execute("insert or ignore into memory_entities(memory_id, entity) values (?,?)", (m.memory_id, e))
@@ -232,9 +248,9 @@ class MemoryStore:
         return out
 
     def list(self, *, status: str | None = None, memory_type: str | None = None, source: str | None = None, project: str | None = None,
-             q: str | None = None, limit: int = 100, offset: int = 0) -> list[Memory]:
+             q: str | None = None, limit: int = 100, offset: int = 0, sensitivity: str | None = None) -> list[Memory]:
         where, args = [], []
-        for col, v in (("status", status), ("memory_type", memory_type), ("source", source), ("project", project)):
+        for col, v in (("status", status), ("memory_type", memory_type), ("source", source), ("project", project), ("sensitivity", sensitivity)):
             if v:
                 where.append(f"{col}=?")
                 args.append(v)
@@ -256,6 +272,20 @@ class MemoryStore:
             for r in self.db.execute(f"select entity, memory_id from memory_entities where entity in ({','.join('?' * len(chunk))})", chunk):
                 out.setdefault(r["entity"], set()).add(r["memory_id"])
         return out
+
+    def topic_memories(self, topics: Iterable[str], limit: int = 300) -> list[Memory]:
+        """ACTIVE memories carrying any of these topic tags (indexed), most important first - the candidates of a context cluster."""
+        ts = sorted(set(topics))
+        if not ts:
+            return []
+        rows = self.db.execute(
+            f"select m.* from memories m where m.status='ACTIVE' and m.memory_id in (select memory_id from memory_topics where topic in ({','.join('?' * len(ts))})) "
+            "order by m.importance desc, m.updated_at desc limit ?", (*ts, limit)).fetchall()
+        return [self._from_row(r) for r in rows]
+
+    @property
+    def sensitive_enabled(self) -> bool:
+        return self.get_setting("sensitive", "1") == "1"
 
     def match_entities(self, candidates: Iterable[str]) -> set[str]:
         """Which of these strings are stored entities? Indexed lookup - cost does not grow with the number of memories."""
@@ -320,13 +350,24 @@ class MemoryStore:
             scope: str | None = None, project: str | None = None, entities: list[str] | None = None, topics: list[str] | None = None,
             importance: float | None = None, confidence: float | None = None, source_conversation: str | None = None,
             metadata: dict[str, Any] | None = None, slot: str | None = None, supersedes: str | None = None,
-            goal_active: bool | None = None, now: float | None = None, embed: np.ndarray | None = None) -> AddResult:
+            goal_active: bool | None = None, now: float | None = None, embed: np.ndarray | None = None, sensitivity: str | None = None) -> AddResult:
         content = " ".join((content or "").split())
         if not content:
             return AddResult("rejected", reason="empty")
         mtype = MemoryType(memory_type)
         src = Source(source)
         now = now or time.time()
+        notes: list[str] = []
+        if mtype != MemoryType.INTERPRETATION and mtype != MemoryType.CONVERSATION and is_interpretation(content):
+            mtype = MemoryType.INTERPRETATION  # a feeling or a reading of motives is never stored as an objective fact
+            slot = None
+            supersedes = None
+            notes.append("stored as the user's view, not as a fact")
+        if mtype == MemoryType.INTERPRETATION:
+            content = view_text(content)
+        tags = sorted(set(topics or []) | set(topics_for(content)))
+        if sensitivity is None:
+            sensitivity = "sensitive" if (is_sensitive(tags) or mtype == MemoryType.INTERPRETATION) else "normal"
         if scope is None:
             scope = "conversation" if mtype == MemoryType.CONVERSATION else ("project" if project else "global")
         if mtype == MemoryType.GOAL and goal_active is None:
@@ -334,7 +375,7 @@ class MemoryStore:
         vec = embed if embed is not None else self.embedder.embed([content])[0]
         m = Memory(
             content=content, memory_type=mtype, scope=scope, project=project, entities=sorted({e.strip() for e in (entities or []) if e.strip()}),
-            topics=sorted(set(topics or [])), source_conversation=source_conversation, created_at=now, updated_at=now,
+            topics=tags, sensitivity=sensitivity, source_conversation=source_conversation, created_at=now, updated_at=now,
             importance=importance if importance is not None else (0.8 if src == Source.USER_EXPLICIT else 0.4),
             confidence=confidence if confidence is not None else (0.95 if src == Source.USER_EXPLICIT else 0.6),
             source=src, slot=slot, valid_from=now, goal_active=goal_active, metadata=metadata or {}, embedding=vec.astype(np.float32).tobytes(),
@@ -373,7 +414,7 @@ class MemoryStore:
             self._link_entities(m)
             self._event(m.memory_id, "created", f"{src.value}/{mtype.value}")
             self.db.commit()
-        return AddResult("superseded" if target is not None else "created", m, target)
+        return AddResult("superseded" if target is not None else "created", m, target, notes=notes)
 
     def _find_duplicate(self, m: Memory, vec: np.ndarray) -> Memory | None:
         r = self.db.execute("select * from memories where status='ACTIVE' and memory_type=? and scope=? and coalesce(project,'')=coalesce(?, '') and lower(content)=lower(?) limit 1",
@@ -460,14 +501,17 @@ class MemoryStore:
 
     def update(self, memory_id: str, *, content: str | None = None, importance: float | None = None, confidence: float | None = None,
                status: Status | str | None = None, project: str | None = None, entities: list[str] | None = None, topics: list[str] | None = None,
-               goal_active: bool | None = None, expires_at: float | None = None, by_user: bool = True) -> Memory | None:
+               goal_active: bool | None = None, expires_at: float | None = None, sensitivity: str | None = None, by_user: bool = True) -> Memory | None:
         """Edit in place (the user fixing their own memory). Editing is explicit by definition."""
         with self._lock:
             m = self.get(memory_id)
             if m is None:
                 return None
             if content is not None and " ".join(content.split()) != m.content:
-                m.content = " ".join(content.split())
+                m.content = view_text(" ".join(content.split())) if m.memory_type == MemoryType.INTERPRETATION else " ".join(content.split())
+                m.topics = sorted(set(m.topics) | set(topics_for(m.content)))
+                if is_sensitive(m.topics):
+                    m.sensitivity = "sensitive"
                 vec = self.embedder.embed([m.content])[0]
                 m.embedding = vec.astype(np.float32).tobytes()
                 self._cache_put(m.memory_id, vec, m.status in (Status.ACTIVE, Status.SUPERSEDED))
@@ -484,6 +528,8 @@ class MemoryStore:
                 m.topics = sorted(set(topics))
             if goal_active is not None:
                 m.goal_active = goal_active
+            if sensitivity in ("normal", "sensitive"):
+                m.sensitivity = sensitivity
             if expires_at is not None:
                 m.metadata = {**m.metadata, "expires_at": expires_at}
             if status is not None:
@@ -516,6 +562,7 @@ class MemoryStore:
             self.db.execute("delete from memories where memory_id=?", (memory_id,))
             self._fts_drop(memory_id)
             self.db.execute("delete from memory_entities where memory_id=?", (memory_id,))
+            self.db.execute("delete from memory_topics where memory_id=?", (memory_id,))
             self.db.execute("delete from memory_links where src=? or dst=?", (memory_id, memory_id))
             self.db.execute("update memories set supersedes=null where supersedes=?", (memory_id,))
             self.db.execute("update memories set superseded_by=null where superseded_by=?", (memory_id,))
@@ -528,7 +575,7 @@ class MemoryStore:
         with self._lock:
             n = self.count()
             self._gen += 1
-            for t in ("memories", "memory_fts", "memory_fts_map", "memory_entities", "memory_links"):
+            for t in ("memories", "memory_fts", "memory_fts_map", "memory_entities", "memory_topics", "memory_links"):
                 self.db.execute(f"delete from {t}")
             self._event(None, "delete_all", f"{n} memories")
             self.db.commit()
@@ -570,7 +617,7 @@ class MemoryStore:
         size = Path(self.path).stat().st_size if self.path != ":memory:" and Path(self.path).exists() else 0
         return {"total": self.count(), "by_type": grp("memory_type"), "by_status": grp("status"), "by_source": grp("source"),
                 "projects": sorted(self.known_projects()), "db_bytes": size, "embedder": self.embedder.name,
-                "inject_enabled": self.inject_enabled, "capture_enabled": self.capture_enabled}
+                "sensitive": self.count(sensitivity="sensitive"), "inject_enabled": self.inject_enabled, "capture_enabled": self.capture_enabled, "sensitive_enabled": self.sensitive_enabled}
 
     def check_invariants(self) -> list[str]:
         problems = []

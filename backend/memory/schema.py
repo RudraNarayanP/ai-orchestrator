@@ -17,6 +17,7 @@ class MemoryType(str, Enum):
     PROJECT = "project"  # knowledge scoped to a named project (namespace)
     EPISODIC = "episodic"  # something that happened, with a time
     CONVERSATION = "conversation"  # short-lived thread context; kept apart from long-term memory
+    INTERPRETATION = "interpretation"  # the user's feeling/belief/reading of motives: their VIEW, never an objective fact
 
 
 class Status(str, Enum):
@@ -59,6 +60,7 @@ class Memory(BaseModel):
     valid_from: float | None = None
     valid_to: float | None = None
     goal_active: bool | None = None
+    sensitivity: str = "normal"  # normal | sensitive (family, money, health, relationships, legal, identity)
     embedding: bytes | None = Field(default=None, exclude=True, repr=False)
 
     def public(self) -> dict[str, Any]:

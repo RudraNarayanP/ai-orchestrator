@@ -55,6 +55,7 @@
     <div class="row">
       <label class="check"><input type="checkbox" id="memInject"> use memory in answers</label>
       <label class="check"><input type="checkbox" id="memCapture"> learn from what I say</label>
+      <label class="check" title="Family, money, health, relationships, legal and identity memories. Off = never sent to any AI."><input type="checkbox" id="memSensitive"> allow sensitive memories when relevant</label>
     </div>
     <p id="memStats" class="hint"></p>
     <h3>Why would it be used?</h3>
@@ -63,7 +64,7 @@
     <h3>Add a memory</h3>
     <div class="row">
       <input id="memNew" type="text" maxlength="1000" placeholder="e.g. I prefer short answers">
-      <select id="memNewType"><option value="fact">fact</option><option value="preference">preference</option><option value="goal">goal</option><option value="project">project</option></select>
+      <select id="memNewType"><option value="fact">fact</option><option value="preference">preference</option><option value="goal">goal</option><option value="project">project</option><option value="interpretation">my view / feeling</option></select>
       <button id="memAdd" class="primary" type="button">add</button>
     </div>
     <h3>Everything stored</h3>

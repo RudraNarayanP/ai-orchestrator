@@ -376,11 +376,56 @@ def cmd_scale(args):
     (OUT / f"memory_scale_{args.embedder}_{tag}.json").write_text(json.dumps(results, indent=1), encoding="utf-8")
 
 
+# ---------------------------------------------------------------- the family-finance cluster fixture
+def cmd_cluster(args):
+    fx = json.loads((ROOT / "data" / "eval" / "fixtures" / "memory_family_finance.json").read_text(encoding="utf-8"))
+    report = {"fixture": fx["name"], "embedders": {}}
+    for kind in args.embedders.split(","):
+        emb = HashEmbedder() if kind == "hash" else get_embedder(kind, "BAAI/bge-small-en-v1.5")
+        svc = MemoryService(MemoryStore(":memory:", emb))
+        key = {}
+        for it in fx["learn"]:
+            key[it["key"]] = svc.learn(it["say"]).added[0].memory
+        for it in fx["remember"]:
+            key[it["key"]] = svc.remember(it["text"], slot=it.get("slot")).memory
+        inv = {m.memory_id: k for k, m in key.items()}
+        rows, ok_all = [], True
+        for q in fx["queries"]:
+            block, ret = svc.context_for(q["q"])
+            keys = [inv[h.memory.memory_id] for h in ret.hits]
+            missing = [k for k in q["must_include"] if k not in keys]
+            leaked = [k for k in keys if k in fx["unrelated"] and k not in q["must_include"]]
+            leaked_cluster = [k for k in keys if k in fx["cluster"]] if q.get("must_not_cluster") else []
+            in_range = q["min"] <= len(keys) <= q["max"]
+            ok = not missing and not leaked and not leaked_cluster and in_range
+            ok_all &= ok
+            rows.append({"q": q["q"], "kind": ret.kind, "returned": keys, "missing": missing, "unrelated_leaked": leaked + leaked_cluster, "count_ok": in_range, "pass": ok})
+            print(("PASS " if ok else "FAIL ") + f"[{emb.name}] {q['q']!r} -> {ret.kind} {keys}" + (f" MISSING {missing}" if missing else "") + (f" LEAKED {leaked + leaked_cluster}" if leaked or leaked_cluster else ""))
+        block, _r = svc.context_for(fx["queries"][0]["q"])
+        view_line = next((ln for ln in block.splitlines() if "valuing" in ln), "")
+        checks = {
+            "interpretation_stored_as_view": key["view"].memory_type.value == "interpretation",
+            "facts_stored_as_facts": key["coaching"].memory_type.value == "fact" and key["land"].memory_type.value == "fact",
+            "view_labelled_when_injected": "not an established fact" in view_line,
+            "sensitive_flags": all(key[k].sensitivity == "sensitive" for k in ("coaching", "land", "view", "rejected")),
+        }
+        svc.store.set_setting("sensitive", "0")
+        _b, off = svc.context_for(fx["queries"][0]["q"])
+        checks["sensitive_off_withholds_cluster"] = not any(inv[h.memory.memory_id] in fx["cluster"] and h.memory.sensitivity == "sensitive" for h in off.hits)
+        for k, v in checks.items():
+            print(("PASS " if v else "FAIL ") + f"[{emb.name}] {k}")
+            ok_all &= bool(v)
+        report["embedders"][kind] = {"name": emb.name, "queries": rows, "checks": checks, "all_pass": ok_all}
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "memory_cluster_fixture.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     q = sub.add_parser("quality"); q.add_argument("--embedders", default="hash,fastembed"); q.set_defaults(fn=cmd_quality)
     sc = sub.add_parser("scenarios"); sc.add_argument("--embedder", default="hash"); sc.set_defaults(fn=cmd_scenarios)
+    cl = sub.add_parser("cluster"); cl.add_argument("--embedders", default="hash,fastembed"); cl.set_defaults(fn=cmd_cluster)
     sl = sub.add_parser("scale"); sl.add_argument("sizes"); sl.add_argument("--embedder", default="hash")
     sl.add_argument("--floor", type=float, default=None); sl.add_argument("--tmp", default=str(ROOT / "data" / "tmp_scale")); sl.set_defaults(fn=cmd_scale)
     args = ap.parse_args()

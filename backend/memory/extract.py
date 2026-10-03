@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 from backend.memory.embed import content_tokens
 from backend.memory.schema import MemoryType, Source
+from backend.memory.topics import is_interpretation, view_text
 
 NO_REMEMBER_RE = re.compile(
     r"\b(?:do(?:n'?t| not)\s+(?:remember|save|store|keep|record)\s+(?:this|that|it|any of this)|off the record|"
@@ -26,6 +27,11 @@ HYPOTHETICAL_RE = re.compile(r"\b(?:if i|suppose i|imagine i|what if i|let'?s sa
 
 # (regex, type, slot builder, base score, neutral rewrite)
 PATTERNS: list[tuple[re.Pattern[str], MemoryType, str, float]] = [
+    # facts about the people around the user (stated, checkable): "my parents spent about INR 4L on Allen coaching"
+    (re.compile(r"\bmy (?P<k>parents|mother|father|mom|dad|mum|sister|brother|grandparents|grandmother|grandfather|family|uncle|aunt|wife|husband) (?P<v>(?:spent|paid|bought|sold|owns?|earns?|earned|has|have|had|runs?|ran|works?|worked|lost|saved|took|borrowed|refused|cannot|can't|won't|said|told|agreed|offered|promised)\b[^.;!?]*)", re.I), MemoryType.FACT, "family", 0.7),
+    # a decision the user is in the middle of / has taken
+    (re.compile(r"\bi(?:'m| am) (?:currently )?(?:considering|thinking (?:about|of)|deciding (?:whether )?(?:to )?|weighing)\s+(?P<v>[^.;!?]+)", re.I), MemoryType.GOAL, "goal", 0.7),
+    (re.compile(r"\bi (?:rejected|declined|turned down|withdrew from|chose not to (?:go to |attend |accept |join )?)\s*(?P<v>[^.;!?]+)", re.I), MemoryType.EPISODIC, "decision", 0.7),
     (re.compile(r"\bi (?:currently )?live (?:in|at|near) (?P<v>[^.,;!?]+)", re.I), MemoryType.FACT, "residence", 0.8),
     (re.compile(r"\bi(?:'ve| have)? (?:just )?moved (?:to|into) (?P<v>[^.,;!?]+)", re.I), MemoryType.FACT, "residence", 0.8),
     (re.compile(r"\bi(?:'m| am) (?:from|based in|living in) (?P<v>[^.,;!?]+)", re.I), MemoryType.FACT, "residence", 0.75),
@@ -108,6 +114,8 @@ def neutralise(sentence: str) -> str:
 def _slot(base: str, m: re.Match[str], value: str) -> str:
     if base == "attr":
         return "attr:" + "_".join(re.findall(r"[a-z0-9]+", m.group("k").lower())[:3])
+    if base in ("family", "decision"):  # many of these coexist; none replaces another
+        return None  # type: ignore[return-value]
     if base == "goal":  # goals are many; a slot per goal so a new goal never replaces an unrelated one
         return "goal:" + " ".join(re.findall(r"[a-z0-9]+", value.lower())[:4])
     if base == "pref":
@@ -158,6 +166,11 @@ def extract(message: str, *, project: str | None = None, conversation: str | Non
         sentence = sentence.strip()
         if len(sentence.split()) < 3:
             continue
+        if is_interpretation(sentence):
+            # a feeling / belief / reading of motives: the user's VIEW, kept verbatim and never as a fact
+            out.candidates.append(Candidate(content=view_text(sentence.rstrip(".! ")), memory_type=MemoryType.INTERPRETATION, slot=None, source=Source.USER_EXPLICIT,
+                                            score=0.7, entities=entities_in(sentence), project=None))
+            continue
         done = None if re.match(r"(?:yesterday|last |earlier today|this morning|on (?:mon|tues|wednes|thurs|fri|satur|sun)day)", sentence, re.I) else GOAL_DONE_RE.search(sentence)
         if done:
             out.candidates.append(Candidate(content=neutralise(sentence), memory_type=MemoryType.GOAL, slot=None, source=Source.USER_EXPLICIT, score=0.7,
@@ -189,12 +202,14 @@ def extract(message: str, *, project: str | None = None, conversation: str | Non
             continue
         # Explicit = the user stated it as a fact or rule about themselves (or asked to remember / corrected it).
         # Inferred = soft signals: casual likes, plans, work-in-progress, one-off events. Inferred never overrides explicit.
-        soft = mtype == MemoryType.EPISODIC or slot_base == "goal" and not re.search(r"my goal is", sentence, re.I) or (
+        soft = (mtype == MemoryType.EPISODIC and slot_base != "decision") or slot_base == "goal" and not re.search(r"my goal is|considering|deciding|thinking (?:about|of)|weighing", sentence, re.I) or (
             pm2 is not None and pm2.groupdict().get("verb", "").lower() in ("like", "enjoy", "dislike")) or slot_base == "pref" and False
         src = Source.USER_EXPLICIT if (explicit or correction or not soft) else Source.MODEL_INFERRED
         templ = TEMPLATES.get(slot_base or "")
         if templ and pm2 is not None and "v" in pm2.re.groupindex:
             text_out = templ.format(v=TIME_TAIL_RE.sub("", pm2.group("v").strip()))
+        elif slot_base == "family" and pm2 is not None:
+            text_out = f"{pm2.group('k').capitalize()} {pm2.group('v').strip()}"
         elif not explicit or pm2 is not None:
             text_out = neutralise(sentence)
         else:

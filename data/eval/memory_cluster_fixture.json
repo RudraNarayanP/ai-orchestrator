@@ -1,0 +1,173 @@
+{
+ "fixture": "family-finance-education-decision",
+ "embedders": {
+  "hash": {
+   "name": "hash-v1",
+   "queries": [
+    {
+     "q": "why can't my parents fund this?",
+     "kind": "cluster",
+     "returned": [
+      "rejected",
+      "decision",
+      "view",
+      "land",
+      "coaching"
+     ],
+     "missing": [],
+     "unrelated_leaked": [],
+     "count_ok": true,
+     "pass": true
+    },
+    {
+     "q": "remember why I rejected that university?",
+     "kind": "cluster",
+     "returned": [
+      "rejected",
+      "view",
+      "coaching",
+      "decision"
+     ],
+     "missing": [],
+     "unrelated_leaked": [],
+     "count_ok": true,
+     "pass": true
+    },
+    {
+     "q": "what is my gaming rank?",
+     "kind": "personal",
+     "returned": [
+      "gaming"
+     ],
+     "missing": [],
+     "unrelated_leaked": [],
+     "count_ok": true,
+     "pass": true
+    },
+    {
+     "q": "how often do I work out?",
+     "kind": "personal",
+     "returned": [],
+     "missing": [
+      "gym"
+     ],
+     "unrelated_leaked": [],
+     "count_ok": false,
+     "pass": false
+    },
+    {
+     "q": "which laptop or PC should I buy for coding, given my build?",
+     "kind": "personal",
+     "returned": [],
+     "missing": [
+      "pc"
+     ],
+     "unrelated_leaked": [],
+     "count_ok": false,
+     "pass": false
+    },
+    {
+     "q": "what is the tuition fee at Oxford University?",
+     "kind": "general",
+     "returned": [],
+     "missing": [],
+     "unrelated_leaked": [],
+     "count_ok": true,
+     "pass": true
+    }
+   ],
+   "checks": {
+    "interpretation_stored_as_view": true,
+    "facts_stored_as_facts": true,
+    "view_labelled_when_injected": true,
+    "sensitive_flags": true,
+    "sensitive_off_withholds_cluster": true
+   },
+   "all_pass": false
+  },
+  "fastembed": {
+   "name": "BAAI/bge-small-en-v1.5",
+   "queries": [
+    {
+     "q": "why can't my parents fund this?",
+     "kind": "cluster",
+     "returned": [
+      "rejected",
+      "decision",
+      "view",
+      "coaching",
+      "land"
+     ],
+     "missing": [],
+     "unrelated_leaked": [],
+     "count_ok": true,
+     "pass": true
+    },
+    {
+     "q": "remember why I rejected that university?",
+     "kind": "cluster",
+     "returned": [
+      "rejected",
+      "coaching",
+      "decision",
+      "view"
+     ],
+     "missing": [],
+     "unrelated_leaked": [],
+     "count_ok": true,
+     "pass": true
+    },
+    {
+     "q": "what is my gaming rank?",
+     "kind": "personal",
+     "returned": [
+      "gaming"
+     ],
+     "missing": [],
+     "unrelated_leaked": [],
+     "count_ok": true,
+     "pass": true
+    },
+    {
+     "q": "how often do I work out?",
+     "kind": "personal",
+     "returned": [
+      "gym"
+     ],
+     "missing": [],
+     "unrelated_leaked": [],
+     "count_ok": true,
+     "pass": true
+    },
+    {
+     "q": "which laptop or PC should I buy for coding, given my build?",
+     "kind": "personal",
+     "returned": [
+      "pc"
+     ],
+     "missing": [],
+     "unrelated_leaked": [],
+     "count_ok": true,
+     "pass": true
+    },
+    {
+     "q": "what is the tuition fee at Oxford University?",
+     "kind": "general",
+     "returned": [],
+     "missing": [],
+     "unrelated_leaked": [],
+     "count_ok": true,
+     "pass": true
+    }
+   ],
+   "checks": {
+    "interpretation_stored_as_view": true,
+    "facts_stored_as_facts": true,
+    "view_labelled_when_injected": true,
+    "sensitive_flags": true,
+    "sensitive_off_withholds_cluster": true
+   },
+   "all_pass": true
+  }
+ }
+}

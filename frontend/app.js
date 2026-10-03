@@ -62,6 +62,7 @@ async function boot() {
   $("#memForgetAll").addEventListener("click", memForgetAll);
   $("#memInject").addEventListener("change", () => memSetting({ inject: $("#memInject").checked }));
   $("#memCapture").addEventListener("change", () => memSetting({ capture: $("#memCapture").checked }));
+  $("#memSensitive").addEventListener("change", () => memSetting({ sensitive: $("#memSensitive").checked }));
   $("#closeHistory").addEventListener("click", () => openPanel(null));
   $("#historyList").addEventListener("keydown", historyKeys);
   $("#question").addEventListener("keydown", questionKeys);
@@ -173,12 +174,12 @@ const jsonOpts = (method, body) => ({ method, headers: { "Content-Type": "applic
 function memCard(m, opts = {}) {
   const card = el("div", "mem");
   card.append(el("div", "mem-text", m.content));
-  const bits = [m.memory_type, m.source === "user_explicit" ? "you said it" : "inferred", `confidence ${Math.round((m.confidence || 0) * 100)}%`, m.status.toLowerCase()];
+  const bits = [m.memory_type === "interpretation" ? "your view, not a fact" : m.memory_type, m.sensitivity === "sensitive" ? "sensitive" : null, m.source === "user_explicit" ? "you said it" : "inferred", `confidence ${Math.round((m.confidence || 0) * 100)}%`, m.status.toLowerCase()];
   if (m.project) bits.push("project: " + m.project);
   bits.push("saved " + fmtTime(m.created_at));
   if (m.updated_at && Math.abs(m.updated_at - m.created_at) > 60) bits.push("updated " + fmtTime(m.updated_at));
   const chips = el("div", "chips");
-  for (const b of bits) chips.append(el("span", "chip", b));
+  for (const b of bits.filter(Boolean)) chips.append(el("span", "chip", b));
   card.append(chips);
   if (m.why?.length) card.append(el("div", "mem-why", "why: " + m.why.join("; ")));
   if (!opts.readonly) {
@@ -208,6 +209,7 @@ async function loadMemory() {
     const s = await memCall("/api/memory/settings");
     $("#memInject").checked = !!s.inject;
     $("#memCapture").checked = !!s.capture;
+    $("#memSensitive").checked = !!s.sensitive;
     const status = $("#memStatus").value;
     const data = await memCall("/api/memory?limit=200" + (status ? "&status=" + status : ""));
     const t = data.stats?.total ?? data.items.length;

@@ -50,7 +50,7 @@ async def main() -> int:
             orig = ad.ask
 
             async def spy(job_id, prompt, round_no=1, emit=None, continue_thread=False, _o=orig, _n=name):
-                prompts.append({"provider": _n, "round": round_no, "has_memory_block": MARK in prompt, "mentions_atlas_fact": "PostgreSQL 16" in prompt,
+                prompts.append({"provider": _n, "round": round_no, "continue_thread": bool(continue_thread), "has_memory_block": MARK in prompt, "mentions_atlas_fact": "PostgreSQL 16" in prompt,
                                 "mentions_kyiv": "Kyiv" in prompt, "head": prompt[:260]})
                 return await _o(job_id, prompt, round_no, emit, continue_thread)
 
@@ -66,8 +66,10 @@ async def main() -> int:
             case = {
                 "case": label, "question": question, "project": project, "expect_memory_block": expect_block, "memory_kind": finished.memory_kind,
                 "memory_used": [m["content"] for m in finished.memory_used], "prompts_sent": len(prompts),
-                "prompts_with_block": sum(p["has_memory_block"] for p in prompts), "providers": sorted({p["provider"] for p in prompts}),
-                "block_matches_expectation": all(p["has_memory_block"] == expect_block for p in prompts) if prompts else None,
+                "prompts_with_block": sum(p["has_memory_block"] for p in prompts), "prompt_flags": [(p["provider"], p["round"], p["continue_thread"], p["has_memory_block"]) for p in prompts], "providers": sorted({p["provider"] for p in prompts}),
+                "fresh_prompts": sum(not p["continue_thread"] for p in prompts), "fresh_prompts_with_block": sum(p["has_memory_block"] for p in prompts if not p["continue_thread"]),
+                "thread_followups_with_block": sum(p["has_memory_block"] for p in prompts if p["continue_thread"]),
+                "block_matches_expectation": all(p["has_memory_block"] == expect_block for p in prompts if not p["continue_thread"]) if prompts else None,
                 "memory_text_in_claims_evidence_or_answer": ("PostgreSQL 16 on a single VPS" in blob) or ("Kyiv" in blob and "Kyiv" not in question),
                 "status": finished.status.value, "answer_chars": len(ans.answer) if ans else 0, "answer_head": (ans.answer[:200] if ans else None),
                 "confidence": ans.confidence_label if ans else None, "sources": len(ans.sources) if ans else 0, "error": finished.error,

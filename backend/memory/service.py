@@ -14,8 +14,10 @@ from backend.memory.extract import Candidate, extract
 from backend.memory.retrieve import Retrieval, Retriever
 from backend.memory.schema import Memory, MemoryType, Source, Status
 from backend.memory.store import AddResult, MemoryStore
+from backend.memory.topics import view_quote
 
 CONTEXT_HEADER = "Relevant context about the user:"
+VIEW_NOTE = "Entries marked as the user's own view are their feelings or beliefs, not established facts: never state them as facts."
 CONTEXT_FOOTER = (
     "Use when relevant. Don't mention it was supplied. Don't assume irrelevant memories apply. "
     "The user's current instructions override this context."
@@ -30,8 +32,12 @@ def format_context(hits: list[Any]) -> str:
     for h in hits:
         m = h.memory if hasattr(h, "memory") else h
         suffix = " (earlier, since changed)" if getattr(h, "history", False) else ""
-        lines.append(f"- {m.content.rstrip('.')}{suffix}")
-    return CONTEXT_HEADER + "\n" + "\n".join(lines) + "\n" + CONTEXT_FOOTER
+        if m.memory_type == MemoryType.INTERPRETATION:
+            lines.append(f"- (the user's own view, not an established fact) {view_quote(m.content)}{suffix}")
+        else:
+            lines.append(f"- {m.content.rstrip('.')}{suffix}")
+    views = any((h.memory if hasattr(h, "memory") else h).memory_type == MemoryType.INTERPRETATION for h in hits)
+    return CONTEXT_HEADER + "\n" + "\n".join(lines) + "\n" + (VIEW_NOTE + " " if views else "") + CONTEXT_FOOTER
 
 
 def approx_tokens(text: str) -> int:

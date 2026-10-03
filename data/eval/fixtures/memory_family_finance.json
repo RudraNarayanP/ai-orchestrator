@@ -1,0 +1,31 @@
+{
+  "name": "family-finance-education-decision",
+  "description": "Facts and the user's interpretation about family money and a study-abroad decision, stored among unrelated memories. A vague follow-up must retrieve the connected cluster (facts + the decision + the user's view, labelled as a view) and nothing unrelated.",
+  "learn": [
+    {"key": "coaching", "say": "My parents spent about INR 4 lakh on Allen coaching."},
+    {"key": "land", "say": "My parents bought land worth roughly INR 50 lakh."},
+    {"key": "decision", "say": "I'm considering studying abroad for my master's."},
+    {"key": "rejected", "say": "I rejected the University of Leeds offer because the tuition was GBP 25,000."},
+    {"key": "view", "say": "I may read their refusal to fund as not valuing my education."}
+  ],
+  "remember": [
+    {"key": "gaming", "text": "Plays Valorant with friends every evening and is ranked Diamond"},
+    {"key": "gym", "text": "Goes to the gym four times a week and does squats and bench press"},
+    {"key": "pc", "text": "Built a gaming PC with an RTX 4070 and 32 GB RAM"},
+    {"key": "girlfriend", "text": "Girlfriend is called Olena and they met at college"},
+    {"key": "brother", "text": "Brother Taras lives in Lviv"},
+    {"key": "coffee", "text": "Likes strong black coffee in the morning"},
+    {"key": "cat", "text": "Owns a cat called Miso"},
+    {"key": "city", "text": "Lives in Kyiv", "slot": "residence"}
+  ],
+  "cluster": ["coaching", "land", "decision", "rejected", "view"],
+  "unrelated": ["gaming", "gym", "pc", "girlfriend", "brother", "coffee", "cat", "city"],
+  "queries": [
+    {"q": "why can't my parents fund this?", "must_include": ["coaching", "land", "decision", "view"], "min": 4, "max": 6},
+    {"q": "remember why I rejected that university?", "must_include": ["rejected", "coaching", "decision"], "min": 3, "max": 6},
+    {"q": "what is my gaming rank?", "must_include": ["gaming"], "min": 1, "max": 2, "must_not_cluster": true},
+    {"q": "how often do I work out?", "must_include": ["gym"], "min": 1, "max": 2, "must_not_cluster": true},
+    {"q": "which laptop or PC should I buy for coding, given my build?", "must_include": ["pc"], "min": 1, "max": 3, "must_not_cluster": true},
+    {"q": "what is the tuition fee at Oxford University?", "must_include": [], "min": 0, "max": 0}
+  ]
+}

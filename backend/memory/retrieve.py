@@ -16,6 +16,7 @@ from typing import Any
 from backend.memory.embed import content_tokens
 from backend.memory.schema import Memory, MemoryType, Status
 from backend.memory.store import MemoryStore
+from backend.memory.topics import SENSITIVE_TOPICS, topics_for
 
 PERSONAL_RE = re.compile(r"\b(i|i'm|i've|i'd|i'll|me|my|mine|myself|we|our|us)\b", re.I)
 ADVICE_RE = re.compile(r"\b(recommend|suggest|should i|what should|best (?:way|option|choice) for|for me|help me|advise|which (?:one )?(?:is|would be) (?:best|better) for)\b", re.I)
@@ -36,7 +37,7 @@ class Hit:
     def public(self) -> dict[str, Any]:
         return {"memory_id": self.memory.memory_id, "content": self.memory.content, "memory_type": self.memory.memory_type.value,
                 "source": self.memory.source.value, "confidence": self.memory.confidence, "status": self.memory.status.value,
-                "project": self.memory.project, "created_at": self.memory.created_at, "updated_at": self.memory.updated_at,
+                "project": self.memory.project, "sensitivity": self.memory.sensitivity, "created_at": self.memory.created_at, "updated_at": self.memory.updated_at,
                 "score": round(self.score, 3), "why": self.why}
 
 
@@ -52,7 +53,9 @@ class Retrieval:
     stages: dict[str, float] = field(default_factory=dict)
 
 
-BUDGETS = {"general": 0, "personal": 2, "project": 5, "complex": 8}
+BUDGETS = {"general": 0, "personal": 2, "project": 5, "cluster": 6, "complex": 8}
+SENSITIVE_REL = 0.30  # a sensitive memory needs a strong direct match unless the question is plainly about its domain
+DEICTIC_RE = re.compile(r"\b(this|that|these|those|it|them|the same|that one)\b|\bremember (?:why|when|what|how|that)\b|\bwe (?:talked|discussed|spoke)\b|\bearlier\b|\blast time\b", re.I)
 HALF_LIFE_DAYS = {MemoryType.EPISODIC: 30.0, MemoryType.GOAL: 120.0, MemoryType.CONVERSATION: 2.0}
 W = {"rel": 0.46, "importance": 0.14, "confidence": 0.08, "recency": 0.08, "source": 0.08, "project": 0.10, "graph": 0.06}
 
@@ -91,6 +94,46 @@ class Retriever:
             kind = "general"
         return kind, proj, ent_hits, history
 
+    def _expand_cluster(self, query: str, qtopics: set[str], hits: list[Hit], proj: str | None, conversation: str | None, now: float) -> list[Hit]:
+        seeds = [h for h in hits if h.relevance >= 0.2 and (not qtopics or (set(h.memory.topics) & qtopics))][:3]
+        if not seeds:
+            return []
+        topics = set(qtopics)
+        for h in seeds:
+            topics |= set(h.memory.topics)
+        have = {h.memory.memory_id for h in hits}
+        deictic = bool(DEICTIC_RE.search(query))
+        sensitive_ok = bool(qtopics & SENSITIVE_TOPICS) or any(h.memory.sensitivity == "sensitive" for h in seeds)
+        out: list[Hit] = []
+        for n in self.store.topic_memories(topics):
+            if n.memory_id in have or n.memory_type == MemoryType.CONVERSATION:
+                continue
+            if n.memory_type == MemoryType.GOAL and n.goal_active is False:
+                continue
+            exp = n.metadata.get("expires_at")
+            if exp and exp < now:
+                continue
+            if n.scope == "project" and n.project and (not proj or n.project.lower() != proj.lower()):
+                continue
+            if n.sensitivity == "sensitive" and (not self.store.sensitive_enabled or not sensitive_ok):
+                continue
+            shared = set(n.topics) & topics
+            need = 1 if ("decision" in n.topics and deictic) else 2
+            if len(shared) < need:
+                continue
+            rel = min(0.6, 0.30 + 0.08 * len(shared))
+            age_days = max(0.0, (now - max(n.updated_at, n.created_at)) / 86400.0)
+            hl = HALF_LIFE_DAYS.get(n.memory_type)
+            recency = 0.5 ** (age_days / hl) if hl else 1.0 / (1.0 + age_days / 730.0)
+            sig = {"rel": rel, "importance": n.importance, "confidence": n.confidence, "recency": recency,
+                   "source": 1.0 if n.source.value == "user_explicit" else 0.6, "project": 0.0, "graph": 1.0}
+            why = [f"connected to your question through {', '.join(sorted(shared))}", "you said this" if n.source.value == "user_explicit" else "inferred from earlier chats"]
+            if n.memory_type == MemoryType.INTERPRETATION:
+                why.append("your own view, not a fact")
+            out.append(Hit(n, sum(W[k] * v for k, v in sig.items()), rel, sig, why))
+        out.sort(key=lambda h: -h.score)
+        return out[:8]
+
     # ------------------------------------------------------------ the pipeline
     def retrieve(self, query: str, *, project: str | None = None, conversation: str | None = None, now: float | None = None,
                  budget: int | None = None, include_history: bool | None = None, min_relevance: float | None = None) -> Retrieval:
@@ -112,6 +155,7 @@ class Retriever:
         emb = self.store.embedder
         floor = emb.floor if min_relevance is None else min_relevance
         qterms = list(dict.fromkeys(content_tokens(query)))
+        qtopics = set(topics_for(query))
         # --- candidates
         t1 = time.perf_counter()
         qvec = emb.embed([query])[0]
@@ -162,6 +206,8 @@ class Retriever:
                 continue  # project isolation: another project's memory never leaks in
             if m.scope == "project" and m.project and not proj:
                 continue  # a project-scoped memory is only for that project's questions
+            if m.sensitivity == "sensitive" and not self.store.sensitive_enabled:
+                continue  # the user switched sensitive memories off for injection
             c = cos.get(mid, 0.0)
             vec_rel = max(0.0, (c - floor) / (1.0 - floor)) if c >= floor else 0.0
             matched = sum(1 for t in qterms if t in set(content_tokens(m.content + " " + " ".join(m.entities) + " " + " ".join(m.topics))))
@@ -178,6 +224,8 @@ class Retriever:
             in_proj = bool(proj and m.project and m.project.lower() == proj.lower())
             if rel < 0.18 and not in_proj:
                 continue
+            if m.sensitivity == "sensitive" and rel < SENSITIVE_REL and not (qtopics & set(m.topics)):
+                continue  # personal/family/money/health: only when strongly matched or the question is about that domain
             if rel < 0.30 and in_proj and kind != "complex" and c < floor:
                 continue
             age_days = max(0.0, (now - max(m.updated_at, m.created_at)) / 86400.0)
@@ -206,6 +254,13 @@ class Retriever:
             hits.append(Hit(m, score, rel, sig, why, history=is_history))
         res.stages["score_ms"] = (time.perf_counter() - t1) * 1000
         hits.sort(key=lambda h: -h.score)
+        # --- context cluster: a vague follow-up pulls the memories connected to its strongest matches (shared life-domain topics)
+        added = self._expand_cluster(query, qtopics, hits, proj, conversation, now)
+        if added:
+            hits.extend(added)
+            hits.sort(key=lambda h: -h.score)
+            kind = res.kind = "cluster"
+            cap = res.budget = max(cap, BUDGETS["cluster"])
         # --- dedupe near-identical memories, then cut to the budget
         out: list[Hit] = []
         for h in hits:

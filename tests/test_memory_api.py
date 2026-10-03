@@ -101,3 +101,18 @@ def test_memory_switched_off_is_503(tmp_path):
 def test_consolidate_endpoint(mclient):
     add(mclient, "Likes strong black coffee in the morning")
     assert mclient.post("/api/memory/consolidate").json() == {"merged": 0}
+
+def test_interpretation_and_sensitivity_through_the_api(mclient):
+    r = mclient.post("/api/memory", json={"content": "I feel like my parents don't care about my future", "memory_type": "fact"}).json()
+    assert r["memory"]["memory_type"] == "interpretation" and r["memory"]["sensitivity"] == "sensitive" and r["notes"]
+    mclient.post("/api/memory", json={"content": "Parents bought land worth roughly INR 50 lakh"})
+    mclient.post("/api/memory", json={"content": "Owns a cat called Miso"})
+    sens = mclient.get("/api/memory?sensitivity=sensitive").json()["items"]
+    assert len(sens) == 2 and mclient.get("/api/memory/stats").json()["sensitive"] == 2
+    s = mclient.post("/api/memory/settings", json={"sensitive": False}).json()
+    assert s["sensitive"] is False and s["inject"] is True
+    hits = mclient.post("/api/memory/search", json={"query": "why can't my parents fund this land purchase?"}).json()["hits"]
+    assert not any(h["sensitivity"] == "sensitive" for h in hits)
+    mclient.post("/api/memory/settings", json={"sensitive": True})
+    mid = next(i["memory_id"] for i in sens if "land" in i["content"])
+    assert mclient.patch(f"/api/memory/{mid}", json={"sensitivity": "normal"}).json()["sensitivity"] == "normal"
