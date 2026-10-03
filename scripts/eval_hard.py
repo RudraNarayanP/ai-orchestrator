@@ -245,6 +245,9 @@ def ask(base: str, question: str, mode: str, max_rounds: int, timeout_s: int) ->
     return call(base, f"/api/jobs/{jid}"), time.time() - started
 
 
+SECRET_FOR_CHILD = {"key": ""}
+
+
 def trimmed_config(skip: list[str], dest: Path) -> list[str]:
     cfg_path = ROOT / "config" / "settings.yaml"
     if not cfg_path.exists():
@@ -253,6 +256,12 @@ def trimmed_config(skip: list[str], dest: Path) -> list[str]:
     for name in skip:
         if name in (raw.get("providers") or {}):
             raw["providers"][name]["enabled"] = False
+    # The temp config never holds the API key: it is handed to the child through the environment, so a
+    # killed run cannot leave a key on disk.
+    for role in ("verifier", "analysis", "vision"):
+        if isinstance(raw.get(role), dict) and raw[role].get("api_key"):
+            SECRET_FOR_CHILD["key"] = SECRET_FOR_CHILD["key"] or str(raw[role]["api_key"])
+            raw[role]["api_key"] = ""
     dest.write_text(yaml.safe_dump(raw, sort_keys=False, allow_unicode=True), encoding="utf-8")
     return [n for n, p in (raw.get("providers") or {}).items() if p.get("enabled")]
 
@@ -288,6 +297,8 @@ def main() -> int:
     port = free_port()
     base = f"http://127.0.0.1:{port}"
     env = dict(os.environ, OMNIBRAIN_CONFIG=str(cfg_file), PYTHONIOENCODING="utf-8")
+    if SECRET_FOR_CHILD["key"] and not env.get("OPENROUTER_API_KEY"):
+        env["OPENROUTER_API_KEY"] = SECRET_FOR_CHILD["key"]
     log = open(OUT_DIR / f"_server_{stamp}.log", "wb")
     server = subprocess.Popen([sys.executable, str(ROOT / "run.py"), "serve", "--port", str(port)], cwd=ROOT, env=env, stdout=log, stderr=log)
     records: list[dict[str, Any]] = []

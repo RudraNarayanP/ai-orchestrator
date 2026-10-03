@@ -9,3 +9,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 config/settings.yaml
+
+data/eval/_*

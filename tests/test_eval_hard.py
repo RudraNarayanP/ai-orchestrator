@@ -88,3 +88,18 @@ def test_markdown_report_has_a_table_row_per_question():
     rec = eval_hard.analyse(q(), snapshot("It's 13 \u2696\uFE0F", evidence=[ev("https://www.legislation.gov.uk/x", "legislation.gov.uk", "13")], sources=["https://www.legislation.gov.uk/x"]), 4)
     md = eval_hard.render_markdown("20261003_000000", [rec], {"providers": ["chatgpt"], "verifier": "ready", "mode": "STANDARD", "max_rounds": 2})
     assert "| t | answer | **PASS** |" in md and "Totals: PASS 1" in md
+
+def test_temp_config_never_contains_the_api_key(tmp_path, monkeypatch):
+    fake = "sk-or-v1-" + "0123456789abcdef" * 4
+    src = tmp_path / "settings.yaml"
+    src.write_text(yaml.safe_dump({"providers": {"chatgpt": {"enabled": True}}, "verifier": {"api_key": fake, "model": "m"}, "analysis": {"api_key": fake}}), encoding="utf-8")
+    real_root = eval_hard.ROOT
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "settings.yaml").write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setattr(eval_hard, "ROOT", tmp_path)
+    out = tmp_path / "cfg.yaml"
+    eval_hard.trimmed_config([], out)
+    assert fake not in out.read_text(encoding="utf-8")
+    assert eval_hard.SECRET_FOR_CHILD["key"] == fake, "the key is passed to the child through the environment instead"
+    eval_hard.SECRET_FOR_CHILD["key"] = ""
+    assert real_root.exists()
