@@ -151,7 +151,7 @@ def test_uvicorn_output_lands_in_the_same_file(tmp_path):
     assert "file" in config["handlers"] and all("file" in config["loggers"][n]["handlers"] for n in ("uvicorn", "uvicorn.access"))
     logging.config.dictConfig(config)
     logging.getLogger("uvicorn.error").info("Uvicorn running on http://127.0.0.1:8730")
-    logging.getLogger("uvicorn.access").info('127.0.0.1 - "GET /api/doctor HTTP/1.1" 200')
+    logging.getLogger("uvicorn.access").info('%s - "%s %s HTTP/%s" %d', "127.0.0.1:5000", "GET", "/api/doctor", "1.1", 200)
     text = read(target)
     assert text.count("Uvicorn running") == 1, "uvicorn.error propagates to uvicorn; each line must be written once"
     assert text.count("GET /api/doctor") == 1
