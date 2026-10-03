@@ -91,6 +91,18 @@ def base_settings(**overrides: Any) -> Settings:
 
 
 @pytest.fixture
+def fake_openai():
+    """A scripted OpenAI-compatible server on localhost (no Ollama needed)."""
+    from tests.fake_openai import FakeOpenAI
+
+    server = FakeOpenAI().start()
+    try:
+        yield server
+    finally:
+        server.stop()
+
+
+@pytest.fixture
 def settings() -> Settings:
     return base_settings()
 

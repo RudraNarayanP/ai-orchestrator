@@ -98,6 +98,8 @@ class ChatAdapter:
         self.sel = selectors or selectors_for(provider)
         self._sel_dict = asdict(self.sel)
         self._pages_with_library: set[int] = set()
+        self._prompt_sent = False
+        self.vision_client = None  # tests inject a scripted client; otherwise built from settings.vision
 
     # ---------------------------------------------------------------- plumbing
 
@@ -196,7 +198,47 @@ class ChatAdapter:
         round_no: int = 1,
         emit: EventHook | None = None,
     ) -> ProviderResponse:
+        """DOM path first; the vision fallback only if that path ends BROKEN."""
         emit = emit or (lambda *a, **k: asyncio.sleep(0))
+        self._prompt_sent = False
+        response = await self._ask_dom(job_id, prompt, round_no, emit)
+        if self._vision_eligible(response):
+            response = await self._vision_fallback(response, prompt, round_no, emit)
+        return response
+
+    def _vision_eligible(self, response: ProviderResponse) -> bool:
+        """Selector drift only, and only before anything was sent.
+
+        BROKEN after the prompt went out ("no new message appeared") is not retried
+        through vision: that would submit the question a second time.
+        """
+        return (
+            self.is_chat
+            and response.status == ProviderStatus.BROKEN
+            and not self._prompt_sent
+            and (getattr(self, "vision_client", None) is not None or self.settings.vision.provider != "disabled")
+        )
+
+    async def _vision_fallback(self, response: ProviderResponse, prompt: str, round_no: int, emit: EventHook) -> ProviderResponse:
+        from backend.browser.vision import VisionFallback, VisionOutcome, apply_outcome
+
+        fallback = VisionFallback(self.settings, client=getattr(self, "vision_client", None))
+        if not fallback.available:
+            return response
+        dom_error = response.error
+        await self._safe_emit(emit, "provider", f"{self.provider}: DOM path broken ({dom_error}); trying vision fallback", self.provider, round_no)
+        try:
+            page = await self.engine.open_research_page(self.provider, self.cfg.new_chat_url or self.cfg.url)
+            outcome = await fallback.run(page, prompt, emit, self.provider, round_no)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 -- the fallback must never kill the job either
+            outcome = VisionOutcome("failed", f"{type(exc).__name__}: {exc}"[:200])
+        apply_outcome(response, outcome, prompt)
+        await self._safe_emit(emit, "provider", f"{self.provider}: vision fallback -> {outcome.kind} {outcome.reason}".strip(), self.provider, round_no)
+        return self._finish(response)
+
+    async def _ask_dom(self, job_id: str, prompt: str, round_no: int, emit: EventHook) -> ProviderResponse:
         response = ProviderResponse(
             id=new_id("resp"),
             job_id=job_id,
@@ -224,6 +266,10 @@ class ChatAdapter:
                     continue
                 return self._finish(response)
             if outcome:
+                return self._finish(response)
+            if attempt + 1 >= attempts:
+                # Out of attempts: keep the terminal status the last attempt set
+                # (BROKEN, LOGGED_OUT, ...) instead of resetting it to LAUNCHING.
                 return self._finish(response)
             response.status = ProviderStatus.LAUNCHING
             await emit("provider", f"{self.provider}: retrying ({response.error or 'no usable answer'})", self.provider, round_no)
@@ -424,6 +470,7 @@ class ChatAdapter:
         return bool(length and length >= min(40, int(len(prompt) * 0.4)))
 
     async def _submit(self, page) -> None:
+        self._prompt_sent = True
         clicked = await self._call(page, "clickSend", self._sel_dict)
         if isinstance(clicked, str):
             try:

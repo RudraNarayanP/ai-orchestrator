@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Canvas UI</title>
+<style>
+  html, body { margin: 0; background: #111; }
+  canvas { display: block; width: 900px; height: 560px; }
+</style>
+</head>
+<body>
+<canvas id="c" width="900" height="560" tabindex="0"></canvas>
+<script>
+/*
+ * A chat UI drawn entirely on a canvas: there is no textarea, no contenteditable,
+ * no button and no text node anywhere in the DOM, so every DOM selector strategy
+ * finds nothing. This is the "selector drift taken to the limit" fixture for the
+ * vision fallback (backend/browser/vision.py).
+ *
+ *   (default)   a working chat: click the box, type, Enter or click the arrow
+ *   ?captcha=1  a human check drawn on the canvas; nothing here may be clicked
+ *   ?iframe=1   the chat plus a captcha-looking iframe in the DOM
+ *
+ * window.__canvas records everything the page received so tests can prove what
+ * was (and was not) done to it.
+ */
+const params = new URLSearchParams(location.search);
+const MODE = params.get('captcha') ? 'captcha' : 'chat';
+if (params.get('iframe')) {
+  const f = document.createElement('iframe');
+  f.title = 'reCAPTCHA challenge';
+  f.src = 'about:blank';
+  f.style.cssText = 'position:absolute;left:0;top:562px;width:200px;height:40px;';
+  document.body.append(f);
+}
+const ANSWER = 'The Acme Bolt launched on 14 May 2026 and costs $549.';
+const cv = document.getElementById('c');
+const g = cv.getContext('2d');
+const S = {
+  mode: MODE, focused: false, typed: '', submitted: null, shown: '', finished: false,
+  events: [],
+  layout: {
+    composer: {x: 340, y: 510, label: 'message box at the bottom'},
+    send: {x: 840, y: 510, label: 'round arrow button'},
+  },
+};
+window.__canvas = S;
+
+function draw() {
+  g.fillStyle = '#16181d'; g.fillRect(0, 0, 900, 560);
+  g.fillStyle = '#e8e8e8'; g.font = '20px sans-serif';
+  if (MODE === 'captcha') {
+    g.fillText('Select all squares with traffic lights', 40, 60);
+    for (let i = 0; i < 9; i++) {
+      g.fillStyle = '#394150'; g.fillRect(40 + (i % 3) * 110, 90 + Math.floor(i / 3) * 110, 100, 100);
+    }
+    g.fillStyle = '#fff'; g.fillRect(500, 90, 24, 24);
+    g.fillStyle = '#e8e8e8'; g.fillText("I'm not a robot", 536, 110);
+    return;
+  }
+  g.fillText('Ask me anything', 40, 40);
+  if (S.submitted) {
+    g.fillStyle = '#233a4a'; g.fillRect(300, 70, 560, 40);
+    g.fillStyle = '#e8e8e8'; g.font = '14px sans-serif';
+    g.fillText(S.submitted.slice(0, 70), 312, 95);
+    g.font = '20px sans-serif';
+    g.fillStyle = '#e8e8e8';
+    wrap(S.shown, 40, 160, 800, 28);
+    if (!S.finished && S.shown) { g.fillText('...', 40, 400); }
+  }
+  g.strokeStyle = S.focused ? '#8ab4f8' : '#4a5160'; g.lineWidth = 2;
+  g.strokeRect(40, 480, 760, 60);
+  g.fillStyle = '#e8e8e8'; g.font = '16px sans-serif';
+  g.fillText(S.typed ? S.typed.slice(-80) : 'Type here', 56, 516);
+  g.fillStyle = '#2b3a55'; g.beginPath(); g.arc(840, 510, 26, 0, 7); g.fill();
+  g.fillStyle = '#fff'; g.fillText('^', 836, 517);
+}
+function wrap(text, x, y, maxW, lh) {
+  let line = '';
+  for (const word of text.split(' ')) {
+    const test = line ? line + ' ' + word : word;
+    if (g.measureText(test).width > maxW) { g.fillText(line, x, y); y += lh; line = word; } else { line = test; }
+  }
+  if (line) g.fillText(line, x, y);
+}
+function submit() {
+  if (!S.typed.trim() || S.submitted) return;
+  S.submitted = S.typed; S.typed = '';
+  let i = 0;
+  setTimeout(() => {
+    const t = setInterval(() => {
+      i += 5; S.shown = ANSWER.slice(0, i); draw();
+      if (i >= ANSWER.length) { clearInterval(t); S.finished = true; draw(); }
+    }, 120);
+  }, 900);
+  draw();
+}
+cv.addEventListener('mousedown', (e) => {
+  const r = cv.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  S.events.push({t: 'click', x: Math.round(x), y: Math.round(y)});
+  if (MODE === 'captcha') return;
+  S.focused = x >= 40 && x <= 800 && y >= 480 && y <= 540;
+  if (Math.hypot(x - 840, y - 510) <= 28) submit();
+  draw();
+});
+document.addEventListener('keydown', (e) => {
+  S.events.push({t: 'key', k: e.key});
+  if (MODE === 'captcha' || !S.focused) return;
+  if (e.key === 'Enter') { e.preventDefault(); submit(); }
+  else if (e.key === 'Backspace') { S.typed = S.typed.slice(0, -1); }
+  else if (e.key.length === 1) { S.typed += e.key; }
+  draw();
+});
+draw();
+</script>
+</body>
+</html>

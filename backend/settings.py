@@ -112,6 +112,30 @@ class AnalysisConfig(BaseModel):
     timeout_s: int = 120
 
 
+class VisionConfig(BaseModel):
+    """Level-2 fallback: read the page as pixels when the DOM path is BROKEN.
+
+    Off unless a vision-capable OpenAI-compatible endpoint is configured. It only
+    ever runs after selector drift; it never clicks a captcha, a login control or
+    a payment control (see backend/browser/vision.py).
+    """
+
+    provider: str = "disabled"
+    model: str = ""
+    base_url: str = ""
+    api_key: str = ""
+    temperature: float = 0.0
+    max_tokens: int = 1500
+    timeout_s: int = 90
+    max_calls: int = 6
+    """Hard cap on vision requests per fallback attempt (1 locate + transcriptions)."""
+
+    wait_s: int = 90
+    """How long to wait for the on-screen answer to stop changing."""
+
+    stable_s: float = 3.0
+
+
 class ResearchConfig(BaseModel):
     mode: Literal["QUICK", "STANDARD", "DEEP_RESEARCH"] = "STANDARD"
     max_rounds: int = 3
@@ -154,6 +178,7 @@ class Settings(BaseModel):
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
     verifier: VerifierConfig = Field(default_factory=VerifierConfig)
     analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
+    vision: VisionConfig = Field(default_factory=VisionConfig)
     research: ResearchConfig = Field(default_factory=ResearchConfig)
     search: SearchConfig = Field(default_factory=SearchConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
@@ -167,7 +192,7 @@ class Settings(BaseModel):
     def public_dict(self) -> dict[str, Any]:
         """Config handed to the frontend, with every secret stripped."""
         data = self.model_dump(mode="json")
-        for section in ("verifier", "analysis"):
+        for section in ("verifier", "analysis", "vision"):
             block = data.get(section, {})
             has_key = bool(getattr(self, section).api_key)
             if "api_key" in block:

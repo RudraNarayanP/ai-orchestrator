@@ -56,6 +56,20 @@ analysis:
   temperature: 0.3
   max_tokens: 2048
 
+vision:
+  # Level-2 fallback: when the DOM path reports BROKEN (selector drift, or a UI
+  # drawn on a canvas) and the prompt has not been sent yet, screenshot the page
+  # and ask a vision-capable OpenAI-compatible model where the composer is.
+  # OFF by default. It never touches a captcha, login or payment control; an
+  # answer obtained this way is marked detail="vision fallback" and has no citations.
+  provider: disabled         # disabled | ollama | lm_studio | openrouter | openai_compatible
+  model: ""                  # e.g. qwen2.5vl:7b (ollama) -- must accept image input
+  base_url: ""
+  api_key: ""
+  max_calls: 6
+  wait_s: 90
+  stable_s: 3.0
+
 research:
   mode: STANDARD             # QUICK | STANDARD | DEEP_RESEARCH
   max_rounds: 3
