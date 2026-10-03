@@ -18,11 +18,12 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from backend.browser.engine import BrowserEngine
 from backend.cancel import CancelToken
+from backend.export import export_filename, job_markdown
 from backend.logs import get_logger
 from backend.models import (
     EscalationLevel,
@@ -303,7 +304,23 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/jobs")
     async def list_jobs(limit: int = 50) -> Any:
-        return store.list_jobs(limit=limit)
+        """Recent jobs, newest first (the History view). `limit` is clamped to 1..200."""
+        return store.list_jobs(limit=max(1, min(int(limit), 200)))
+
+    @app.get("/api/jobs/{job_id}/export")
+    async def export_job(job_id: str, format: str = "md") -> Response:
+        """A finished job as a Markdown record (default) or its full JSON snapshot, as a download."""
+        fmt = format.lower()
+        if fmt not in {"md", "json"}:
+            raise HTTPException(status_code=400, detail="format must be md or json")
+        snapshot = store.job_snapshot(job_id)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="no such job")
+        if not snapshot.get("final") and job_id in manager.jobs and manager.jobs[job_id].final is None:
+            raise HTTPException(status_code=409, detail="the job has not finished yet")
+        body = job_markdown(snapshot) if fmt == "md" else json.dumps(snapshot, ensure_ascii=False, indent=2, default=str)
+        media = "text/markdown; charset=utf-8" if fmt == "md" else "application/json"
+        return Response(body, media_type=media, headers={"Content-Disposition": f'attachment; filename="{export_filename(job_id, fmt)}"'})
 
     @app.get("/api/jobs/{job_id}")
     async def get_job(job_id: str) -> Any:
