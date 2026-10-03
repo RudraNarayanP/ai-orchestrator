@@ -629,10 +629,11 @@ class ResearchRunner:
         # One conversation per AI per research id. A follow-up goes into the thread
         # that AI already has for this research; everything else opens a new chat.
         thread_key = (job_id, provider)
-        turn = self._turns.get(thread_key, 0) + 1
-        continue_thread = bool(continue_thread and turn > 1)
         # per-provider first, then the global pool: waiting on one busy site must not hold a global slot
         async with self._provider_slot(provider), self._sem:
+            # numbered inside the slot: two requests to one AI in the same round are two turns, not one
+            turn = self._turns.get(thread_key, 0) + 1
+            continue_thread = bool(continue_thread and turn > 1)
             declined = await self.politeness.before(provider, sleep=self.cancel.sleep)
             if declined:
                 response = ProviderResponse(id=f"resp_skip_{provider}_{round_no}", job_id="", round=round_no, provider=provider, prompt=prompt)

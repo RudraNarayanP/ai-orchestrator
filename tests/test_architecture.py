@@ -384,3 +384,18 @@ def test_threads_corrections_and_opened_flags_are_persisted_per_research(tmp_pat
     assert extra["threads"][0]["turn"] == 2 and extra["threads"][0]["continued"] is True and extra["threads"][0]["superseded"] is True
     assert extra["corrections"][0]["initial_claim"] == "X" and extra["corrections"][0]["final_position"] == "Y"
     assert extra["evidence_flags"][0]["ai_opened"] is False and extra["evidence_flags"][0]["cited_by"] == ["chatgpt"]
+
+async def test_two_requests_to_one_ai_in_the_same_round_are_two_turns(settings, net):
+    import asyncio
+
+    log: list[dict[str, Any]] = []
+    adapter = Scripted("gemini", [{"answer": "one"}, {"answer": "two"}, {"answer": "three"}], log)
+    runner = ResearchRunner(settings, {"gemini": adapter}, engine=None, verifier=None)
+    first = await runner._ask("gemini", "Q about Acme", 1, job_id="rid-1", role="primary")
+    a, b = await asyncio.gather(
+        runner._ask("gemini", "follow-up one", 2, job_id="rid-1", continue_thread=True),
+        runner._ask("gemini", "follow-up two", 2, job_id="rid-1", continue_thread=True),
+    )
+    assert first.turn == 1 and not first.continued
+    assert sorted([a.turn, b.turn]) == [2, 3], "concurrent requests to one chat must not share a turn number"
+    assert a.continued and b.continued

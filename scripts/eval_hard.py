@@ -177,14 +177,14 @@ def analyse(q: dict[str, Any], snapshot: dict[str, Any], runtime_s: float) -> di
         "stop_reason": live.get("stop_reason"),
         "threads": [
             {k: t.get(k) for k in ("provider", "role", "turn", "continued", "superseded")}
-            for t in ((live.get("extra") or {}).get("threads") or [])
+            for t in ((snapshot.get("extra") or live.get("extra") or {}).get("threads") or [])
         ],
         "corrections": [
             {k: c.get(k) for k in ("provider", "verdict", "initial_claim", "follow_up_result", "final_position")}
-            for c in ((live.get("extra") or {}).get("corrections") or [])
+            for c in ((snapshot.get("extra") or live.get("extra") or {}).get("corrections") or [])
         ],
         "ai_opened": {
-            str(f.get("url")): f.get("ai_opened") for f in ((live.get("extra") or {}).get("evidence_flags") or []) if f.get("cited_by")
+            str(f.get("url")): f.get("ai_opened") for f in ((snapshot.get("extra") or live.get("extra") or {}).get("evidence_flags") or []) if f.get("cited_by")
         },
         "unsupported_figures": unsupported,
         "claim_text_len": len(claim_text),
