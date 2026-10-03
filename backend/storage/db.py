@@ -154,6 +154,7 @@ class Store:
                 for r in job.responses
             ],
             "corrections": [c.model_dump(mode="json") for c in job.corrections],
+            "memory": {"kind": job.memory_kind, "used": job.memory_used},
             "evidence_flags": [
                 {"id": e.id, "url": e.url, "claim_id": e.claim_id, "ai_opened": e.ai_opened, "cited_by": e.cited_by,
                  "provenance": e.provenance, "omnibrain_opened": e.omnibrain_opened}

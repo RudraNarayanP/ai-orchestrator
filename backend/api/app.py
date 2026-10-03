@@ -105,6 +105,21 @@ class JobManager:
         self.health: dict[str, str] = {}
         self.politeness = PolitenessGate(settings.research)  # shared by every job, so a backoff outlives one question
 
+    def memory_service(self) -> Any:
+        """One local memory store per server (None when switched off in settings or if it cannot open)."""
+        if not self.settings.memory.enabled:
+            return None
+        if getattr(self, "_memory", None) is None:
+            try:
+                from backend.memory import MemoryService, MemoryStore
+                from backend.memory.embed import get_embedder
+
+                self._memory = MemoryService(MemoryStore(self.settings.memory.path, get_embedder(self.settings.memory.embedder, self.settings.memory.model)))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("memory unavailable: %s", exc)
+                self._memory = None
+        return self._memory
+
     async def engine_get(self) -> BrowserEngine:
         if self.engine is None:
             self.engine = BrowserEngine(self.settings)
@@ -135,6 +150,7 @@ class JobManager:
         mode: str | None,
         max_rounds: int | None,
         conversation_id: str | None = None,
+        project: str | None = None,
     ) -> Job:
         question = (question or "").strip()
         if not question:
@@ -151,6 +167,7 @@ class JobManager:
             mode=resolved_mode,
             max_rounds=int(max_rounds or self.settings.research.max_rounds),
             conversation_id=cid or f"conv_{uuid.uuid4().hex[:12]}",
+            project=(project or "").strip()[:64] or None,
         )
         # earlier finished turns of this thread; the runner decides whether this question leans on them
         job.history = self.store.conversation_turns(job.conversation_id, exclude_job_id=job.id, limit=3)
@@ -177,6 +194,7 @@ class JobManager:
                     analysis_endpoint=endpoint_for(self.settings, "analysis"),
                     cancel=self.cancels.setdefault(job.id, CancelToken()),
                     politeness=self.politeness,
+                    memory=self.memory_service(),
                 )
                 await emit("status", f"starting with {len(adapters)} enabled providers")
                 await runner.run(job)
@@ -291,8 +309,108 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
         conversation_id = body.get("conversation_id")
         if conversation_id is not None and not isinstance(conversation_id, str):
             raise HTTPException(status_code=400, detail="conversation_id must be a string")
-        job = await manager.start(question, mode, max_rounds, conversation_id)
+        project = body.get("project")
+        if project is not None and not isinstance(project, str):
+            raise HTTPException(status_code=400, detail="project must be a string")
+        job = await manager.start(question, mode, max_rounds, conversation_id, project)
         return JSONResponse({"job_id": job.id, "status": job.status.value, "conversation_id": job.conversation_id})
+
+    # ------------------------------------------------------------------ memory (local only; see backend/memory)
+    def _mem() -> Any:
+        svc = manager.memory_service()
+        if svc is None:
+            raise HTTPException(status_code=503, detail="memory is switched off in settings (memory.enabled)")
+        return svc
+
+    @app.get("/api/memory")
+    async def memory_list(status: str | None = None, type: str | None = None, source: str | None = None, project: str | None = None,
+                          q: str | None = None, limit: int = 100, offset: int = 0) -> Any:
+        svc = _mem()
+        items = svc.store.list(status=status, memory_type=type, source=source, project=project, q=q, limit=max(1, min(limit, 500)), offset=max(0, offset))
+        return {"items": [m.public() for m in items], "stats": svc.store.stats()}
+
+    @app.get("/api/memory/stats")
+    async def memory_stats() -> Any:
+        return _mem().store.stats()
+
+    @app.get("/api/memory/export")
+    async def memory_export() -> Any:
+        return JSONResponse(_mem().store.export(), headers={"Content-Disposition": "attachment; filename=omnibrain-memory.json"})
+
+    @app.post("/api/memory/search")
+    async def memory_search(request: Request) -> Any:
+        """What would be offered for this question, and WHY each memory was picked."""
+        body = await _json_object(request)
+        q = body.get("query")
+        if not isinstance(q, str) or not q.strip():
+            raise HTTPException(status_code=400, detail="query must be a non-empty string")
+        project = body.get("project") if isinstance(body.get("project"), str) else None
+        block, res = _mem().context_for(q, project=project)
+        return {"kind": res.kind, "budget": res.budget, "candidates": res.candidates, "reason": res.reason, "elapsed_ms": round(res.elapsed_ms, 2),
+                "context": block, "hits": [h.public() for h in res.hits]}
+
+    @app.get("/api/memory/settings")
+    async def memory_get_settings() -> Any:
+        s = _mem().store
+        return {"inject": s.inject_enabled, "capture": s.capture_enabled, "embedder": s.embedder.name}
+
+    @app.post("/api/memory/settings")
+    async def memory_set_settings(request: Request) -> Any:
+        body = await _json_object(request)
+        s = _mem().store
+        for key in ("inject", "capture"):
+            if key in body:
+                if not isinstance(body[key], bool):
+                    raise HTTPException(status_code=400, detail=f"{key} must be true or false")
+                s.set_setting(key, "1" if body[key] else "0")
+        return {"inject": s.inject_enabled, "capture": s.capture_enabled, "embedder": s.embedder.name}
+
+    @app.post("/api/memory")
+    async def memory_add(request: Request) -> Any:
+        body = await _json_object(request)
+        content = body.get("content")
+        if not isinstance(content, str) or not content.strip() or len(content) > 1000:
+            raise HTTPException(status_code=400, detail="content must be a non-empty string (max 1000 characters)")
+        mtype = body.get("memory_type", "fact")
+        project = body.get("project") if isinstance(body.get("project"), str) and body.get("project") else None
+        try:
+            res = _mem().remember(content, memory_type=mtype, project=project)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="unknown memory_type") from None
+        return {"action": res.action, "memory": res.memory.public() if res.memory else None, "reason": res.reason}
+
+    @app.patch("/api/memory/{memory_id}")
+    async def memory_edit(memory_id: str, request: Request) -> Any:
+        body = await _json_object(request)
+        fields = {k: body[k] for k in ("content", "importance", "confidence", "status", "project", "goal_active") if k in body}
+        try:
+            m = _mem().store.update(memory_id, **fields)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid value") from None
+        if m is None:
+            raise HTTPException(status_code=404, detail="no such memory")
+        return m.public()
+
+    @app.delete("/api/memory/{memory_id}")
+    async def memory_delete(memory_id: str) -> Any:
+        if not _mem().store.delete(memory_id):
+            raise HTTPException(status_code=404, detail="no such memory")
+        return {"deleted": memory_id}
+
+    @app.post("/api/memory/forget-all")
+    async def memory_forget_all(request: Request) -> Any:
+        body = await _json_object(request)
+        if body.get("confirm") is not True:
+            raise HTTPException(status_code=400, detail="send {\"confirm\": true} to delete every memory")
+        return {"deleted": _mem().store.delete_all()}
+
+    @app.get("/api/memory/{memory_id}")
+    async def memory_get(memory_id: str) -> Any:
+        s = _mem().store
+        m = s.get(memory_id)
+        if m is None:
+            raise HTTPException(status_code=404, detail="no such memory")
+        return {**m.public(), "events": s.events(memory_id)}
 
     @app.get("/api/conversations/{conversation_id}")
     async def get_conversation(conversation_id: str) -> Any:

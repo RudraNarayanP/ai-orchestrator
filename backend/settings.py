@@ -198,6 +198,16 @@ class StorageConfig(BaseModel):
     """Rotating log file (2 MB x 3). `run.py serve|ask --log-file PATH` overrides it."""
 
 
+class MemoryConfig(BaseModel):
+    """Long-term memory (backend/memory). Local only: the file below never leaves this machine."""
+
+    enabled: bool = True
+    path: str = str(DATA_DIR / "memory.db")
+    embedder: str = "auto"
+    """auto = the local ONNX model when installed, else the built-in hashing embedder; hash | fastembed to force one."""
+    model: str = "BAAI/bge-small-en-v1.5"
+
+
 class Settings(BaseModel):
     providers: dict[str, ProviderConfig] = Field(default_factory=dict)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
@@ -207,6 +217,7 @@ class Settings(BaseModel):
     research: ResearchConfig = Field(default_factory=ResearchConfig)
     search: SearchConfig = Field(default_factory=SearchConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
     tone: str = (
         "casual, short, light humour -- never forced. Use past context when it "
         "is genuinely relevant. Never guess, never invent a statistic, never "

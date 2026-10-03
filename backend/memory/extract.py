@@ -51,6 +51,7 @@ ENTITY_RE = re.compile(r"\b[A-Z][\w'-]{1,}(?:\s+[A-Z][\w'-]{1,})*\b")
 _NOT_ENT = {"I", "I'm", "I've", "My", "The", "A", "An", "Please", "Actually", "Yesterday", "Also", "And", "But", "So", "Remember", "Note", "Always", "Never", "It", "This", "That", "What", "How"}
 
 TEMPLATES = {"residence": "Lives in {v}", "name": "Name is {v}", "employer": "Works at {v}", "education": "Studies {v}", "languages": "Speaks {v}"}
+TIME_TAIL_RE = re.compile(r"\s+(?:last (?:week|month|year|night)|this (?:week|month|year)|yesterday|recently|just now|(?:a|one) (?:week|month|year) ago|since \w+)\s*$", re.I)
 _VERB3 = {"prefer": "Prefers", "like": "Likes", "love": "Loves", "enjoy": "Enjoys", "hate": "Hates", "dislike": "Dislikes", "can't stand": "Can't stand", "cant stand": "Can't stand"}
 
 
@@ -191,7 +192,7 @@ def extract(message: str, *, project: str | None = None, conversation: str | Non
         src = Source.USER_EXPLICIT if (explicit or correction or not soft) else Source.MODEL_INFERRED
         templ = TEMPLATES.get(slot_base or "")
         if templ and pm2 is not None and "v" in pm2.re.groupindex:
-            text_out = templ.format(v=pm2.group("v").strip())
+            text_out = templ.format(v=TIME_TAIL_RE.sub("", pm2.group("v").strip()))
         elif not explicit or pm2 is not None:
             text_out = neutralise(sentence)
         else:

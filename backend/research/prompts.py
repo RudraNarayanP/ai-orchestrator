@@ -120,10 +120,14 @@ def research_prompt(
     angle: str | None = None,
     needs_web: bool = True,
     history: Any | None = None,
+    context: str = "",
 ) -> str:
     """The prompt actually typed into a provider's own website."""
     parts: list[str] = []
     label = (provider or "").replace("_", " ").strip()
+
+    if context:
+        parts.append(context)  # relevant user context (memory): the same block for every provider; never evidence
 
     if history:
         parts.append(memory.history_block(history))

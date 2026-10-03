@@ -316,6 +316,8 @@ def trimmed_config(skip: list[str], dest: Path) -> list[str]:
     if not cfg_path.exists():
         cfg_path = ROOT / "config" / "settings.example.yaml"
     raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+    # An eval must neither read nor write the user's personal memory: same questions, no personalisation, no learning.
+    raw["memory"] = {**(raw.get("memory") or {}), "enabled": False}
     for name in skip:
         if name in (raw.get("providers") or {}):
             raw["providers"][name]["enabled"] = False

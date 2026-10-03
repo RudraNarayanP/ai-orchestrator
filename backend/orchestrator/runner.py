@@ -102,8 +102,10 @@ class ResearchRunner:
         store: Any = None,
         cancel: CancelToken | None = None,
         politeness: PolitenessGate | None = None,
+        memory: Any = None,
     ) -> None:
         self.settings = settings
+        self.memory = memory  # MemoryService | None -- personalisation context only; never evidence
         self.adapters = adapters
         self.engine = engine
         self.bus = bus or NullBus()
@@ -126,7 +128,9 @@ class ResearchRunner:
 
     async def run(self, job: Job) -> Job:
         try:
-            return await self._run(job)
+            finished = await self._run(job)
+            await self._learn(finished)
+            return finished
         except asyncio.CancelledError:
             job.status = JobStatus.CANCELLED
             job.stop_reason = "cancelled by user"
@@ -174,6 +178,8 @@ class ResearchRunner:
             job.stop_reason = "question answered at level 0; no investigation earned"
             await self._emit("final", job.final.answer, job=job)
             return job
+
+        await self._prepare_memory(job)
 
         if not analysis.needs_web_research and analysis.trivial:
             # banter with no model configured: one provider, no research framing.
@@ -239,6 +245,7 @@ class ResearchRunner:
             round_no=round_no,
             needs_web=analysis.needs_web_research,
             history=job.history if analysis.follow_up else None,
+            context=job.memory_context,
         )
         response = await self._ask(primary, prompt, round_no, role="primary", job_id=job.id)
         responses: list[ProviderResponse] = [r for r in [response] if r]
@@ -582,11 +589,48 @@ class ResearchRunner:
             emit=self._adapter_emit,
         )
 
+    async def _prepare_memory(self, job: Job) -> None:
+        """Offer relevant things the user told us to every AI that starts a conversation -- as prompt context only.
+
+        The block lives on `job.memory_context` and in prompts. It is never added to claims, evidence, the verifier's
+        payload, sources or the answer: memory is not evidence.
+        """
+        job.memory_context, job.memory_used, job.memory_kind = "", [], ""
+        if self.memory is None:
+            return
+        try:
+            block, res = self.memory.context_for(job.question, project=job.project, conversation=job.conversation_id)
+        except Exception as exc:  # noqa: BLE001 -- memory must never break research
+            await self._emit("status", f"memory unavailable ({type(exc).__name__}); researching without it", job=job)
+            return
+        job.memory_kind = res.kind
+        job.memory_context = block
+        job.memory_used = [h.public() for h in res.hits]
+        if res.hits:
+            await self._emit("memory", f"using {len(res.hits)} remembered thing(s) as context (not evidence)", job=job, kind=res.kind, ids=[h.memory.memory_id for h in res.hits])
+
+    async def _learn(self, job: Job) -> None:
+        """After the conversation: keep what the USER said (never what an AI answered), subject to their settings."""
+        if self.memory is None or job.status not in (JobStatus.COMPLETED,):
+            return
+        try:
+            learned = self.memory.learn(job.question, project=job.project, conversation=job.conversation_id)
+        except Exception:  # noqa: BLE001
+            return
+        kept = [r for r in learned.added if r.memory is not None and r.action in {"created", "superseded"}]
+        if kept or learned.forgotten:
+            await self._emit("memory", f"memory updated: {len(kept)} saved, {len(learned.forgotten)} forgotten", job=job)
+
+    @staticmethod
+    def _with_context(job: Job, prompt: str) -> str:
+        return f"{job.memory_context}\n\n{prompt}" if job.memory_context else prompt
+
     @staticmethod
     def _banter_prompt(job: Job, analysis: Any) -> str:
+        ctx = f"{job.memory_context}\n\n" if job.memory_context else ""
         if getattr(analysis, "follow_up", False) and job.history:
-            return f"{memory.history_block(job.history)}\n\n{job.question}"
-        return job.question
+            return f"{ctx}{memory.history_block(job.history)}\n\n{job.question}"
+        return f"{ctx}{job.question}"
 
     async def _rewrite_follow_up(self, question: str, prior: Any) -> str | None:
         """Ask the analysis model to resolve "they"/"it"; the heuristic rewrite stands if it can't."""
@@ -730,6 +774,7 @@ class ResearchRunner:
                 sources=context["sources"],
                 needs_web=analysis.needs_web_research,
             )
+            prompt = self._with_context(job, prompt)
             if index >= 2:
                 angle = angle_for(provider, index)
                 if angle:
@@ -780,7 +825,7 @@ class ResearchRunner:
             if not pool:
                 break
             provider = pool[index % len(pool)]
-            prompt = follow_up_prompt(self._q(job), follow_up)
+            prompt = self._with_context(job, follow_up_prompt(self._q(job), follow_up))
             tasks.append(
                 self._ask(
                     provider, prompt, round_no, role="targeted", escalation_reason=follow_up.reason, job_id=job.id,

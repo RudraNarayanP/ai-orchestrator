@@ -1,0 +1,57 @@
+{
+ "machine": "DESKTOP-OPRRNRH",
+ "python": "3.12.0",
+ "results": [
+  {
+   "n": 1000,
+   "dim": 384,
+   "np_f32_cold_ms": 0.08600000001024455,
+   "np_f32_warm_p50_ms": 0.03189999551977962,
+   "np_f32_warm_p95_ms": 0.05119999696034938,
+   "np_i8_warm_p50_ms": 0.4868000032729469,
+   "np_prefilter_p50_ms": 0.006699992809444666,
+   "sqlitevec_insert_total_s": 0.02,
+   "sqlitevec_cold_ms": 2.2963000083109364,
+   "sqlitevec_warm_p50_ms": 0.6676000048173591,
+   "sqlitevec_warm_p95_ms": 0.7769999938318506,
+   "sqlitevec_matches_numpy_top20": null,
+   "sqlitevec_prefilter_p50_ms": 0.5495999939739704,
+   "db_mb": 1.6,
+   "bench_s": 0.2
+  },
+  {
+   "n": 10000,
+   "dim": 384,
+   "np_f32_cold_ms": 0.5545999883906916,
+   "np_f32_warm_p50_ms": 0.17379999917466193,
+   "np_f32_warm_p95_ms": 0.2922999992733821,
+   "np_i8_warm_p50_ms": 4.459650001081172,
+   "np_prefilter_p50_ms": 0.043199994252063334,
+   "sqlitevec_insert_total_s": 0.19,
+   "sqlitevec_cold_ms": 12.534499997855164,
+   "sqlitevec_warm_p50_ms": 12.04695001069922,
+   "sqlitevec_warm_p95_ms": 12.61069999600295,
+   "sqlitevec_matches_numpy_top20": null,
+   "sqlitevec_prefilter_p50_ms": 11.119499991764314,
+   "db_mb": 16.1,
+   "bench_s": 1.7
+  },
+  {
+   "n": 100000,
+   "dim": 384,
+   "np_f32_cold_ms": 7.496999998693354,
+   "np_f32_warm_p50_ms": 7.3816000076476485,
+   "np_f32_warm_p95_ms": 8.482199991703965,
+   "np_i8_warm_p50_ms": 35.68500000255881,
+   "np_prefilter_p50_ms": 1.5936999989207834,
+   "sqlitevec_insert_total_s": 3.91,
+   "sqlitevec_cold_ms": 231.95150001265574,
+   "sqlitevec_warm_p50_ms": 237.46045000007143,
+   "sqlitevec_warm_p95_ms": 256.45369999983814,
+   "sqlitevec_matches_numpy_top20": null,
+   "sqlitevec_prefilter_p50_ms": 216.54364999994868,
+   "db_mb": 157.6,
+   "bench_s": 30.0
+  }
+ ]
+}

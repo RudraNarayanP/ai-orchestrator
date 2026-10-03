@@ -172,6 +172,19 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _open_memory(settings):
+    """The local memory service for a one-shot ask (None when disabled or unavailable)."""
+    if not settings.memory.enabled:
+        return None
+    try:
+        from backend.memory import MemoryService, MemoryStore
+        from backend.memory.embed import get_embedder
+
+        return MemoryService(MemoryStore(settings.memory.path, get_embedder(settings.memory.embedder, settings.memory.model)))
+    except Exception:  # noqa: BLE001 -- memory never blocks a question
+        return None
+
+
 async def _one_shot(question: str, mode: str | None, rounds: int | None, args: argparse.Namespace | None = None) -> int:
     settings = load()
     if args is not None:
@@ -216,6 +229,7 @@ async def _one_shot(question: str, mode: str | None, rounds: int | None, args: a
             engine=engine,
             bus=ConsoleBus(),
             analysis_endpoint=endpoint_for(settings, "analysis"),
+            memory=_open_memory(settings),
         )
         finished = await runner.run(job)
         print("\n" + "=" * 72)

@@ -1,0 +1,23 @@
+{
+ "machine": "DESKTOP-OPRRNRH",
+ "python": "3.12.0",
+ "results": [
+  {
+   "n": 1000000,
+   "dim": 384,
+   "np_f32_cold_ms": 56.46859999978915,
+   "np_f32_warm_p50_ms": 68.00885000120616,
+   "np_f32_warm_p95_ms": 91.15809999639168,
+   "np_i8_warm_p50_ms": 350.49465000338387,
+   "np_prefilter_p50_ms": 15.688350002164952,
+   "sqlitevec_insert_total_s": 36.44,
+   "sqlitevec_cold_ms": 2273.646399989957,
+   "sqlitevec_warm_p50_ms": 2415.1570000030915,
+   "sqlitevec_warm_p95_ms": 2767.6816000021063,
+   "sqlitevec_matches_numpy_top20": null,
+   "sqlitevec_prefilter_p50_ms": 2215.1913499983493,
+   "db_mb": 1572.1,
+   "bench_s": 303.7
+  }
+ ]
+}

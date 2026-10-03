@@ -605,6 +605,12 @@ class Job(BaseModel):
     updated_at: float = Field(default_factory=time.time)
     finished_at: float | None = None
 
+    project: str | None = None
+    """Optional project namespace: project memories are only offered to questions asked in that project."""
+    memory_used: list[dict[str, Any]] = Field(default_factory=list)
+    """Which memories were offered to the AIs for this question and why (never evidence)."""
+    memory_kind: str = ""
+    memory_context: str = Field(default="", exclude=True)
     max_rounds: int = 3
     stop_note: str = ""
     """Why the loop ended early when a stop rule (not the round limit) ended it."""
