@@ -384,7 +384,7 @@ def plain_caveats(caveats: list[str], limit: int = 4) -> list[str]:
 
 
 INTERNAL_VOCAB_RE = re.compile(
-    r"\b(ledger|evidence score|confidence score|tier\s*\d|claim[- ]?id|clm_|round\s*\d|provider agreement|primary_official|"
+    r"\bclm_\w+|\b(ledger|evidence score|confidence score|tier\s*\d|claim[- ]?id|clm_|round\s*\d|provider agreement|primary_official|"
     r"web_research_status|ai_unsourced|verdicts?|insufficient_evidence)\b",
     re.I,
 )

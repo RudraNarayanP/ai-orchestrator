@@ -259,6 +259,40 @@ async def fetch_page(
     return page
 
 
+_NAME_STOP = {
+    "university", "college", "section", "article", "articles", "chapter", "court", "parliament", "government", "regulation",
+    "regulations", "constitution", "english", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "january", "february", "march", "april", "june", "july", "august", "september", "october", "november", "december",
+    "under", "which", "where", "while", "their", "after", "before", "state", "states", "united", "kingdom", "national",
+    "official", "student", "students", "policy", "policies", "guidance", "definition", "department", "ministry", "office",
+}
+
+
+def _fold(text: str) -> str:
+    import unicodedata
+
+    return "".join(ch for ch in unicodedata.normalize("NFKD", text or "") if not unicodedata.combining(ch)).lower()
+
+
+def subject_names(claim: str) -> list[str]:
+    """Proper names a claim is about (Oxford, Manchester, Wiles), as 5-letter stems.
+
+    Live eval defect: "The University of Oxford defines plagiarism as ..." was marked
+    confirmed by a Nottingham Trent library page that defines plagiarism in the same
+    words, and the answer then called it "Oxford's official guidance". A page about
+    the right idea but the wrong subject is not evidence for this claim.
+    """
+    words = re.findall(r"[^\W\d_][\w'-]*", claim or "")
+    names: list[str] = []
+    for i, w in enumerate(words):
+        if i == 0 or not w[0].isupper() or len(w) < 5 or w.lower() in _NAME_STOP or w.isupper():
+            continue
+        stem = _fold(w)[:5]
+        if stem not in names:
+            names.append(stem)
+    return names[:6]
+
+
 def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) -> dict[str, Any]:
     """Does this page actually contain what the claim says it contains?
 
@@ -295,6 +329,11 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
     for date in sig["dates"][:3]:
         if not any(part in text_lower for part in re.split(r"[\s.]+", date) if len(part) > 3):
             missing.append(date)
+    names = subject_names(claim)
+    if names:
+        folded = _fold((page.text or "") + " " + (page.title or "") + " " + (page.final_url or page.url or ""))
+        if not any(n in folded for n in names):
+            missing.append("subject: " + ", ".join(names[:3]))
 
     if BLOCK_HINT_RE.search((page.text or "")[:2000]) or "gate" in " ".join(page.notes):
         status = SourceCheckStatus.BLOCKED
