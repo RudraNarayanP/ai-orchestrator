@@ -19,7 +19,9 @@ Externally it says: **"Yes."** / **"No."** / **"I'm not sure, the sources disagr
 ```bash
 cd omnibrain
 .venv\Scripts\python.exe run.py doctor      # what is reachable, what is not
-.venv\Scripts\python.exe run.py login chatgpt gemini copilot   # one-time, in its own windows
+# No login step needed for ChatGPT, Gemini or Google AI Mode: they answer logged out.
+# Optional, only for sites that wall off anonymous use (Copilot, Le Chat, Meta AI, Pi, Qwen, DeepSeek):
+#   .venv\Scripts\python.exe run.py login copilot le_chat   # one-time, in its own windows
 .venv\Scripts\python.exe run.py serve       # http://127.0.0.1:8730
 ```
 
@@ -60,8 +62,11 @@ profile at the cost of one window each.
 
 It does not attach to your running Chrome, does not read or copy your everyday
 profile, and does not extract cookies or passwords. You sign in once inside the
-OmniBrain window (`run.py login chatgpt gemini ...` -- one window, one tab each);
-that profile remembers you from then on.
+OmniBrain window (`run.py login <provider> ...` -- one window, one tab each);
+that profile remembers you from then on. This is optional: a site that answers
+anonymously is used anonymously, and one that shows a login wall, captcha, age gate
+or onboarding form is reported `blocked` and skipped (`providers.<name>.requires_login`
+in the config only tells `doctor` which sites to nag about).
 
 *Why not just drive my existing logged-in Chrome?* Chrome 136 and later ignore
 `--remote-debugging-port` on the default profile, so there is no port to attach to
@@ -153,9 +158,50 @@ Also covered offline since the first build (each has its own test file):
   setting is declared but never read), **selector promotion**, **history/export**, and
   the UI in a real browser (`tests/test_ui_live.py`).
 
+**Verified live, logged out (2026-10-03, headful Chrome, no login, no workarounds):**
+
+| Provider | Result | What was observed |
+|---|---|---|
+| ChatGPT | worked | Guest composer `#mobile-composer-prompt` answers in ~8-60 s. Citations are bare chip text, not links, so its answers arrive with no URLs. |
+| Gemini | worked | Long structured answers with real source links. |
+| Google AI Mode | broken logged out | Page loads, then animated dots and no answer block; adapter now gives up after 90 s and does not retry. |
+| Copilot | blocked | Only "Sign in with Microsoft/Apple/Google"; no composer. |
+| Meta AI | blocked | Probe saw an input, but "Sign in to get started" appears on use. |
+| Le Chat | blocked | Cookie banner, then a redirect to `auth.mistral.ai/login` on submit. |
+| Pi | blocked | Asks "what should I call you?" before any chat; not filled in. |
+| Qwen | blocked | "Confirm your age" gate (a personal declaration; deliberately not clicked). |
+| DeepSeek | blocked | Redirects to `/sign_in`. |
+| Grok (disabled in config) | blocked | Composer visible, cookie banner dismissed, but "Sign up to continue" after the first prompt. |
+| Perplexity (disabled in config) | blocked | Cloudflare "Just a moment..." human check; not touched. |
+| Claude | not configured | No provider entry. |
+
+Selectors promoted from these probes (`verified=probe`): chatgpt, gemini (input only),
+google_ai (input), meta_ai, qwen, grok. Le Chat has no stable identifier; Copilot and Pi
+showed no composer; DeepSeek landed on a sign-in page, so none of those were promoted.
+
+Three real questions through the whole pipeline (no Ollama running, so the deterministic
+ledger decided): a factual question (Eiffel Tower date and height) came back with both
+halves answered at moderate confidence; a product question (Sony WH-1000XM5) answered
+from review pages; a follow-up ("And how long does its battery last?") was understood
+as the XM5 because the previous turn is passed as context. The follow-up ended "I don't
+know." because no opened page attached to its claims -- the honest outcome, not a good one.
+
+Bugs these runs exposed are fixed with regression tests: ChatGPT's logged-out DOM
+had no `data-message-author-role` (answers captured empty); a sign-in page's phone
+field was nearly promoted as a composer; age gates and onboarding forms were not
+recognised as blocks; login walls were retried; nested wrappers duplicated Gemini
+answers; section headings glued onto the previous line produced junk claims; bare dates
+and "I'll verify ..." narration became claims; claims with no product name were
+"confirmed" by unrelated pages; `why` showed a ledger score; the AI Mode wait was 404 s.
+
+**Known residue from the live runs:** inline citation chips ("La tour Eiffel", "Sony")
+still leak into some answers when the site gives no links to match them against;
+a failed provider (Copilot, Google AI) is retried in every round; the follow-up above
+shows evidence attachment is weak when providers return no links.
+
 **Not yet verified:**
-- Any provider actually answering, end to end, from your real account. Needs the
-  one-time `run.py login <provider>` step.
+- Any provider answering from a **signed-in** account (never tried; not needed for the
+  providers above).
 - The LLM verifier and model-assisted claim extraction **against a real model**. Needs
   Ollama / LM Studio / an OpenRouter key. The offline tests above prove our parsing,
   fallback and overruling logic with scripted replies; they say nothing about how a
@@ -164,10 +210,8 @@ Also covered offline since the first build (each has its own test file):
 - The vision fallback against a real vision model or a real site; the refutation
   detector's precision on real pages (it is heuristic); review mining and follow-up
   detection on real review sites and real conversations (fixtures only).
-- Selector promotion: `promote-selectors` was dry-run against a real ChatGPT probe, but
-  `browser/adapters/promoted_selectors.json` has deliberately **not** been written --
-  promoting live selectors needs a signed-in probe and your say-so, and until then
-  nothing is `probe`-verified by this mechanism.
+- Selector promotion beyond the logged-out pages above (send buttons for Gemini and
+  Google AI were not visible before typing, so only their inputs are `probe`-verified).
 - The cancel test against a real streaming site (offline stubs and one fixture test
   cover the tab-close path; the live test may stop at an earlier checkpoint).
 - The CI workflow (`.github/workflows/ci.yml`) has never run: the repo has no remote.
