@@ -10,7 +10,7 @@ the numbers below were read from the `job_extra` table of the same jobs.
 | triv-2plus2 | WARN (eval false positive, fixed in 08bebfc) | 4 s | 0 | 0 | "4" - classifier only |
 | uk-dpa-age | PASS | 520 s | 4 | 2 | correct (13), legislation.gov.uk linked as primary; stopped at max rounds (3) |
 | ua-marriage-age | WARN | 373 s | 3 | 2 | "I couldn't verify that reliably." - zakon.rada.gov.ua unreachable from this PC, the AIs could not open it either |
-| uni-oxford-plagiarism | not finished when the report was written | | | | see console_arch1.txt if it completed |
+| uni-oxford-plagiarism | WARN | 176 s | | | "I couldn't verify that reliably." ox.ac.uk answers 403 to the audit fetch and the AIs gave nothing openable; an honest don't-know |
 
 Observed live (this is the first real evidence for the new design):
 - Each research got its OWN new chat on each site (new chatgpt.com/uc/<id>, gemini /app/<id>); the follow-up

@@ -173,6 +173,61 @@
      "said it could not answer an answerable question"
     ]
    }
+  },
+  {
+   "id": "uni-oxford-plagiarism",
+   "category": "university",
+   "kind": "answer",
+   "question": "How does the University of Oxford define plagiarism in its guidance for students?",
+   "answer": "I couldn't verify that reliably. None of the pages I opened confirms an answer, so I won't guess.",
+   "why": "",
+   "confidence": "Low confidence",
+   "caveats": [
+    "One AI answer claimed: \"The University of Oxford defines plagiarism as presenting work or ideas from another source as your own, with or without the original author's consent, by incorporating them into your work without full acknowledgement. This definition covers all published...\" I couldn't confirm that from any page I opened.",
+    "The plagiarism guidance page does not show a separate publication date beyond the copyright footer.",
+    "None of the claims could be confirmed from the pages I opened."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "ox.ac.uk"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 0,
+   "pages_confirmed": 0,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt"
+   ],
+   "providers_failed": [
+    "gemini"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 3,
+   "verifier_calls": 2,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [],
+   "claim_text_len": 1995,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 176.7,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "said it could not answer an answerable question"
+    ]
+   }
   }
  ]
 }
