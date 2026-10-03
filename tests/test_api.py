@@ -279,3 +279,17 @@ def test_doctor_reports_a_reachable_model(tmp_path, monkeypatch, fake_openai, sa
     assert d["verifier"]["ok"] is True and d["verifier"]["state"] == "ready" and "qwen:14b" in d["verifier"]["models"]
     assert d["analysis"]["state"] == "unconfigured"
     assert d["vision"]["state"] == "disabled"
+
+
+def test_doctor_checks_an_openrouter_vision_model_for_real(tmp_path, monkeypatch, fake_openai, saved):
+    monkeypatch.setattr(api_app.JobManager, "_run", lambda *a, **k: None)
+    fake_openai.models = ["vendor/eyes:free"]
+    settings = base_settings(
+        storage={"db_path": str(tmp_path / "d.db")},
+        verifier={"provider": "disabled"},
+        vision={"provider": "openrouter", "model": "vendor/eyes:free", "base_url": fake_openai.base_url, "api_key": "k"},
+    )
+    with TestClient(api_app._make_app(settings)) as c:
+        d = c.get("/api/doctor").json()
+    assert d["vision"]["state"] == "ready" and "free tier" in d["vision"]["detail"]
+

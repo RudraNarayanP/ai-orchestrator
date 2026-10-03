@@ -76,7 +76,9 @@ def cmd_doctor(_: argparse.Namespace) -> int:
         health = asyncio.run(LLMClient(endpoint).health())
         print(f"  {settings.verifier.provider} @ {endpoint.base_url} model={endpoint.model}")
         print(f"  -> {health['state']}: {health['detail']}")
-        if health.get("models"):
+        if endpoint.fallback_models:
+            print("     fallbacks (tried when rate limited): " + ", ".join(endpoint.fallback_models))
+        if health.get("models") and settings.verifier.provider != "openrouter":
             print("     available: " + ", ".join(health["models"][:12]))
     print()
     print("analysis endpoint")
@@ -85,7 +87,17 @@ def cmd_doctor(_: argparse.Namespace) -> int:
         print("  disabled: claims fall back to the deterministic extractor (works, less subtle)")
     else:
         health = asyncio.run(LLMClient(analysis).health())
-        print(f"  {analysis.provider} @ {analysis.base_url} -> {health['state']}: {health['detail']}")
+        print(f"  {analysis.provider} @ {analysis.base_url} model={analysis.model}")
+        print(f"  -> {health['state']}: {health['detail']}")
+    print()
+    print("vision fallback")
+    vision = Endpoint.from_config(settings.vision)
+    if not vision.enabled:
+        print("  disabled: a broken selector is reported broken; no screenshot is sent anywhere")
+    else:
+        health = asyncio.run(LLMClient(vision).health())
+        print(f"  {vision.provider} @ {vision.base_url} model={vision.model}")
+        print(f"  -> {health['state']}: {health['detail']}")
     print()
     print("providers")
     for name, cfg in settings.providers.items():

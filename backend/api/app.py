@@ -37,7 +37,7 @@ from backend.orchestrator.runner import ResearchRunner
 from backend.providers.registry import ProviderCatalog, endpoint_for
 from backend.settings import Settings, load_settings, reload_settings, save_settings
 from backend.storage.db import Store
-from backend.verification.llm import LLMClient
+from backend.verification.llm import Endpoint, LLMClient
 
 log = get_logger("jobs")
 FRONTEND = Path(__file__).resolve().parent.parent.parent / "frontend"
@@ -431,6 +431,9 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
             if vision.provider == "disabled"
             else {"ok": bool(vision.model), "state": "configured" if vision.model else "unconfigured", "detail": f"{vision.provider} / {vision.model or 'no model set'}"}
         )
+        if vision.provider == "openrouter" and vision.model:
+            # A hosted endpoint can be checked for real: reachable, key accepted, exact model id listed.
+            checks["vision"] = await LLMClient(Endpoint.from_config(vision)).health()
         checks["providers"] = {
             name: {
                 "enabled": cfg.enabled,
