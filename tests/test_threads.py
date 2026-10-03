@@ -118,3 +118,55 @@ async def test_a_site_that_never_exposes_the_id_is_reported_not_faked():
 
 async def _none():
     return None
+
+async def test_typing_and_sending_hold_the_focus_lock_and_release_it_even_on_failure():
+    import asyncio
+
+    import pytest
+
+    adapter = make_adapter()
+    lock = asyncio.Lock()
+    adapter.engine = SimpleNamespace(_focus_lock=lock)
+    held: list[bool] = []
+    fronted: list[bool] = []
+
+    class Page(FakePage):
+        async def bring_to_front(self):
+            fronted.append(lock.locked())
+
+    page = Page("https://gemini.test/app")
+
+    async def _page(fresh=False):
+        return page
+
+    async def _settle(p):
+        return None
+
+    async def _open(p):
+        return p
+
+    async def prepare(p, emit, round_no):
+        return {"ok": True}
+
+    async def call(p, name, *a):
+        return {"count": 0, "lastText": ""}
+
+    async def type_(p, prompt):
+        held.append(lock.locked())
+        return True
+
+    async def submit(p):
+        held.append(lock.locked())
+        raise RuntimeError("stop here")
+
+    async def emit(*a, **k):
+        return None
+
+    adapter._page, adapter._settle, adapter._open_conversation = _page, _settle, _open
+    adapter.prepare, adapter._call, adapter._type_with_fallback, adapter._submit = prepare, call, type_, submit
+    adapter._research_id, adapter._continue_thread = "r", False
+    response = ProviderResponse(job_id="r", provider="gemini", prompt="q")
+    with pytest.raises(RuntimeError):
+        await adapter._attempt(page_setup=False, response=response, prompt="q", round_no=1, emit=emit)
+    assert held == [True, True] and fronted == [True], "this tab is in front while it types and sends"
+    assert not lock.locked(), "the next tab gets its turn even when this one failed"

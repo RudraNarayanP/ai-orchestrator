@@ -396,22 +396,39 @@ class ChatAdapter:
             await emit("provider", f"{self.provider}: {response.status.value} — {state}", self.provider, round_no)
             return False
 
-        baseline = await self._call(page, "baseline", self._sel_dict) or {"count": 0, "lastText": ""}
-        await emit("provider", f"{self.provider}: composing prompt", self.provider, round_no)
-        typed = await self._type_with_fallback(page, prompt)
-        if not typed:
-            response.note(ProviderStatus.BROKEN, error="could not place text in the composer")
-            return False
-        if getattr(self, "_navigated_for_prompt", False):
-            # The URL prefill replaced the document, so the old baseline is stale.
-            baseline = await self._call(page, "baseline", self._sel_dict) or baseline
-            ready = await self.readiness(page)
-            if not ready.get("inputHere"):
-                response.note(ProviderStatus.BROKEN, error="composer vanished after URL prefill")
+        # Typing and sending happen with this tab in front and the others waiting their turn: a background tab in
+        # the shared window can swallow the keystrokes and then show no answer at all (seen live with three
+        # providers asked at once). Once the prompt is sent the lock is released and the answers stream in parallel.
+        lock = getattr(self.engine, "_focus_lock", None)
+        if lock is not None:
+            await lock.acquire()
+        try:
+            if lock is not None:
+                try:
+                    await page.bring_to_front()
+                except Exception:  # noqa: BLE001
+                    pass
+            baseline = await self._call(page, "baseline", self._sel_dict) or {"count": 0, "lastText": ""}
+            await emit("provider", f"{self.provider}: composing prompt", self.provider, round_no)
+            typed = await self._type_with_fallback(page, prompt)
+            if not typed:
+                response.note(ProviderStatus.BROKEN, error="could not place text in the composer")
                 return False
+            if getattr(self, "_navigated_for_prompt", False):
+                # The URL prefill replaced the document, so the old baseline is stale.
+                baseline = await self._call(page, "baseline", self._sel_dict) or baseline
+                ready = await self.readiness(page)
+                if not ready.get("inputHere"):
+                    response.note(ProviderStatus.BROKEN, error="composer vanished after URL prefill")
+                    return False
 
-        await emit("provider", f"{self.provider}: prompt sent — waiting for answer", self.provider, round_no)
-        await self._submit(page)
+            await emit("provider", f"{self.provider}: prompt sent — waiting for answer", self.provider, round_no)
+            await self._submit(page)
+            if lock is not None:
+                await asyncio.sleep(1.5)  # let the site take the message before the next tab comes forward
+        finally:
+            if lock is not None and lock.locked():
+                lock.release()
         if getattr(self, "quick_answer_allowed", False):
             try:
                 shortcut = await self._call(page, "quickAnswer", self._sel_dict)
