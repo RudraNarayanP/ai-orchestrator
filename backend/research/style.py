@@ -23,10 +23,18 @@ compliance document.
 
 Match the amount of explanation to what the question actually needs.
 
+Sound like a knowledgeable friend who just looked it up: contractions, plain
+words, short sentences, a little warmth. Not a help-desk script, not a report.
+Use at most two emojis, and only ones that genuinely fit the topic (a tower, a
+battery, a court, a graduation cap, a thumbs-up for a settled fact). Never
+decorate for decoration's sake.
+
 When the evidence is strong, answer directly and confidently.
 When the sources genuinely conflict, say so explicitly and name the conflict.
 When the available evidence is too weak to trust, say "I couldn't verify this reliably."
-When there is no adequate evidence at all, say "I don't know."
+When there is no adequate evidence at all, say "I don't know." and give the
+reason in one plain sentence. That line stays plain: no emoji, no cushioning, no
+apology. Warmth never softens an honest "I don't know."
 
 Do not manufacture uncertainty merely to sound cautious.
 Do not manufacture confidence merely to sound decisive.
@@ -116,6 +124,20 @@ BANNED_PHRASES = [
     "leverage",
     "robust",
     "seamless",
+    "great question",
+    "certainly!",
+    "i hope this helps",
+    "feel free to",
+    "it is worth noting",
+    "it's worth noting",
+    "i'm just an ai",
+    "as a language model",
+    "dive into",
+    "let's explore",
+    "ledger",
+    "evidence score",
+    "round 1",
+    "round 2",
 ]
 
 # The plain-language equivalents, so the synthesiser has somewhere to go.
@@ -211,8 +233,22 @@ gathered, and your own verdicts. Write the answer the way a good researcher
 would say it out loud.
 
 - Lead with the answer. One to three sentences if that is all it takes.
-- Keep the register casual and human. Light humour only if it fits; never
-  forced, never performing.
+- Keep the register casual and human, like a person talking: contractions,
+  everyday words, no padding, no preamble, no sign-off. Light humour only if
+  it fits; never forced, never performing.
+- Add at most two emojis that really fit the subject, placed naturally (after
+  the first sentence or at the end), e.g. a tower for the Eiffel Tower, a
+  battery for battery life, scales for a law. Skip them when the topic is
+  grave. NEVER put an emoji on "I don't know." or "I couldn't verify this
+  reliably." -- those stay plain and say why.
+
+Before and after (same facts):
+  stiff:  "Based on the available evidence, the construction of the Eiffel
+           Tower appears to have been completed on 31 March 1889."
+  human:  "It was finished on 31 March 1889 -- and it's 330 m tall today with
+           the antenna. \U0001F5FC"
+  stiff:  "It is important to note that the claim cannot be substantiated."
+  human:  "No -- that's a myth. The Act says the opposite (s.12). \u2696\uFE0F"
 - Explain only as much as the question needs.
 - Be definitive when the evidence is definitive. Weak evidence gets one plain
   sentence about being weak -- not a paragraph of throat-clearing.
@@ -264,3 +300,88 @@ def scrub(text: str) -> tuple[str, list[str]]:
             cleaned = cleaned[:idx] + replacement + cleaned[idx + len(original) :]
             hits.append(f"replaced: {original}")
     return cleaned.strip(), hits
+
+
+# ---------------------------------------------------------------- tone, applied in code
+#
+# The prompts above ask a model for a warm voice; this part makes it true even when no model
+# is running (the deterministic path) and gives the eval a way to check the result.
+
+import re  # noqa: E402
+
+EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B50\u2B06\u2705\u274C\u2B1B\u2B1C]\uFE0F?")
+
+# first matching topic wins; (pattern, emoji)
+TOPIC_EMOJI = [
+    (r"\b(tower|bridge|building|skyscraper)\b", "\U0001F5FC"),
+    (r"\b(battery|charge|charging|hours of (?:playback|battery))\b", "\U0001F50B"),
+    (r"\b(act|statute|law|legislation|section|court|tribunal|ruling|regulation|zakon|verkhovna)\b", "\u2696\uFE0F"),
+    (r"\b(university|phd|doctoral|thesis|viva|examiner|degree|academic misconduct|appeal)\b", "\U0001F393"),
+    (r"\b(price|cost|costs|\$\d|usd|eur|gbp|\u00a3\d)", "\U0001F4B8"),
+    (r"\b(headphones|earbuds|noise[- ]cancel)", "\U0001F3A7"),
+    (r"\b(vaccine|drug|dose|clinical|trial|medicine|patients?)\b", "\U0001F9EA"),
+    (r"\b(launch(?:ed)?|released?|announced)\b", "\U0001F680"),
+]
+
+_PLAIN_STARTS = ("i don't know", "i couldn't verify", "i could not verify", "i can't verify")
+
+
+def count_emojis(text: str) -> int:
+    return len(EMOJI_RE.findall(text or ""))
+
+
+def humanize(answer: str, confidence: str = "moderate") -> str:
+    """Add one fitting emoji to a settled answer. Never touches an honest 'I don't know'.
+
+    `confidence` is the plain band name (high / moderate / low / insufficient_evidence).
+    """
+    text = (answer or "").strip()
+    low = text.lower()
+    if not text or low.startswith(_PLAIN_STARTS) or count_emojis(text):
+        return text
+    if str(confidence).lower() in {"none", "insufficient_evidence"}:
+        return text
+    if low.startswith("no - ") or low.startswith("no, "):
+        mark = "\U0001F6AB" if not re.search(TOPIC_EMOJI[2][0], low) else "\u2696\uFE0F"
+    elif low.startswith("the sources genuinely conflict") or str(confidence).lower() == "low":
+        mark = "\U0001F914"
+    else:
+        mark = next((e for pat, e in TOPIC_EMOJI if re.search(pat, low)), "\u2705" if str(confidence).lower() == "high" else "\U0001F44D")
+    # after the first sentence, so the conclusion still comes first
+    m = re.search(r"(?<=[.!?])\s", text)
+    if m and m.start() < len(text) - 1:
+        return text[: m.start()] + " " + mark + text[m.start():]
+    return f"{text} {mark}"
+
+
+INTERNAL_VOCAB_RE = re.compile(
+    r"\b(ledger|evidence score|confidence score|tier\s*\d|claim[- ]?id|clm_|round\s*\d|provider agreement|primary_official|"
+    r"web_research_status|ai_unsourced|verdicts?|insufficient_evidence)\b",
+    re.I,
+)
+HEDGE_OPENERS = ("it is important to", "it's important to", "it should be noted", "please note", "based on the available", "based on my research", "as an ai")
+
+
+def voice_report(answer: str) -> dict:
+    """Is this answer in the house voice? Used by the eval and by tests; returns the problems found."""
+    text = (answer or "").strip()
+    low = text.lower()
+    problems: list[str] = []
+    if not text:
+        return {"ok": False, "problems": ["empty"], "emojis": 0}
+    if INTERNAL_VOCAB_RE.search(text):
+        problems.append("internal vocabulary: " + INTERNAL_VOCAB_RE.search(text).group(0))
+    for phrase in BANNED_PHRASES:
+        if phrase.lower() in low:
+            problems.append("banned phrase: " + phrase)
+    if low.startswith(HEDGE_OPENERS):
+        problems.append("hedging opener")
+    emojis = count_emojis(text)
+    plain = low.startswith(_PLAIN_STARTS)
+    if emojis > 3:
+        problems.append("too many emojis")
+    if plain and emojis:
+        problems.append("emoji on an honest don't-know")
+    if len(text) > 900:
+        problems.append("padded: over 900 characters")
+    return {"ok": not problems, "problems": problems, "emojis": emojis}

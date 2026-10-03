@@ -37,6 +37,7 @@ from backend.research.style import (
     SOURCE_PRIORITY,
     SYNTHESIS_INSTRUCTIONS,
     VERIFIER_ROLE,
+    humanize,
     scrub,
 )
 from backend.research.prompts import fence_all
@@ -725,7 +726,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
     return FinalAnswer(
-        answer=report.answer,
+        answer=humanize(report.answer, report.confidence.value if hasattr(report.confidence, "value") else str(report.confidence)),
         why=report.why,
         important_disagreement=report.important_disagreement,
         confidence=report.confidence,
