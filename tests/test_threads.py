@@ -72,3 +72,49 @@ async def test_continue_without_a_thread_falls_back_to_a_new_conversation():
     adapter._research_id = "research_Z"
     adapter._continue_thread = bool(True and "research_Z" in adapter._threads)
     assert adapter._continue_thread is False
+
+class SlowUrlPage(FakePage):
+    """Gemini-style: the conversation id reaches the address bar a moment after the answer."""
+
+    def __init__(self, url: str, changes_after: int, final: str) -> None:
+        super().__init__(url)
+        self.polls, self.changes_after, self.final = 0, changes_after, final
+
+    @property
+    def url(self):
+        self.polls += 1
+        return self.final if self.polls > self.changes_after else self._url
+
+    @url.setter
+    def url(self, value):
+        self._url = value
+
+    async def evaluate(self, *a, **kw):
+        return None
+
+
+async def test_a_conversation_id_that_arrives_late_is_still_captured():
+    adapter = make_adapter()
+    adapter.url_wait_s = 3.0
+    adapter._research_id, adapter._continue_thread = "research_A", False
+    page = SlowUrlPage("https://gemini.test/app", changes_after=4, final="https://gemini.test/app/d0328f17eebd6a24")
+    response = ProviderResponse(job_id="research_A", provider="gemini", prompt="q")
+    await adapter._remember_thread_when_known(page, response)
+    assert response.conversation_url == "https://gemini.test/app/d0328f17eebd6a24"
+    assert adapter._threads["research_A"].endswith("d0328f17eebd6a24"), "the follow-up goes back to this id"
+
+
+async def test_a_site_that_never_exposes_the_id_is_reported_not_faked():
+    adapter = make_adapter()
+    adapter.url_wait_s = 0.5
+    adapter._research_id, adapter._continue_thread = "research_A", False
+    page = FakePage("https://gemini.test/app")
+    page.evaluate = lambda *a, **k: _none()
+    response = ProviderResponse(job_id="research_A", provider="gemini", prompt="q")
+    await adapter._remember_thread_when_known(page, response)
+    assert response.conversation_url == "https://gemini.test/app"
+    assert "not exposed" in (response.detail or "")
+
+
+async def _none():
+    return None

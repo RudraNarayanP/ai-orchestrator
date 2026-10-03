@@ -454,7 +454,7 @@ class ChatAdapter:
             response.note(ProviderStatus.TIMEOUT, error="timed out with only a fragment")
             return False
         response.status = status if status.terminal else ProviderStatus.COMPLETED
-        self._remember_thread(page, response)
+        await self._remember_thread_when_known(page, response)
         if status == ProviderStatus.TIMEOUT and len(response.answer_text) >= 200:
             response.detail = "answer truncated by timeout but usable"
             response.status = ProviderStatus.COMPLETED
@@ -482,11 +482,45 @@ class ChatAdapter:
             pass
         return page
 
-    def _remember_thread(self, page, response: ProviderResponse) -> None:
+    url_wait_s: float = 8.0
+
+    async def _conversation_url(self, page) -> str:
+        """The chat's own URL. Some sites (Gemini) put the conversation id in the address a moment AFTER the answer,
+        so a read taken the instant the answer lands still shows the bare new-chat page."""
+        base = (self.cfg.new_chat_url or self.cfg.url or "").rstrip("/")
+        deadline = time.time() + self.url_wait_s
+        while (page.url or "").rstrip("/") == base and time.time() < deadline and not self._continue_thread:
+            await asyncio.sleep(0.4)
+        if (page.url or "").rstrip("/") == base:
+            found = await self._conversation_url_from_dom(page)
+            if found:
+                return found
+        return page.url
+
+    async def _conversation_url_from_dom(self, page) -> str | None:
+        """Fallback when the address bar never changes: the site's own link to the open chat, if it shows one."""
+        try:
+            href = await page.evaluate(
+                "() => { const a = document.querySelector('a[aria-current=\"page\"][href], a[aria-selected=\"true\"][href]');"
+                " return a ? a.href : null; }"
+            )
+        except Exception:  # noqa: BLE001
+            return None
+        base = (self.cfg.new_chat_url or self.cfg.url or "").rstrip("/")
+        return href if href and href.rstrip("/") != base and href.startswith("http") else None
+
+    async def _remember_thread_when_known(self, page, response: ProviderResponse) -> None:
+        url = await self._conversation_url(page)
+        self._remember_thread(page, response, url)
+        if (url or "").rstrip("/") == (self.cfg.new_chat_url or self.cfg.url or "").rstrip("/"):
+            response.detail = ((response.detail or "") + " conversation id not exposed by the site; follow-ups continue in the open tab").strip()
+
+    def _remember_thread(self, page, response: ProviderResponse, url: str | None = None) -> None:
+        url = url or page.url
         self._tab_dirty = True
-        response.conversation_url = page.url
+        response.conversation_url = url
         response.continued = self._continue_thread
-        self._threads[self._research_id] = page.url
+        self._threads[self._research_id] = url
         while len(self._threads) > 20:
             self._threads.pop(next(iter(self._threads)))
 
