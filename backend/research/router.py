@@ -177,6 +177,14 @@ def _safe_eval(expr: str) -> float:
         raise SafeEvalError(str(exc)) from None
 
 
+STATUTE_RE = re.compile(
+    r"\b(?:section|s\.|article|clause|schedule)\s*\d+|\bact\s+(?:of\s+)?(?:19|20)\d\d\b|\b(?:statute|statutory|constitution|legislation|ordinance|"
+    r"directive|family code|criminal code|civil code|bill of rights|regulations?\s+(?:19|20)\d\d)\b",
+    re.I,
+)
+"""A question about the text of a law: never answered from the model's memory, however sure it sounds."""
+
+
 def classify(
     question: str,
     *,
@@ -232,6 +240,7 @@ def classify(
         intent = "arithmetic"
 
     chatty = bool(CHITCHAT_RE.search(text) or OPINION_ASK_RE.search(text))
+    statutory = bool(STATUTE_RE.search(text))
     stable_knowledge = bool(STABLE_KNOWLEDGE_RE.search(text)) and not time_sensitive and not follow_up
 
     analysis = QuestionAnalysis(
@@ -240,7 +249,7 @@ def classify(
         key_entities=proper_nouns[:8],
         time_sensitivity="high" if time_sensitive else ("low" if stable_knowledge else "medium"),
         needs_current_data=time_sensitive,
-        needs_web_research=not (computed is not None or chatty or stable_knowledge),
+        needs_web_research=not (computed is not None or ((chatty or stable_knowledge) and not statutory)),
         difficulty="high" if (high_stakes or text.count("?") > 2 or len(text.split()) > 45) else ("low" if len(text.split()) < 8 else "medium"),
         classifier_source="heuristic",
     )
@@ -262,7 +271,7 @@ def classify(
         analysis.direct_answer = f"{computed}"
         analysis.rationale = f"computed locally from {expr}; no model or browser needed"
         analysis.starting_level = EscalationLevel.DIRECT
-    elif chatty and not time_sensitive and not high_stakes:
+    elif chatty and not time_sensitive and not high_stakes and not statutory:
         analysis.trivial = True
         analysis.can_answer_directly = bool(llm_stable_answer)
         analysis.direct_answer = llm_stable_answer
@@ -271,7 +280,7 @@ def classify(
             "banter/creative ask -- answered as itself, no research" if llm_stable_answer
             else "banter/creative ask; no model configured, so one provider handles it cheaply"
         )
-    elif stable_knowledge and llm_stable_answer:
+    elif stable_knowledge and llm_stable_answer and not statutory:
         analysis.trivial = True
         analysis.can_answer_directly = True
         analysis.direct_answer = llm_stable_answer
