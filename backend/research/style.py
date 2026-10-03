@@ -360,7 +360,7 @@ _CAVEAT_REWRITES = (
     (re.compile(r"^verifier answer overruled", re.I), ""),
     (re.compile(r"^voice scrub removed", re.I), ""),
     (re.compile(r"^no claim survived the (?:evidence )?ledger\.?$", re.I), "None of the claims could be confirmed from the pages I opened."),
-    (re.compile(r"^not confirmed by any page we opened:\s*(.+)$", re.I | re.S), r"The AI answers said \1 but none of the pages I opened confirmed it."),
+    (re.compile(r"^not confirmed by any page we opened:\s*(.+)$", re.I | re.S), "One AI answer claimed: \"\\1\" I couldn't confirm that from any page I opened."),
 )
 
 

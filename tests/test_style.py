@@ -89,7 +89,7 @@ def test_plain_caveats_reword_or_drop_internal_bookkeeping():
     got = plain_caveats(raw)
     assert got[0].startswith("The AI reviewer wasn't available")
     assert "None of the claims could be confirmed from the pages I opened." in got
-    assert any(c.startswith("The AI answers said The minimum age is 13 years old.") for c in got)
+    assert any(c.startswith('One AI answer claimed: "The minimum age is 13 years old." I couldn') for c in got)
     assert got.count("Only one independent site backs this.") == 1, "duplicates collapse"
     assert not any(INTERNAL_VOCAB_RE.search(c) or "localhost" in c or "verifier" in c.lower() for c in got)
 
@@ -104,3 +104,18 @@ def test_final_answer_caveats_are_plain_language():
     report.confidence_note = " No claim survived the evidence ledger."
     final = build_final_answer(report, [], 1)
     assert final.caveats == ["None of the claims could be confirmed from the pages I opened."]
+
+def test_a_dont_know_draft_is_not_quoted_back_as_an_unconfirmed_claim():
+    from backend.models import Claim, ClaimStatus, ClaimVerdict, Confidence, VerifierReport
+    from backend.research.style import plain_caveats
+    from backend.verification.llm import Endpoint
+    from backend.verification.verifier import Verifier
+
+    claim = Claim(job_id="j", id="c1", claim="x is true", kind="fact")
+    verdict = ClaimVerdict(claim_id="c1", claim="x is true", verdict=ClaimStatus.INSUFFICIENT_EVIDENCE, confidence=Confidence.NONE, reasoning="r")
+    for draft, expect_caveat in (("I don't know which article, no sources were retrieved.", False), ("Article 10 makes Ukrainian the only state language.", True)):
+        report = VerifierReport(job_id="j", round=1, verdicts=[verdict], answer=draft, confidence=Confidence.MODERATE)
+        Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)._reconcile(report, [claim], [])
+        quoted = [c for c in plain_caveats(report.caveats) if "One AI answer claimed" in c]
+        assert bool(quoted) is expect_caveat
+        assert report.answer.startswith("I couldn't verify this reliably.")
