@@ -52,6 +52,11 @@ async function boot() {
   $("#testVerifier").addEventListener("click", checkDoctor);
   $("#cancel").addEventListener("click", cancelJob);
   $("#newThread").addEventListener("click", newThread);
+  $("#openHistory").addEventListener("click", () => openPanel("history"));
+  $("#closeHistory").addEventListener("click", () => openPanel(null));
+  $("#historyList").addEventListener("keydown", historyKeys);
+  $("#question").addEventListener("keydown", questionKeys);
+  document.addEventListener("keydown", globalKeys);
   await restoreThread();
   $("#question").focus();
 }
@@ -129,7 +134,112 @@ function paintConfig() {
 }
 
 function toggleSettings(open) {
-  $("#settings").hidden = !open;
+  openPanel(open ? "settings" : null);
+}
+
+/** One side panel at a time ("settings", "history", or null). Focus moves in on open and back to the question on close. */
+function openPanel(name) {
+  for (const id of ["settings", "history"]) $("#" + id).hidden = id !== name;
+  $("#openSettings").setAttribute("aria-expanded", String(name === "settings"));
+  $("#openHistory").setAttribute("aria-expanded", String(name === "history"));
+  if (name === "history") loadHistory();
+  if (name) $("#" + name).querySelector("input, select, button")?.focus();
+  else $("#question").focus();
+}
+
+function fmtTime(seconds) {
+  const d = new Date(Number(seconds) * 1000);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+
+/** The History view: every earlier question, newest first. Text only -- nothing here is trusted markup. */
+async function loadHistory() {
+  const box = $("#historyList");
+  box.textContent = "loading.";
+  try {
+    const res = await fetch("/api/jobs?limit=100");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const jobs = await res.json();
+    box.textContent = "";
+    if (!jobs.length) {
+      box.append(el("p", "hint", "Nothing asked yet."));
+      return;
+    }
+    for (const job of jobs) {
+      const item = el("button", "history-item");
+      item.type = "button";
+      item.dataset.jobId = job.id;
+      item.append(el("span", "h-q", job.question || "(no question)"));
+      const bits = [fmtTime(job.created_at), job.status, job.confidence && job.confidence !== "none" ? job.confidence : null].filter(Boolean);
+      item.append(el("span", "meta", bits.join(" - ")));
+      item.addEventListener("click", () => openPastJob(job.id));
+      box.append(item);
+    }
+  } catch (err) {
+    box.textContent = "";
+    box.append(el("p", "err", "Could not load history: " + err.message));
+  }
+}
+
+/** Show a finished job exactly as it looked when it ran (answer, evidence, raw research, export). */
+async function openPastJob(jobId) {
+  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
+  if (!res.ok) return note("could not open that job");
+  const job = await res.json();
+  state.es?.close();
+  $("#live").hidden = true;
+  state.jobId = jobId;
+  rememberThread(job.conversation_id || null);
+  $("#stream").textContent = "";
+  const bubble = el("div", "msg user");
+  bubble.append(el("span", "q", job.question || job.live?.question || ""));
+  const shell = buildAnswerShell();
+  shell.jobId = jobId;
+  $("#stream").append(bubble, shell.root);
+  paintAnswer(shell, finalFrom(job));
+  shell.sections.append(exportRow(jobId));
+  await paintEvidence(shell, job);
+  openPanel(null);
+}
+
+function exportRow(jobId) {
+  const row = el("div", "export-row");
+  row.append(el("span", "export-label", "export"));
+  for (const [fmt, label] of [["md", "Markdown"], ["json", "JSON"]]) {
+    const link = el("a", "export-link", label);
+    link.href = `/api/jobs/${encodeURIComponent(jobId)}/export?format=${fmt}`;
+    link.download = "";
+    row.append(link);
+  }
+  return row;
+}
+
+function historyKeys(e) {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const items = [...document.querySelectorAll("#historyList .history-item")];
+  const at = items.indexOf(document.activeElement);
+  if (!items.length) return;
+  e.preventDefault();
+  const next = e.key === "ArrowDown" ? Math.min(items.length - 1, at + 1) : Math.max(0, at - 1);
+  items[next].focus();
+}
+
+/** Enter sends, Shift+Enter is a new line (and IME composition is left alone). */
+function questionKeys(e) {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    ask();
+  }
+}
+
+/** Escape closes the open side panel; "/" jumps to the question box. */
+function globalKeys(e) {
+  if (e.key === "Escape" && (!$("#settings").hidden || !$("#history").hidden)) {
+    openPanel(null);
+  } else if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "")) {
+    e.preventDefault();
+    $("#question").focus();
+  }
 }
 
 async function saveSettings() {
@@ -218,7 +328,7 @@ async function ask(event) {
   state.providers.clear();
   state.startedAt = Date.now();
 
-  const res = await fetch("/api/jobs", {
+  const reply = await fetch("/api/jobs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -227,7 +337,14 @@ async function ask(event) {
       max_rounds: Number($("#maxRounds").value),
       conversation_id: state.conversationId,
     }),
-  }).then((r) => r.json());
+  });
+  const res = await reply.json().catch(() => ({}));
+  if (!reply.ok || !res.job_id) {
+    $("#live").hidden = true;
+    answerShell.error.textContent = "Could not start: " + (typeof res.detail === "string" ? res.detail : `HTTP ${reply.status}`);
+    return;
+  }
+  answerShell.jobId = res.job_id;
   if (res.conversation_id) rememberThread(res.conversation_id);
   state.jobId = res.job_id;
   listen(res.job_id, answerShell);
@@ -315,6 +432,7 @@ function buildAnswerShell() {
 async function hydrate(jobId, shell) {
   const job = await fetch(`/api/jobs/${jobId}`).then((r) => r.json());
   paintAnswer(shell, finalFrom(job));
+  shell.sections.append(exportRow(jobId));
   await paintEvidence(shell, job);
 }
 
@@ -417,7 +535,7 @@ function paintAnswer(shell, final) {
   if (disagreement) shell.sections.append(expander("Where they disagree", () => el("p", "body", disagreement), true));
   if (sources.length) shell.sections.append(expander(`Sources (${sources.length})`, () => sourceList(sources)));
   if (caveats.length) shell.sections.append(expander("Caveats", () => { const ul = el("ul", "body"); caveats.forEach((c) => ul.append(el("li", null, c))); return ul; }));
-  shell.sections.append(expander("Raw research", () => rawPanel(state.jobId)));
+  shell.sections.append(expander("Raw research", () => rawPanel(shell.jobId || state.jobId)));
 }
 
 function expander(title, build, open = false) {

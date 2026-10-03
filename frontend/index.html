@@ -26,7 +26,8 @@
       <input type="number" id="maxRounds" min="1" max="8" value="3">
     </label>
     <button id="newThread" class="ghost" type="button" title="Start a fresh conversation: earlier questions stop being used as context">new thread</button>
-    <button id="openSettings" class="ghost">providers &amp; verifier</button>
+    <button id="openHistory" class="ghost" type="button" aria-controls="history" aria-expanded="false" title="Earlier questions and their evidence">history</button>
+    <button id="openSettings" class="ghost" type="button" aria-controls="settings" aria-expanded="false">providers &amp; verifier</button>
   </div>
 </header>
 
@@ -41,7 +42,13 @@
     <button id="cancel" class="ghost small">stop</button>
   </section>
 
-  <aside id="settings" class="settings" hidden>
+  <aside id="history" class="settings history" aria-label="History" hidden>
+    <h2>History</h2>
+    <div id="historyList" class="history-list"></div>
+    <div class="row"><button id="closeHistory" class="ghost" type="button">close</button></div>
+  </aside>
+
+  <aside id="settings" class="settings" aria-label="Providers and verifier" hidden>
     <h2>Providers</h2>
     <div id="providerList"></div>
     <h2>Verifier</h2>
@@ -76,10 +83,11 @@
 
 <footer>
   <form id="askForm">
-    <textarea id="question" rows="1" placeholder="Ask something that needs checking&hellip;"></textarea>
+    <textarea id="question" rows="1" aria-label="Your question" placeholder="Ask something that needs checking&hellip;"></textarea>
     <button type="submit" class="primary" id="askBtn">Ask</button>
   </form>
   <p class="hint" id="footHint">
+    Enter sends &middot; Shift+Enter new line &middot; / focuses the box &middot; Esc closes a panel.
     Runs in its own Chrome windows &mdash; never your everyday browser. No API keys for the chat sites: sign in once, it remembers.
   </p>
 </footer>
