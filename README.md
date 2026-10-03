@@ -372,11 +372,57 @@ privacy. It will not match a frontier model on subtle reading of a primary docum
 
 ---
 
+## OpenRouter (free models) first, Ollama as the alternative
+
+The verifier, the question analyser and the screenshot (vision) fallback each talk to an
+OpenAI-compatible endpoint. The default is OpenRouter with `:free` models, each with
+ordered `fallback_models`: a 429 (honours Retry-After), an upstream error, an empty
+completion or a 404 moves to the next model; a bad key or an unreachable server stops
+at once. A reply cut off by the token limit is retried once with more room.
+
+```
+OPENROUTER_API_KEY=...            # or verifier.api_key in config/settings.yaml (gitignored)
+OMNIBRAIN_VERIFIER_MODEL=nvidia/nemotron-3-super-120b-a12b:free
+```
+
+Models used in the last live run: verifier `nvidia/nemotron-3-super-120b-a12b:free`,
+analysis `poolside/laguna-s-2.1:free`, vision `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free`
+(see `config/settings.example.yaml` for the fallbacks). **The key lives only in the
+gitignored `config/settings.yaml` or the environment; never commit it.** A test fails if a
+key-shaped string appears in tracked files, and logs redact `sk-...` strings. `run.py doctor`
+reports the key, model and fallbacks honestly. Ollama still works: set `provider: ollama`.
+
+## Hard-question evaluation
+
+One command re-runs it (starts its own server on a free port, trimmed provider set):
+
+```bash
+.venv\Scripts\python.exe scripts/eval_hard.py                       # all questions in scripts/eval_questions.yaml
+.venv\Scripts\python.exe scripts/eval_hard.py --only uk-dpa-age,res-ten-percent-brain
+.venv\Scripts\python.exe scripts/eval_hard.py --category uk-law --limit 2
+```
+
+Results land in `data/eval/eval_<timestamp>.md` and `.json`: the final answer, whether
+primary sources (legislation.gov.uk, zakon.rada.gov.ua, university pages) were opened
+and cited, refutation counts, figures in the answer that no opened page contains,
+voice compliance, and runtime. The question set covers UK Acts, Ukrainian laws,
+university regulations, PhD-level research, false premises, myths and unanswerable
+questions (the right answer there is "I don't know." with a reason). Each question
+takes 3-10 minutes on live sites, so use `--only` for batches.
+
+## Voice
+
+Final answers are conclusion first, plain and conversational, with at most two fitting
+emojis (added after the first sentence). An honest "I don't know." / "I couldn't verify
+this reliably." never gets an emoji or an apology, and always says why. Internal words
+(ledger, scores, claim ids, rounds) are scrubbed from answers and caveats
+(`backend/research/style.py`: `humanize`, `plain_caveats`, `voice_report`).
+
 ## Testing
 
 ```bash
-.venv\Scripts\python.exe -m pytest -q                       # everything (285, ~2.5 min)
-.venv\Scripts\python.exe -m pytest -q -m "not browser"      # skip real Chrome (262, ~35 s)
+.venv\Scripts\python.exe -m pytest -q                       # everything (~365, ~3 min)
+.venv\Scripts\python.exe -m pytest -q -m "not browser"      # skip real Chrome (338, ~40 s)
 .venv\Scripts\python.exe -m pytest -q tests/test_browser_live.py
 .venv\Scripts\python.exe -m pytest -q tests/test_ui_live.py   # the UI in headless Chrome
 ```
