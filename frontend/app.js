@@ -54,6 +54,15 @@ async function boot() {
   $("#newThread").addEventListener("click", newThread);
   $("#openHistory").addEventListener("click", () => openPanel("history"));
   $("#openMemory").addEventListener("click", () => openPanel("memory"));
+  $("#openThreads").addEventListener("click", () => openPanel("threads"));
+  $("#closeThreads").addEventListener("click", () => openPanel(null));
+  $("#thCreate").addEventListener("click", createThread);
+  $("#thBack").addEventListener("click", loadThreads);
+  $("#thSend").addEventListener("click", sendThread);
+  $("#thText").addEventListener("keydown", threadKeys);
+  $("#thRecallBtn").addEventListener("click", recallThread);
+  $("#thRecall").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); recallThread(); } });
+  $("#thDelete").addEventListener("click", deleteThread);
   $("#closeMemory").addEventListener("click", () => openPanel(null));
   $("#memSearch").addEventListener("click", memSearch);
   $("#memQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); memSearch(); } });
@@ -149,12 +158,14 @@ function toggleSettings(open) {
 
 /** One side panel at a time ("settings", "history", or null). Focus moves in on open and back to the question on close. */
 function openPanel(name) {
-  for (const id of ["settings", "history", "memory"]) $("#" + id).hidden = id !== name;
+  for (const id of ["settings", "history", "memory", "threads"]) $("#" + id).hidden = id !== name;
   $("#openSettings").setAttribute("aria-expanded", String(name === "settings"));
   $("#openHistory").setAttribute("aria-expanded", String(name === "history"));
   $("#openMemory").setAttribute("aria-expanded", String(name === "memory"));
+  $("#openThreads").setAttribute("aria-expanded", String(name === "threads"));
   if (name === "history") loadHistory();
   if (name === "memory") loadMemory();
+  if (name === "threads") loadThreads();
   if (name) $("#" + name).querySelector("input, select, button")?.focus();
   else $("#question").focus();
 }
@@ -346,7 +357,7 @@ function questionKeys(e) {
 
 /** Escape closes the open side panel; "/" jumps to the question box. */
 function globalKeys(e) {
-  if (e.key === "Escape" && (!$("#settings").hidden || !$("#history").hidden || !$("#memory").hidden)) {
+  if (e.key === "Escape" && (!$("#settings").hidden || !$("#history").hidden || !$("#memory").hidden || !$("#threads").hidden)) {
     openPanel(null);
   } else if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "")) {
     e.preventDefault();
@@ -354,8 +365,175 @@ function globalKeys(e) {
   }
 }
 
-async function saveSettings() {
-  const providers = {};
+/* ------------------------------------------------------------------ threads screen
+ * One long conversation over replaceable provider chats. The server owns the thread; this only draws it.
+ * Text-only (no innerHTML): provider replies are untrusted input.
+ */
+const thread = { id: null, busy: false };
+const REASONS = { context_limit: "the previous chat was nearly full", provider_switch: "you changed provider", resume: "the thread was resumed" };
+
+function enabledProviders() {
+  const all = state.config?.providers || {};
+  return Object.entries(all).filter(([name, p]) => p && p.enabled && name !== "search").map(([name, p]) => [name, p.label || name]);
+}
+
+function thStatus(text, bad = false) {
+  const s = $("#thStatus");
+  s.textContent = text || "";
+  s.className = bad ? "err" : "hint";
+}
+
+async function loadThreads() {
+  thread.id = null;
+  $("#thDetail").hidden = true;
+  $("#thListBox").hidden = false;
+  const box = $("#thList");
+  box.textContent = "loading.";
+  try {
+    const data = await memCall("/api/threads");
+    box.textContent = "";
+    if (!data.threads.length) box.append(el("p", "hint", "No threads yet. Create one above."));
+    for (const t of data.threads) {
+      const card = el("div", "mem th-card");
+      card.append(el("div", "mem-text", t.title || "Untitled thread"));
+      const chips = el("div", "chips");
+      for (const b of [`${t.messages} message${t.messages === 1 ? "" : "s"}`, t.project ? "project: " + t.project : null, "last active " + fmtTime(t.updated_at)]) if (b) chips.append(el("span", "chip", b));
+      card.append(chips);
+      const open = el("button", "ghost small th-open", "open");
+      open.type = "button";
+      open.addEventListener("click", () => openThread(t.thread_id));
+      card.append(open);
+      box.append(card);
+    }
+  } catch (e) {
+    box.textContent = "";
+    box.append(el("p", "err", "Could not load threads: " + e.message));
+  }
+}
+
+async function createThread() {
+  const title = $("#thTitle").value.trim();
+  const project = $("#thProject").value.trim();
+  try {
+    const made = await memCall("/api/threads", jsonOpts("POST", { title, project: project || null }));
+    $("#thTitle").value = "";
+    $("#thProject").value = "";
+    await openThread(made.thread_id);
+  } catch (e) {
+    thStatus("Could not create the thread: " + e.message, true);
+  }
+}
+
+async function openThread(id) {
+  thread.id = id;
+  $("#thListBox").hidden = true;
+  $("#thDetail").hidden = false;
+  thStatus("");
+  const sel = $("#thProvider");
+  if (!sel.options.length) for (const [name, label] of enabledProviders()) sel.append(new Option(label, name));
+  await refreshThread();
+  $("#thText").focus();
+}
+
+async function refreshThread() {
+  const [view, segs] = await Promise.all([memCall(`/api/threads/${thread.id}?last=300`), memCall(`/api/threads/${thread.id}/segments`)]);
+  paintThread(view, segs);
+}
+
+function paintThread(view, segs) {
+  $("#thHeading").textContent = (view.title || "Untitled thread") + (view.project ? "  \u00b7  project: " + view.project : "");
+  const strip = $("#thSegments");
+  strip.textContent = "";
+  for (const s of segs.segments) {
+    const chip = el("span", "chip seg" + (s.open ? " seg-open" : ""), `${s.label} \u00b7 ${s.tokens}/${s.limit} tokens \u00b7 ${s.open ? "in use" : "closed"}`);
+    chip.title = `${s.provider}; opened because: ${REASONS[s.reason] || s.reason || "start"}${s.method ? "; summary: " + s.method : ""}`;
+    strip.append(chip);
+  }
+  if (!segs.segments.length) strip.append(el("span", "hint", "No AI chat yet \u2014 send a message."));
+  const box = $("#thMessages");
+  box.textContent = "";
+  for (const m of view.messages) {
+    const ctx = m.context;
+    if (m.role === "user" && ctx && ctx.rotated) {
+      box.append(el("div", "rotation", `\u21bb A new ${ctx.chat} chat was opened because ${REASONS[ctx.reason] || ctx.reason}. It was given the thread so far (${ctx.packet_tokens} tokens of context).`));
+    }
+    const row = el("div", "th-msg " + (m.role === "user" ? "th-user" : "th-ai"));
+    const who = m.role === "user" ? "you" : (m.provider || "assistant");
+    row.append(el("div", "th-who", who + " \u00b7 " + fmtTime(m.ts)));
+    row.append(el("div", "th-text", m.content));
+    if (m.role === "user" && ctx) {
+      const bits = [`chat: ${ctx.chat}`];
+      if (ctx.packet_tokens) bits.push(`thread context given: ${ctx.packet_tokens} tokens`);
+      if (ctx.recalled) bits.push(`${ctx.recalled} earlier message(s) recalled`);
+      const mem = ctx.memory_used || [];
+      bits.push(mem.length ? `${mem.length} remembered thing(s) used` : "no personal memory used");
+      const d = el("details", "th-ctx");
+      d.append(el("summary", null, bits.join(" \u00b7 ")));
+      if (mem.length) { const ul = el("ul", "th-mem"); for (const t of mem) ul.append(el("li", null, t)); d.append(ul); }
+      row.append(d);
+    }
+    box.append(row);
+  }
+  box.scrollTop = box.scrollHeight;
+  $("#thEmpty").hidden = view.messages.length > 0;
+}
+
+async function sendThread() {
+  if (thread.busy || !thread.id) return;
+  const text = $("#thText").value.trim();
+  const provider = $("#thProvider").value;
+  if (!text || !provider) { thStatus("Type a message and pick a provider.", true); return; }
+  thread.busy = true;
+  $("#thSend").disabled = true;
+  thStatus(`Asking ${provider} \u2014 this uses its real chat window and can take a minute.`);
+  try {
+    const out = await memCall(`/api/threads/${thread.id}/chat`, jsonOpts("POST", { text, provider }));
+    $("#thText").value = "";
+    thStatus(out.rotated ? `Opened a new chat (${out.chat}).` : "");
+  } catch (e) {
+    thStatus("That didn't go through: " + e.message + " Your message is saved in the thread.", true);
+  } finally {
+    thread.busy = false;
+    $("#thSend").disabled = false;
+    await refreshThread().catch(() => {});
+  }
+}
+
+async function recallThread() {
+  const q = $("#thRecall").value.trim();
+  const out = $("#thRecallOut");
+  out.textContent = "";
+  if (!q || !thread.id) return;
+  try {
+    const data = await memCall(`/api/threads/${thread.id}/recall`, jsonOpts("POST", { query: q }));
+    if (!data.messages.length) out.append(el("p", "hint", "Nothing in this thread matches."));
+    for (const s of data.summaries) out.append(el("div", "mem", "summary of an earlier part: " + s.text));
+    for (const m of data.messages) {
+      const card = el("div", "mem");
+      card.append(el("div", "mem-text", m.content));
+      card.append(el("div", "mem-why", `${m.role} \u00b7 ${fmtTime(m.ts)} \u00b7 found by ${m.why.join(", ")}`));
+      out.append(card);
+    }
+  } catch (e) {
+    out.append(el("p", "err", "Recall failed: " + e.message));
+  }
+}
+
+async function deleteThread() {
+  if (!thread.id || !window.confirm("Delete this whole thread (every message and summary)? This cannot be undone.")) return;
+  try {
+    await memCall(`/api/threads/${thread.id}`, { method: "DELETE" });
+    await loadThreads();
+  } catch (e) {
+    thStatus("Could not delete: " + e.message, true);
+  }
+}
+
+function threadKeys(e) {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendThread(); }
+}
+
+async function saveSettings() {  const providers = {};
   for (const box of document.querySelectorAll("#providerList input[type=checkbox]")) {
     providers[box.dataset.provider] = { enabled: box.checked };
   }

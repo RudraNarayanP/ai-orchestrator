@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OmniBrain</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -28,6 +29,7 @@
     <button id="newThread" class="ghost" type="button" title="Start a fresh conversation: earlier questions stop being used as context">new thread</button>
     <button id="openHistory" class="ghost" type="button" aria-controls="history" aria-expanded="false" title="Earlier questions and their evidence">history</button>
     <button id="openMemory" class="ghost" type="button" aria-controls="memory" aria-expanded="false" title="What OmniBrain remembers about you, and why">memory</button>
+    <button id="openThreads" class="ghost" type="button" aria-controls="threads" aria-expanded="false" title="Long conversations that never run out: OmniBrain keeps the thread while the AI chats underneath are swapped">threads</button>
     <button id="openSettings" class="ghost" type="button" aria-controls="settings" aria-expanded="false">providers &amp; verifier</button>
   </div>
 </header>
@@ -77,6 +79,35 @@
     <div class="row"><button id="closeMemory" class="ghost" type="button">close</button></div>
   </aside>
 
+  <aside id="threads" class="settings memory threads" aria-label="Threads" hidden>
+    <h2>Threads</h2>
+    <p class="hint">A thread is one long conversation that never runs out. OmniBrain keeps all of it on this computer; the AI chat underneath is swapped for a fresh one when it fills up or when you change provider, and the new chat is given the thread so far. (Different from &ldquo;new thread&rdquo; in the header, which only resets follow-up questions.)</p>
+    <div id="thListBox">
+      <div class="row">
+        <input id="thTitle" type="text" maxlength="120" placeholder="title (optional)">
+        <input id="thProject" type="text" maxlength="60" placeholder="project (optional)">
+        <button id="thCreate" class="primary" type="button">new thread</button>
+      </div>
+      <div id="thList" class="mem-list"></div>
+    </div>
+    <div id="thDetail" hidden>
+      <div class="row"><button id="thBack" class="ghost small" type="button">&larr; all threads</button><h3 id="thHeading"></h3><button id="thDelete" class="ghost small" type="button">delete thread</button></div>
+      <p class="field-label">AI chats under this thread</p>
+      <div id="thSegments" class="chips"></div>
+      <p id="thEmpty" class="hint">Nothing here yet.</p>
+      <div id="thMessages" class="th-messages"></div>
+      <p id="thStatus" class="hint"></p>
+      <div class="row">
+        <select id="thProvider" aria-label="Provider for the next message"></select>
+        <textarea id="thText" rows="2" aria-label="Message" placeholder="Message this thread&hellip; (Enter sends, Shift+Enter new line)"></textarea>
+        <button id="thSend" class="primary" type="button">send</button>
+      </div>
+      <h3>Find something said earlier</h3>
+      <div class="row"><input id="thRecall" type="text" placeholder="e.g. the Germany salary thing"><button id="thRecallBtn" class="ghost" type="button">search</button></div>
+      <div id="thRecallOut" class="mem-list"></div>
+    </div>
+    <div class="row"><button id="closeThreads" class="ghost" type="button">close</button></div>
+  </aside>
   <aside id="settings" class="settings" aria-label="Providers and verifier" hidden>
     <h2>Providers</h2>
     <div id="providerList"></div>

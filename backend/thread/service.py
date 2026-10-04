@@ -61,6 +61,7 @@ class TurnPlan:
     packet: Packet | None = None
     recalled: list[int] = field(default_factory=list)  # seqs of earlier messages injected
     segment_label: str = ""
+    memory_lines: list[str] = field(default_factory=list)  # personal memory offered to the new chat (context, never evidence)
 
 
 @dataclass
@@ -140,10 +141,12 @@ class ThreadService:
             found, sums = self.store.search(tid, text, k=self.recall_k, window=time_window(text, now))
         packet: Packet | None = None
         prompt = text
+        mem_lines: list[str] = []
         if fresh and prior:
             th = self.store.get_thread(tid) or {}
+            mem_lines = self._user_lines(text)
             packet = build_packet(
-                state=th.get("state"), recent=recent, task=text, budget_tokens=self.packet_budget, user_lines=self._user_lines(text),
+                state=th.get("state"), recent=recent, task=text, budget_tokens=self.packet_budget, user_lines=mem_lines,
                 project=th.get("project"), earlier=[f for f in found if f.message.seq not in {m.seq for m in recent}], summary_hits=sums[:2],
             )
             prompt = packet.text
@@ -151,11 +154,15 @@ class ThreadService:
         elif recall and (found or sums):
             prompt, n = recall_block(found, sums, text)
             self.store.add_segment_tokens(seg.segment_id, approx_tokens(prompt) - incoming)
-        self.store.add_messages(tid, [dict(role="user", content=text, provider=provider, segment_id=seg.segment_id, ts=ts)])
+        label = self.label(seg)
+        meta = {"chat": label, "provider": provider, "rotated": rotated, "reason": reason or ("start" if fresh and not prior else ""),
+                "packet_tokens": packet.tokens if packet else 0, "packet_sections": packet.sections if packet else {},
+                "recalled": len(found) if (packet or recall) else 0, "memory_used": mem_lines}
+        self.store.add_messages(tid, [dict(role="user", content=text, provider=provider, segment_id=seg.segment_id, ts=ts, meta=meta)])
         return TurnPlan(
             thread_id=tid, segment_id=seg.segment_id, provider=provider, provider_key=seg.provider_key, prompt=prompt,
             continue_thread=not (fresh) and seg.tokens > 0, rotated=rotated, reason=reason or ("start" if fresh and not prior else ""),
-            packet=packet, recalled=[f.message.seq for f in found] if (packet or recall) else [], segment_label=self.label(seg),
+            packet=packet, recalled=[f.message.seq for f in found] if (packet or recall) else [], segment_label=label, memory_lines=mem_lines,
         )
 
     def record_reply(self, tid: str, text: str, provider: str, *, segment_id: str | None = None, ts: float | None = None) -> Message:

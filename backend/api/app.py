@@ -484,8 +484,10 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/threads/{tid}/segments")
     async def thread_segments(tid: str) -> Any:
         svc = _thread_or_404(tid)
-        return {"segments": [{"label": svc.label(s), "provider": s.provider, "tokens": s.tokens, "open": s.open, "reason": s.reason, "method": s.method,
-                              "first_seq": s.first_seq, "last_seq": s.last_seq} for s in svc.store.segments(tid)]}
+        th = svc.store.get_thread(tid) or {}
+        return {"segments": [{"label": svc.label(s), "provider": s.provider, "tokens": s.tokens, "limit": svc.ctx.limit(s.provider), "open": s.open,
+                              "reason": s.reason, "method": s.method, "first_seq": s.first_seq, "last_seq": s.last_seq, "opened_at": s.opened_at}
+                             for s in svc.store.segments(tid)], "state_kb": round(len(json.dumps(th.get("state") or {})) / 1024, 1)}
 
     @app.post("/api/threads/{tid}/recall")
     async def thread_recall(tid: str, request: Request) -> Any:
@@ -517,7 +519,10 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
             turn = await svc.chat(tid, text.strip(), provider, adapter_ask(adapters))
         except Exception as exc:  # noqa: BLE001 -- the user's message is already stored; say what failed
             raise HTTPException(status_code=502, detail=f"{type(exc).__name__}: {exc}") from None
-        return {"reply": turn.reply, "rotated": turn.plan.rotated, "reason": turn.plan.reason, "chat": turn.plan.segment_label}
+        p = turn.plan
+        return {"reply": turn.reply, "rotated": p.rotated, "reason": p.reason, "chat": p.segment_label, "provider": provider,
+                "context": {"packet_tokens": p.packet.tokens if p.packet else 0, "recalled": len(p.recalled), "memory_used": p.memory_lines,
+                            "continued_chat": p.continue_thread}}
 
     @app.delete("/api/threads/{tid}")
     async def thread_delete(tid: str) -> Any:

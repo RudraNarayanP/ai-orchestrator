@@ -28,7 +28,7 @@ create table if not exists segments(segment_id text primary key, thread_id text 
   opened_at real, closed_at real, first_seq integer, last_seq integer, tokens integer default 0, summary_json text, method text, reason text);
 create index if not exists seg_thread on segments(thread_id, idx);
 create table if not exists messages(msg_id integer primary key autoincrement, thread_id text not null, seq integer not null, segment_id text,
-  role text, content text, provider text, ts real, tokens integer, job_id text, emb blob);
+  role text, content text, provider text, ts real, tokens integer, job_id text, emb blob, meta text);
 create index if not exists msg_thread_seq on messages(thread_id, seq);
 create index if not exists msg_seg on messages(segment_id);
 create index if not exists msg_seg_seq on messages(segment_id, seq);
@@ -53,9 +53,13 @@ class Message:
     ts: float
     tokens: int
     job_id: str = ""
+    meta: dict[str, Any] = field(default_factory=dict)
 
     def public(self) -> dict[str, Any]:
-        return {"seq": self.seq, "role": self.role, "content": self.content, "provider": self.provider, "ts": self.ts}
+        out = {"seq": self.seq, "role": self.role, "content": self.content, "provider": self.provider, "ts": self.ts}
+        if self.meta:
+            out["context"] = self.meta  # what the chat was given for this turn (rotation, packet size, memory used)
+        return out
 
 
 @dataclass
@@ -121,6 +125,9 @@ class ThreadStore:
         self.db.execute("pragma journal_mode=wal")
         self.db.execute("pragma synchronous=normal")
         self.db.executescript(SCHEMA)
+        if "meta" not in {r[1] for r in self.db.execute("pragma table_info(messages)")}:  # files made before the thread screen existed
+            self.db.execute("alter table messages add column meta text")
+            self.db.commit()
         self._vec: dict[str, _VecIndex] = {}
 
     def close(self) -> None:
@@ -220,8 +227,8 @@ class ThreadStore:
 
     # ------------------------------------------------------------------ messages
     def add_message(self, tid: str, role: str, content: str, *, provider: str = "", segment_id: str | None = None, ts: float | None = None,
-                    job_id: str = "") -> Message:
-        return self.add_messages(tid, [dict(role=role, content=content, provider=provider, segment_id=segment_id, ts=ts, job_id=job_id)])[0]
+                    job_id: str = "", meta: dict[str, Any] | None = None) -> Message:
+        return self.add_messages(tid, [dict(role=role, content=content, provider=provider, segment_id=segment_id, ts=ts, job_id=job_id, meta=meta)])[0]
 
     def add_messages(self, tid: str, items: Iterable[dict[str, Any]], *, embed: bool = True) -> list[Message]:
         items = list(items)
@@ -241,12 +248,14 @@ class ThreadStore:
                 ts = it.get("ts") or now
                 emb = vecs[n].astype(np.float32).tobytes() if vecs is not None else None
                 cur = self.db.execute(
-                    "insert into messages(thread_id,seq,segment_id,role,content,provider,ts,tokens,job_id,emb) values(?,?,?,?,?,?,?,?,?,?)",
-                    (tid, seq, it.get("segment_id"), it["role"], text, it.get("provider") or "", ts, toks, it.get("job_id") or "", emb))
+                    "insert into messages(thread_id,seq,segment_id,role,content,provider,ts,tokens,job_id,emb,meta) values(?,?,?,?,?,?,?,?,?,?,?)",
+                    (tid, seq, it.get("segment_id"), it["role"], text, it.get("provider") or "", ts, toks, it.get("job_id") or "", emb,
+                     json.dumps(it["meta"]) if it.get("meta") else None))
                 mid = cur.lastrowid
                 self.db.execute("insert into messages_fts(rowid,tid,content) values(?,?,?)", (mid, tid, text))
                 msg = Message(mid, tid, seq, it.get("segment_id"), it["role"], text, it.get("provider") or "", ts, toks, it.get("job_id") or "")
                 out.append(msg)
+                msg.meta = it.get("meta") or {}
                 if vecs is not None and tid in self._vec:
                     self._vec[tid].add(mid, vecs[n])
                 sid = it.get("segment_id")
@@ -259,9 +268,10 @@ class ThreadStore:
 
     @staticmethod
     def _msg(r: sqlite3.Row) -> Message:
-        return Message(r["msg_id"], r["thread_id"], r["seq"], r["segment_id"], r["role"], r["content"], r["provider"] or "", r["ts"], r["tokens"] or 0, r["job_id"] or "")
+        return Message(r["msg_id"], r["thread_id"], r["seq"], r["segment_id"], r["role"], r["content"], r["provider"] or "", r["ts"], r["tokens"] or 0, r["job_id"] or "",
+                       json.loads(r["meta"]) if r["meta"] else {})
 
-    _COLS = "msg_id,thread_id,seq,segment_id,role,content,provider,ts,tokens,job_id"
+    _COLS = "msg_id,thread_id,seq,segment_id,role,content,provider,ts,tokens,job_id,meta"
 
     def messages(self, tid: str, *, last: int | None = None, segment_id: str | None = None, after_seq: int | None = None) -> list[Message]:
         q, args = f"select {self._COLS} from messages where thread_id=?", [tid]
