@@ -111,6 +111,7 @@ AI_HOSTS: frozenset[str] = frozenset(
         "chatgpt.com",
         "gemini.google.com",
         "copilot.microsoft.com",
+        "copilot.com",  # copilot.microsoft.com redirects here (seen live 2026-10-05); that exact host only
         "meta.ai",
         "chat.mistral.ai",
         "pi.ai",
@@ -186,7 +187,7 @@ def assert_allowed_url(url: str, *, where: str = "") -> None:
     raise LiveChromeRefused(
         f"refused: {_short(url)!r} is not an AI provider page"
         + (f" ({where})" if where else "")
-        + "; the live-Chrome driver only touches chatgpt.com, gemini.google.com, copilot.microsoft.com, "
+        + "; the live-Chrome driver only touches chatgpt.com, gemini.google.com, copilot.microsoft.com, copilot.com, "
         "meta.ai, chat.mistral.ai, pi.ai, chat.deepseek.com, chat.qwen.ai and google.com/search?udm=50"
     )
 

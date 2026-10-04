@@ -93,7 +93,7 @@ in that Chrome through the third-party [`chrome-use`](https://github.com/leeguoo
 CLI and its Chrome extension (native messaging, no debug port, no copied cookies or profile).
 Hard limits enforced in OmniBrain's own code (`backend/browser/live_chrome.py`, tested against
 a fake chrome-use in `tests/test_live_chrome.py`): only the AI provider domains
-(chatgpt.com, gemini.google.com, copilot.microsoft.com, meta.ai, chat.mistral.ai, pi.ai,
+(chatgpt.com, gemini.google.com, copilot.microsoft.com, copilot.com, meta.ai, chat.mistral.ai, pi.ai,
 chat.deepseek.com, chat.qwen.ai, google.com/search?udm=50) are ever opened or acted on, and
 the tab's URL is re-read before every action; only tabs OmniBrain created are touched; a fixed
 set of chrome-use commands is allowed (no cookies, state save/load, auth, humanize, network

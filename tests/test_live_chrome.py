@@ -104,6 +104,8 @@ def engine(fake, tmp_path) -> LiveChromeEngine:
         "https://www.chatgpt.com/c/abc",
         "https://gemini.google.com/app",
         "https://copilot.microsoft.com/",
+        "https://copilot.com/",
+        "https://www.copilot.com/?fromcode=abc&sessionId=1",
         "https://meta.ai/",
         "https://www.meta.ai/",
         "https://chat.mistral.ai/chat",
@@ -131,6 +133,12 @@ def test_provider_urls_are_allowed(url):
         "https://chatgpt.com@evil.com/",
         "https://evil.com@chatgpt.com/x",  # userinfo is never accepted
         "https://sub.chatgpt.com/",  # subdomains are not implied
+        "https://auth.copilot.com/",
+        "https://copilot.com.evil.com/",
+        "https://evil.com/copilot.com",
+        "https://login.microsoftonline.com/",
+        "https://bing.com/chat",
+        "http://copilot.com/",
         "https://chatgpt.com:8443/",
         "https://chat.openai.com/",
         "https://mail.google.com/",
@@ -754,3 +762,13 @@ async def test_a_dialog_over_the_page_is_the_users_to_answer_but_escape_still_wo
     fake.update(rules=[])
     fake.rule("captchaFrame", value={"captchaFrame": False, "cf": False, "human": False, "age": False, "title": "Pi", "modal": ""})
     await page.check_gate()
+
+
+async def test_copilot_redirect_to_copilot_com_is_followed_but_a_microsoft_login_is_not(fake, engine):
+    """Live: copilot.microsoft.com redirects to copilot.com (allowed); a sign-in at login.microsoftonline.com is the user's."""
+    fake.update(redirects={"https://copilot.microsoft.com/": "https://copilot.com/?fromcode=x&sessionId=1"})
+    page = await engine.open_research_page("copilot", "https://copilot.microsoft.com/")
+    assert page.url.startswith("https://copilot.com/")
+    fake.set_tab_url("t2", "https://login.microsoftonline.com/common/oauth2/authorize")
+    with pytest.raises(LiveChromeNeedsUser):
+        await page.evaluate("() => 1")
