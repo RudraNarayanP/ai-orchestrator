@@ -717,6 +717,8 @@ def test_wrapped_script_survives_dom_nodes_and_cycles():
         "(async () => { const out = [];"
         "out.push(await run(" + json.dumps(lc.wrap_for_cli("(async () => new Node())()")) + "));"
         "out.push(await run(" + json.dumps(lc.wrap_for_cli("(async () => cyc)()")) + "));"
+        "const shared = {k: 1}; globalThis.shared = shared;"
+        "out.push(await run(" + json.dumps(lc.wrap_for_cli("(async () => [shared, shared, {again: shared}])()")) + "));"
         "out.push(await run(" + json.dumps(lc.wrap_for_cli("(async () => ({n: 1, f() {}, s: 'x'}))()")) + "));"
         "out.push(await run(" + json.dumps(lc.wrap_for_cli("(async () => { throw new Error('boom'); })()")) + "));"
         "console.log(JSON.stringify(out)); })();"
@@ -726,6 +728,7 @@ def test_wrapped_script_survives_dom_nodes_and_cycles():
     assert json.loads(done.stdout) == [
         {"ok": True, "v": {}},
         {"ok": True, "v": {"a": 1, "self": None}},
+        {"ok": True, "v": [{"k": 1}, {"k": 1}, {"again": {"k": 1}}]},  # shared (not cyclic) references stay intact
         {"ok": True, "v": {"n": 1, "s": "x"}},
         {"ok": False, "e": "boom"},
     ]

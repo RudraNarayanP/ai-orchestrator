@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import time
 from dataclasses import asdict
@@ -375,6 +376,7 @@ class ChatAdapter:
                 gate = needs_user_in(exc)
                 if gate:
                     return self._needs_user(response, gate)
+                logging.getLogger("omnibrain.adapters").warning("%s attempt %d raised", self.provider, attempt + 1, exc_info=True)
                 response.note(ProviderStatus.FAILED, error=f"{type(exc).__name__}: {exc}"[:400])
                 await emit("provider", f"{self.provider}: attempt {attempt + 1} failed ({type(exc).__name__})", self.provider, round_no)
                 if attempt + 1 < attempts:
@@ -510,7 +512,7 @@ class ChatAdapter:
         if items and all(i.get("mediaOnly") for i in items) and not response.answer_text:
             response.answer_text = "[provider returned image or non-text output; nothing to capture]"
             response.detail = "media-only answer, no text captured"
-        response.citations = [Citation(**self._citation_shape(l)) for l in links if l.get("href")]
+        response.citations = [Citation(**self._citation_shape(l)) for l in links if l and l.get("href")]
         response.fingerprint = hashlib.sha256((response.answer_text or "").encode("utf-8", "ignore")).hexdigest()[:16]
         self._assess_web_research(response)
         if not response.answer_text:
