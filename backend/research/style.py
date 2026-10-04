@@ -556,6 +556,10 @@ def _first_sentence(text: str) -> str:
 
 def _ends_clean(sentence: str) -> str:
     sentence = sentence.strip()
+    # a fact appended after "Nah, ..." / "Yeah, ..." starts a new sentence (live: "Nah, that doesn't work like that. the claim ...")
+    first = sentence.split(" ", 1)[0] if sentence else ""
+    if first and first[0].islower() and first.isalpha():
+        sentence = sentence[0].upper() + sentence[1:]
     return sentence if not sentence or sentence[-1] in ".!?" else sentence + "."
 
 

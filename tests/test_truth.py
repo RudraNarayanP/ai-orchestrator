@@ -157,3 +157,8 @@ def test_uncertain_states_are_never_flipped_by_the_premise_check():
 
     for state in ("UNVERIFIED", "CONFLICT", "PARTLY", "FALSE"):
         assert premise_state(state, TEN, "Humans do not use only 10%.") == state
+
+def test_appended_fact_starts_with_a_capital():
+    out = render_truth("FALSE", question=TEN, answer="the claim that humans use only 10% of their brains is a myth.")
+    assert out.startswith("Nah, that doesn't work like that. The claim")
+    assert render_truth("TRUE", question=CHECK, answer="it is 13 under section 9.").endswith("It is 13 under section 9.")
