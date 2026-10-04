@@ -599,8 +599,9 @@ class _Locator:
 class LivePage:
     """The Playwright ``Page`` subset the adapters use, over one chrome-use tab."""
 
-    def __init__(self, engine: "LiveChromeEngine", tab_id: str, url: str, key: str) -> None:
+    def __init__(self, engine: "LiveChromeEngine", tab_id: str, url: str, key: str, provider: str = "") -> None:
         self._engine, self.tab_id, self.key = engine, tab_id, key
+        self.provider = provider or key
         self._url = url
         self._closed = False
         self.keyboard = _Keyboard(self)
@@ -718,8 +719,12 @@ class LivePage:
         except Exception:  # noqa: BLE001 -- a wait never fails on bookkeeping
             pass
 
-    async def bring_to_front(self) -> None:
+    async def bring_to_front(self, *, force: bool = False) -> None:
+        """Raise this tab in the person's Chrome. A no-op unless the provider is opted in (``browser.chrome_use_front_providers``),
+        was escalated after failing in the background, or ``force`` is set (an explicit user action such as signing in)."""
         if self._closed:
+            return
+        if not (force or self._engine.front_allowed(self.provider)):
             return
         async with self._engine._cmd_lock:
             await self._guard(input_action=False)
@@ -789,6 +794,7 @@ class LiveChromeEngine:
         self._open_lock = asyncio.Lock()
         self._selected: str | None = None
         self._verified = False
+        self._escalated: set[str] = set()
         self.log: list[str] = []
 
     def _note(self, message: str) -> None:
@@ -873,7 +879,7 @@ class LiveChromeEngine:
                 if not _TAB_ID.match(tab_id):
                     raise LiveChromeError(f"chrome-use tab new returned no usable tab id: {data!r}"[:300])
                 self._selected = tab_id
-                page = LivePage(self, tab_id, str(data.get("url") or url), tab_key)
+                page = LivePage(self, tab_id, str(data.get("url") or url), tab_key, provider)
                 self._pages[tab_key] = page
                 self._note(f"opened a new tab {tab_id} for {provider} in your Chrome")
                 # a brand-new tab reports about:blank until its first navigation commits (seen on real Chrome)
@@ -908,6 +914,17 @@ class LiveChromeEngine:
             self._note(f"could not close our new tab {page.tab_id}: {exc}")
         if self._selected == page.tab_id:
             self._selected = None
+
+    def front_allowed(self, provider: str) -> bool:
+        return provider in self._escalated or provider in set(self.settings.browser.chrome_use_front_providers)
+
+    def escalate_focus(self, provider: str) -> bool:
+        """A provider failed to work in the background: allow raising ITS tab from now on. True only the first time."""
+        if provider in self._escalated or not self.settings.browser.chrome_use_front_on_failure:
+            return False
+        self._escalated.add(provider)
+        self._note(f"{provider} did not work in a background tab; bringing only that tab to the front from now on")
+        return True
 
     async def focus_tab(self, page: LivePage) -> None:
         async with self._focus_lock:

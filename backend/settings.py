@@ -88,6 +88,14 @@ class BrowserConfig(BaseModel):
 
     chrome_use_timeout_s: float = 60.0
 
+    chrome_use_front_providers: list[str] = Field(default_factory=list)
+    """Providers whose tab may be brought to the front of your Chrome before typing/sending (default: none).
+    OmniBrain's tabs are opened and driven in the background so your own window is never stolen."""
+
+    chrome_use_front_on_failure: bool = True
+    """If a provider cannot be driven in the background (page never renders its composer, text does not land),
+    raise just that provider's tab once and retry. Set false to never bring any tab to the front."""
+
     nav_timeout_ms: int = 45000
     settle_ms: int = 900
     locale: str = "en-US"

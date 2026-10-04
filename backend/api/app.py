@@ -267,7 +267,7 @@ class JobManager:
             raise HTTPException(status_code=404, detail=f"unknown provider {provider!r}")
         engine = await self.engine_get()
         page = await engine.open_research_page(provider, cfg.url)
-        await page.bring_to_front()
+        await (page.bring_to_front(force=True) if getattr(engine, "live", False) else page.bring_to_front())  # user asked to sign in
         return {
             "provider": provider,
             "url": page.url,

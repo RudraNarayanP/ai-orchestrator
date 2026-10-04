@@ -252,6 +252,18 @@ class ChatAdapter:
             pass
         await page.wait_for_timeout(self.settings.browser.settle_ms)
 
+    async def _escalate_focus(self, page) -> bool:
+        """Live Chrome only: allow (once) bringing this provider's tab to the front after it failed in the background."""
+        escalate = getattr(self.engine, "escalate_focus", None)
+        if escalate is None or not hasattr(page, "check_gate"):
+            return False
+        first = escalate(self.provider)
+        try:
+            await page.bring_to_front()
+        except Exception:  # noqa: BLE001
+            pass
+        return first
+
     def _dismiss_cfg(self, page) -> dict[str, Any]:
         """On the person's own Chrome (live driver) banners may be closed but never accepted / agreed to."""
         if hasattr(page, "check_gate"):
@@ -282,12 +294,10 @@ class ChatAdapter:
                 return state
             if state["state"] in {"login_wall", "blocked", "rate_limited"}:
                 return state
-            if attempt == 0 and hasattr(page, "check_gate"):
-                # live Chrome drives new tabs in the background; some apps (meta.ai) render nothing until the tab is shown
-                try:
-                    await page.bring_to_front()
-                except Exception:  # noqa: BLE001
-                    pass
+            if attempt == 1 and hasattr(page, "check_gate"):
+                # Live Chrome drives new tabs in the background and never raises them by default. A few apps (meta.ai)
+                # render nothing until the tab is shown: only after the composer failed to appear twice, raise THIS tab.
+                await self._escalate_focus(page)
             await page.wait_for_timeout(1200 * (attempt + 1))
         return state
 
@@ -360,6 +370,8 @@ class ChatAdapter:
         )
         attempts = max(1, (self.cfg.max_retries or 0) + 1)
         for attempt in range(attempts):
+            if attempt and getattr(self.engine, "live", False):
+                self.engine.escalate_focus(self.provider)  # a failed background attempt: the retry may raise this one tab
             try:
                 outcome = await self._attempt(page_setup=bool(attempt), response=response, prompt=prompt, round_no=round_no, emit=emit)
             except asyncio.CancelledError:
@@ -447,6 +459,8 @@ class ChatAdapter:
             baseline = await self._call(page, "baseline", self._sel_dict) or {"count": 0, "lastText": ""}
             await emit("provider", f"{self.provider}: composing prompt", self.provider, round_no)
             typed = await self._type_with_fallback(page, prompt)
+            if not typed and await self._escalate_focus(page):
+                typed = await self._type_with_fallback(page, prompt)  # live Chrome: retry once with this tab in front
             if not typed:
                 response.note(ProviderStatus.BROKEN, error="could not place text in the composer")
                 return False

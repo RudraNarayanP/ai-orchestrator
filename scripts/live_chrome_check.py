@@ -92,7 +92,8 @@ async def main() -> int:
             if state.get("state") in ("ready", "login_wall", "blocked", "rate_limited"):
                 break
             await page.wait_for_timeout(2500)
-            if _ == 0:  # background tabs: some apps render nothing until the tab is shown
+            if _ == 1 and engine.escalate_focus(args.provider):  # still not rendering in the background: raise only this tab
+                print("      (not ready in a background tab; bringing just this tab to the front once)")
                 await page.bring_to_front()
             state = await adapter.readiness(page)
         print(f"      state : {state.get('state')}  (input visible: {state.get('inputHere')}, login wall: {state.get('loginWall')})")

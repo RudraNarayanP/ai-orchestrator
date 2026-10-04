@@ -23,6 +23,8 @@
 #   driver: chrome_use
 #   chrome_use_path: C:/Users/<you>/AppData/Local/Programs/chrome-use/chrome-use.exe   # only if not on PATH
 #   chrome_use_browser: you@gmail.com    # only if several Chrome profiles run the extension
+#   chrome_use_front_providers: []       # providers whose tab may be raised before typing (default none: tabs stay in the background)
+#   chrome_use_front_on_failure: true    # raise just a provider's tab, once, if it cannot be driven in the background
 browser:
   driver: playwright         # playwright (default, dedicated profile) | chrome_use (opt-in, live Chrome)
   channel: chrome            # installed Chrome; set to "msedge" to use Edge
