@@ -315,6 +315,25 @@ async def test_a_terms_of_service_gate_is_reported_blocked_and_never_accepted(br
     finally:
         await engine.stop(keep_windows=False)
 
+async def test_a_sign_in_page_reached_on_send_is_reported_logged_out_not_empty(browser_settings, fixture_server):
+    """Live finding (Le Chat, 2026-10-04, after the terms were accepted): sending the first message redirected to
+    v2.auth.mistral.ai/login. The adapter said 'answer captured but empty after cleaning'. It is a login wall."""
+    url = fixture_server.rsplit("/", 1)[0] + "/signin_on_submit.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"le_chat": {"enabled": True, "label": "Le Chat", "url": url, "max_retries": 1}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("le_chat", engine, settings, settings.providers["le_chat"])
+        response = await adapter.ask("jobl", "What is the capital of France?", 1)
+        assert response.status.value == "logged_out", (response.status, response.error)
+        assert "empty after cleaning" not in (response.error or ""), response.error
+        assert "login" in (response.error + response.detail).lower() or "sign" in (response.error + response.detail).lower(), (response.error, response.detail)
+    finally:
+        await engine.stop(keep_windows=False)
+
+
 async def test_an_answer_inside_nested_wrappers_is_captured_once(browser_settings, fixture_server):
     """Regression from the first live Gemini run: model-response > message-content > .markdown matched three
     selectors, so the answer text appeared two or three times in the stored response."""

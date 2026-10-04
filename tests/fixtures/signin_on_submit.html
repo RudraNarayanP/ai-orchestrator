@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Le Chat (sign-in on submit fixture)</title>
+<!-- Mirrors chat.mistral.ai after the terms were accepted, 2026-10-04: the composer is usable, but sending the first
+     message redirects to the auth page ("Let's start building / Login or signup below"). -->
+</head><body>
+<div id="q" contenteditable="true" data-placeholder="Ask anything" style="position:fixed;bottom:20px;left:20px;width:500px;height:40px;border:1px solid #888"></div>
+<button type="submit" aria-label="Send" onclick="go()">Send</button>
+<script>
+function go() { location.href = 'signin_wall.html'; }
+document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+</script>
+</body></html>

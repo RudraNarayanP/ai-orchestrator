@@ -455,6 +455,21 @@ class ChatAdapter:
             response.note(ProviderStatus.FAILED, error="only the pre-existing message was visible")
             return False
 
+        if not text:
+            # Nothing was captured. Before calling that an empty answer, look at where the page is now: sending the
+            # first message can redirect to a sign-in page (Le Chat, 2026-10-04) and the real state is LOGGED_OUT.
+            try:
+                after = await self.readiness(page)
+            except Exception:  # noqa: BLE001 -- the diagnosis is best effort; the old message still applies
+                after = {}
+            if after.get("state") in {"login_wall", "blocked", "rate_limited"}:
+                mapping = {"login_wall": ProviderStatus.LOGGED_OUT, "blocked": ProviderStatus.FAILED, "rate_limited": ProviderStatus.RATE_LIMITED}
+                response.note(
+                    mapping[after["state"]],
+                    error=f"readiness={after['state']} after sending (page moved to: {page.url[:80]})",
+                    detail=(after.get("bodyHead") or "")[:300],
+                )
+                return False
         response.answer_text = self._clean(text, prompt)
         response.raw_text = text
         items = (capture or {}).get("items") or []
