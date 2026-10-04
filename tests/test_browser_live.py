@@ -255,6 +255,34 @@ async def test_an_age_gate_is_reported_blocked_and_never_answered(browser_settin
     finally:
         await engine.stop(keep_windows=False)
 
+
+async def test_a_terms_of_service_gate_is_reported_blocked_and_never_accepted(browser_settings, fixture_server):
+    """Live finding (Le Chat, 2026-10-04): a modal 'You must accept our Terms of Service and Privacy Policy' sat over the
+    composer. The old flow reported 'answer captured but empty after cleaning'. Accepting terms is the person's own
+    legal act: neither 'Accept and continue' nor 'I agree' may be pressed, nothing is typed, and the reason is named."""
+    url = fixture_server.rsplit("/", 1)[0] + "/terms_gate.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"le_chat": {"enabled": True, "label": "Le Chat", "url": url, "max_retries": 2}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("le_chat", engine, settings, settings.providers["le_chat"])
+        events = []
+
+        async def emit(kind, message, provider=None, round_no=None):
+            events.append(message)
+
+        response = await adapter.ask("jobt", "What is the capital of France?", 1, emit=emit)
+        assert response.status.value == "failed" and "readiness=blocked" in response.error, (response.status, response.error)
+        assert "terms-of-service" in response.error, response.error
+        page = await engine.open_research_page("le_chat", url)
+        assert await page.evaluate("window.__tosClicked === true") is False, "the terms button must never be pressed"
+        assert (await page.inner_text("#q")).strip() == "", "nothing may be typed while the gate is up"
+        assert not any("retrying" in e for e in events), events
+    finally:
+        await engine.stop(keep_windows=False)
+
 async def test_an_answer_inside_nested_wrappers_is_captured_once(browser_settings, fixture_server):
     """Regression from the first live Gemini run: model-response > message-content > .markdown matched three
     selectors, so the answer text appeared two or three times in the stored response."""

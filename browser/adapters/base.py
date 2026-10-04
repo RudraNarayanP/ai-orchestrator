@@ -390,7 +390,7 @@ class ChatAdapter:
             }
             response.note(
                 mapping.get(state, ProviderStatus.BROKEN),
-                error=f"readiness={state}",
+                error=f"readiness={state}" + (f" ({ready['gate']})" if state == "blocked" and ready.get("gate") else ""),
                 detail=(ready.get("bodyHead") or "")[:300],
             )
             await emit("provider", f"{self.provider}: {response.status.value} — {state}", self.provider, round_no)

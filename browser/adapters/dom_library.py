@@ -306,6 +306,24 @@ DOM_LIBRARY_JS = r"""
     return out;
   }
 
+  // A modal that makes you accept Terms of Service / a privacy policy before the product works is a legal
+  // agreement: only the person can make it. It is never clicked, and the page is reported blocked.
+  const TERMS_NAMED_RE = /terms (of (service|use)|and conditions|& conditions)/i;
+  const TERMS_REQUIRED_RE = /(must|need to|required to|have to)\s+(accept|agree)|(accept|agree)( and|&) continue/i;
+  const TERMS_GATE_RE = {test: (t) => TERMS_NAMED_RE.test(t) && TERMS_REQUIRED_RE.test(t)};
+  function termsGateText() {
+    for (const dlg of document.querySelectorAll('[role="dialog"], [role="alertdialog"], [aria-modal="true"]')) {
+      if (!visible(dlg)) continue;
+      const t = norm(dlg.innerText || '');
+      if (TERMS_GATE_RE.test(t)) return t.slice(0, 200);
+    }
+    return '';
+  }
+  function inTermsGate(el) {
+    const dlg = el.closest && el.closest('[role="dialog"], [role="alertdialog"], [aria-modal="true"]');
+    return !!dlg && TERMS_GATE_RE.test(norm(dlg.innerText || ''));
+  }
+
   const api = {
     version: 3,
     util: {norm, visible, toMarkdown},
@@ -318,10 +336,11 @@ DOM_LIBRARY_JS = r"""
       const rateWords = /(rate limit|too many requests|slow down|you'?ve reached .{0,30}(limit|cap)|try again in|upgrade to|daily (limit|cap)|out of (free )?credits|please wait)/i.test(body);
       const blockedWords = /(access denied|are you a robot|unusual traffic|verify you are a human|enable javascript|are you a human|confirm your age|what year were you born|date of birth|verify your age|what should i call you|preferred name)/i.test(body);
       const inputHere = candidates(cfg.input || {}, cfg.input || {}, {kind: 'input'}).length > 0;
+      const termsGate = termsGateText();
       const credentialForm = [...document.querySelectorAll('input, textarea, [contenteditable="true"]')]
         .some(el => isCredential(el) && visible(el));
       let state = 'unknown';
-      if (blockedWords) state = 'blocked';
+      if (blockedWords || termsGate) state = 'blocked';
       else if (rateWords && !inputHere) state = 'rate_limited';
       else if (credentialForm && !inputHere) state = 'login_wall';
       else if (loginCfg || (loginWords && !inputHere)) state = 'login_wall';
@@ -333,7 +352,8 @@ DOM_LIBRARY_JS = r"""
         hasComposer: inputHere,
         loginWall: loginCfg || loginWords,
         rateLimited: rateWords,
-        blocked: blockedWords,
+        blocked: blockedWords || !!termsGate,
+        gate: termsGate ? 'terms-of-service acceptance required' : (blockedWords ? 'age/identity check or bot check' : ''),
         bodyLength: body.length,
         bodyHead: body.slice(0, 300),
         title: document.title,
@@ -366,13 +386,14 @@ DOM_LIBRARY_JS = r"""
       for (const c of candidates(cfgd, {css: cfgd.css || [], text_regex: cfgd.text_regex, aria: cfgd.aria || [], testids: cfgd.testids}, {kind: 'button'})) {
         const t = c.desc.text + ' ' + (c.desc.aria || '');
         if (!want.test(t)) continue;
+        if (inTermsGate(c.el)) continue;
         try { c.el.click({beacon: false}); clicked.push(norm(t).slice(0, 60)); } catch (e) {}
         if (clicked.length >= 4) break;
       }
       for (const sel of ['form[role="dialog"]', '#layers .zPTDog', '[data-testid="popup"]']) {
         queryAll(sel).forEach(dlg => {
           Array.from(dlg.querySelectorAll('button')).forEach(b => {
-            if (want.test(norm(b.innerText)) && visible(b)) { try { b.click(); clicked.push('modal:' + norm(b.innerText).slice(0, 40)); } catch (e) {} }
+            if (want.test(norm(b.innerText)) && visible(b) && !inTermsGate(b)) { try { b.click(); clicked.push('modal:' + norm(b.innerText).slice(0, 40)); } catch (e) {} }
           });
         });
       }

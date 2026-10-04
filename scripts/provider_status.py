@@ -67,6 +67,9 @@ async def main() -> int:
     engine = BrowserEngine(settings)
     await engine.start()
     store = Store(settings)
+    for n in names:  # an explicitly named provider is probed even when it is switched off in the config (read-only: one question, no sign-in)
+        if n in settings.providers and not settings.providers[n].enabled:
+            settings.providers[n].enabled = True
     catalog = ProviderCatalog(settings, engine)
     rows = []
     try:

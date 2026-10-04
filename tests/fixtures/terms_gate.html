@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Le Chat (terms gate fixture)</title>
+<!-- Mirrors chat.mistral.ai logged out on 2026-10-04: a normal composer under a modal that says
+     "You must accept our Terms of Service and Privacy Policy to start using ..." with one "Accept and continue" button. -->
+</head><body>
+<div id="q" contenteditable="true" data-placeholder="Ask anything" style="position:fixed;bottom:20px;left:20px;width:500px;height:40px;border:1px solid #888"></div>
+<div role="dialog" data-state="open" style="position:fixed;top:80px;left:80px;background:#222;color:#eee;padding:20px">
+  <h2>Vibe Terms of Service</h2>
+  <p>You must accept our <a href="#terms">Terms of Service</a> and <a href="#privacy">Privacy Policy</a> to start using Vibe.</p>
+  <button id="go" onclick="window.__tosClicked = true">Accept and continue</button>
+  <button id="agree" onclick="window.__tosClicked = true">I agree</button>
+</div>
+</body></html>
