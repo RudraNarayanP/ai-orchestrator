@@ -40,6 +40,7 @@ from backend.research.style import (
     SYNTHESIS_INSTRUCTIONS,
     VERIFIER_ROLE,
     humanize,
+    premise_state,
     is_claim_check,
     plain_caveats,
     render_truth,
@@ -1008,6 +1009,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
     state = truth_state(report) if question and (report.verdicts or report.confidence == Confidence.NONE) else ""
+    state = premise_state(state, question, lint_answer(report.answer, question=question).text) if state else state
     S = ClaimStatus
     settled = {S.SUPPORTED, S.REFUTED, S.PARTIALLY_SUPPORTED, S.CONTESTED}
     unknowns = [v.claim for v in report.verdicts if v.verdict not in settled]

@@ -127,3 +127,33 @@ def test_emoji_only_at_the_end_of_confident_answers():
 def test_without_a_question_the_old_path_is_unchanged():
     out = build_final_answer(report(verdict(ClaimStatus.SUPPORTED)), [], 1)
     assert out.truth_state == "" and out.answer.startswith("It is 13")
+
+# ---- the user's claim vs the answer's claim (live: res-ten-percent-brain)
+TEN = "Is it true that humans only use 10 percent of their brains?"
+
+
+def test_supported_denial_of_the_users_claim_is_shown_as_false_not_agreement():
+    rep = report(verdict(ClaimStatus.SUPPORTED, "Humans do not use only 10% of their brains."), answer="Humans do not use only 10% of their brains; they use all of it, though not all at once.")
+    final = build_final_answer(rep, [], 1, TEN)
+    assert final.truth_state == "FALSE"
+    assert final.answer.startswith("Nah, that doesn't work like that")
+    assert "you're right" not in final.answer.lower()
+
+
+def test_a_leading_no_also_flips_a_supported_answer():
+    rep = report(verdict(ClaimStatus.SUPPORTED), answer="No. The minimum age is 13 under section 9.")
+    assert build_final_answer(rep, [], 1, "Is the minimum age 16?").truth_state == "FALSE"
+
+
+def test_agreement_is_untouched_when_the_answer_affirms_or_the_question_is_negative():
+    yes = report(verdict(ClaimStatus.SUPPORTED), answer="It is 13 under section 9.")
+    assert build_final_answer(yes, [], 1, CHECK).truth_state == "TRUE"
+    neg = report(verdict(ClaimStatus.SUPPORTED, "The Act does not ban VPNs."), answer="The Act does not ban VPNs.")
+    assert build_final_answer(neg, [], 1, "Is it true the Act doesn't ban VPNs?").truth_state == "TRUE"
+
+
+def test_uncertain_states_are_never_flipped_by_the_premise_check():
+    from backend.research.style import premise_state
+
+    for state in ("UNVERIFIED", "CONFLICT", "PARTLY", "FALSE"):
+        assert premise_state(state, TEN, "Humans do not use only 10%.") == state

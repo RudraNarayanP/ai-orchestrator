@@ -206,6 +206,33 @@ def _html_to_text(html: str) -> str:
     return text.strip()
 
 
+def pdf_to_text(data: bytes, *, max_chars: int = 12000, max_pages: int = 40) -> str:
+    """Text of a PDF's first pages, or "" when it cannot be read (pypdf missing, scanned image, encrypted).
+
+    Official sources are often PDFs (the original Act, a university's regulations). Reading them as text gave an
+    empty page, so the claim they plainly support was marked "unreachable" (live: Theft Act 1968 PDF).
+    """
+    try:
+        import io
+
+        from pypdf import PdfReader  # noqa: PLC0415 -- optional dependency
+
+        reader = PdfReader(io.BytesIO(data))
+        if getattr(reader, "is_encrypted", False):
+            return ""
+        parts: list[str] = []
+        total = 0
+        for page in list(reader.pages)[:max_pages]:
+            chunk = page.extract_text() or ""
+            parts.append(chunk)
+            total += len(chunk)
+            if total >= max_chars * 2:
+                break
+        return re.sub(r"[ \t]+", " ", re.sub(r"\n\s*\n+", "\n\n", "\n".join(parts))).strip()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 async def fetch_page(
     url: str,
     *,
@@ -224,9 +251,15 @@ async def fetch_page(
             headers={"User-Agent": UA, "Accept-Language": "en-US,en;q=0.9", "Accept": "text/html,application/xhtml+xml"},
         ) as client:
             response = await client.get(url)
-        html = response.text or ""
         status = response.status_code
-        text = _html_to_text(html)
+        ctype = (response.headers.get("content-type") or "").lower()
+        is_pdf = "pdf" in ctype or urlparse(url).path.lower().endswith(".pdf") or response.content[:5] == b"%PDF-"
+        if is_pdf and status < 400:
+            html = ""
+            text = pdf_to_text(response.content, max_chars=max_chars)
+        else:
+            html = response.text or ""
+            text = _html_to_text(html)
         page = FetchedPage(
             url=url,
             final_url=str(response.url),
@@ -300,6 +333,15 @@ def subject_names(claim: str) -> list[str]:
     return names[:6]
 
 
+def _find_digits(text_lower: str, digits: str) -> int:
+    """Position of a number written with separators ("100,000", "100 000") in the page, or -1."""
+    if len(digits) < 4:
+        return -1
+    pattern = r"[,\s.]?".join(re.escape(ch) for ch in digits)
+    m = re.search(r"(?<!\d)" + pattern + r"(?!\d)", text_lower)
+    return m.start() if m else -1
+
+
 def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) -> dict[str, Any]:
     """Does this page actually contain what the claim says it contains?
 
@@ -359,6 +401,18 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
     if hit:
         anchor = hit[0]
         idx = text_lower.find(anchor)
+        # A claim with a figure is evidenced by the sentence that HAS the figure, not by wherever the first common
+        # word happens to sit (live: Oxford DPhil "100,000 words" -- the stored excerpt was the page header, so the
+        # eval could not see the figure the claim stood on).
+        figure_idx = -1
+        for figure in list(sig["numbers"][:6]) + list(sig["years"][:4]):
+            pos = text_lower.find(str(figure).lower())
+            if pos < 0:
+                pos = _find_digits(text_lower, re.sub(r"[^0-9]", "", str(figure)))
+            if pos >= 0 and (figure_idx < 0 or pos < figure_idx):
+                figure_idx = pos
+        if figure_idx >= 0:
+            idx = figure_idx
         if idx >= 0:
             excerpt = re.sub(r"\s+", " ", page.text[max(0, idx - 200) : idx + 320]).strip()
     return {

@@ -524,6 +524,31 @@ def is_claim_check(question: str) -> bool:
     return bool(q) and not _WH_START.match(q)
 
 
+_DENIAL_RE = re.compile(
+    r"\b(not|never|no longer|cannot|can'?t|doesn'?t|does not|didn'?t|did not|isn'?t|is not|aren'?t|are not|wasn'?t|weren'?t|myth|false)\b", re.I
+)
+_LEAD_NO = re.compile(r"^\s*(?:no|nope|nah)\b", re.I)
+
+
+def premise_state(state: str, question: str, answer: str) -> str:
+    """A TRUE ledger verdict means the ANSWER's claim is supported, not that the user's claim is.
+
+    Live (res-ten-percent-brain): "Is it true that humans only use 10 percent of their brains?" got a supported
+    answer "humans do not use only 10%" and was shown as "Yeah, you're right." -- agreement with the opposite of
+    what the answer says. When the question states something without a negation and the answer denies it, the
+    user's claim is FALSE. Only TRUE flips; every other state, and every case the polarity is unclear, is untouched.
+    """
+    if (state or "").upper() != "TRUE" or not is_claim_check(question):
+        return state
+    if _DENIAL_RE.search(question or ""):
+        return state
+    lead = (answer or "").strip()
+    first = _first_sentence(lead)
+    if _LEAD_NO.match(lead) or (first and _DENIAL_RE.search(first)):
+        return "FALSE"
+    return state
+
+
 def _first_sentence(text: str) -> str:
     parts = split_sentences(_LEAD_YESNO.sub("", (text or "").strip()))
     return parts[0].strip() if parts else ""

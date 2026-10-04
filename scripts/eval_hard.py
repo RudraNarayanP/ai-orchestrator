@@ -71,7 +71,9 @@ FIGURE_RE = re.compile(
 def figures_in(text: str) -> list[str]:
     """Checkable figures in an answer: numbers, percentages, section/article numbers."""
     seen: dict[str, None] = {}
-    for m in FIGURE_RE.finditer(text or ""):
+    # "2026-27" / "2026/27" is one academic-year label, not a figure "27" (live: a UCL answer was flagged for it).
+    text = re.sub(r"\b((?:19|20)\d\d)\s?[\u2013\u2014/-]\s?\d{2}\b", r"\1", text or "")
+    for m in FIGURE_RE.finditer(text):
         token = _norm_num(m.group(1))
         if token:
             seen[token] = None

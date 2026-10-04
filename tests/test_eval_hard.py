@@ -132,3 +132,10 @@ def test_the_house_couldnt_verify_line_is_a_complete_answer_to_a_trap_question()
     uq = q(kind="unanswerable", expect={"must_match": ["don't know"]})
     assert eval_hard.analyse(uq, snapshot("Couldn't verify that one."), 2)["judgement"]["verdict"] == "PASS"
     assert eval_hard.analyse(uq, snapshot("I don't know."), 2)["judgement"]["verdict"] == "WARN", "the old bare form still needs a reason"
+
+def test_an_academic_year_label_is_not_a_figure():
+    assert "27" not in eval_hard.figures_in("UCL's current 2026\u201327 procedure allows an appeal.")
+    assert "27" not in eval_hard.figures_in("The 2026/27 session.")
+    assert eval_hard.unsupported_figures("UCL's 2026\u201327 procedure.", "the 2026-27 academic misconduct procedure") == []
+    # a real figure beside it is still checked
+    assert "27" in eval_hard.figures_in("The 2026\u201327 procedure has 27 grounds.")
