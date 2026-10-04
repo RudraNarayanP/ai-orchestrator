@@ -506,3 +506,5 @@ status, or a callable that sees the request), so nothing needs Ollama.
 - **Answers are tiny:** 1-2 sentences, at most one caveat, emoji only at the very end of a confident answer.
 - **All providers are tried:** nothing is hard-coded out. A wall in an earlier run only lowers a site's rank and one escalation slot re-probes it; `python scripts/provider_status.py` probes every AI and writes a status table; the eval prints one per run. Results: `data/eval/ARCH_RESULTS.md`.
 - **Not verified live:** other sites' obedience to the OPENED / MENTIONED ONLY labels; the early-stop path on real sites beyond the runs listed in ARCH_RESULTS.md.
+
+The thread screen (header button 'threads') lists threads, opens one, chats in it with a provider picker, and shows the AI chats under it, memory used per turn and rotation events. Tests: tests/test_thread_http.py, tests/test_thread_ui.py.
