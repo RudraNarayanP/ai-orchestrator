@@ -666,3 +666,14 @@ async def test_adapter_dom_unavailable_wrapping_still_finds_the_gate(fake, engin
     assert response.status == ProviderStatus.LOGGED_OUT
     assert "needs you" in (response.error or "")
     assert not any(v[0] in ("keyboard", "press", "click") for v in fake.verbs())
+
+
+async def test_a_background_daemon_holding_our_output_handles_does_not_hang_the_first_call(fake):
+    """Real chrome-use leaves a daemon behind on the first command; it inherits stdout/stderr (live regression)."""
+    import time
+
+    fake.update(daemon=12)
+    t0 = time.monotonic()
+    data = await fake.runner.run("status")
+    assert data["cliVersion"]
+    assert time.monotonic() - t0 < 8

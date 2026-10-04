@@ -333,8 +333,39 @@ class ChromeUseRunner:
         return env
 
     def _run_sync(self, argv: list[str], stdin: str | None, timeout: float) -> subprocess.CompletedProcess:
-        kwargs: dict[str, Any] = {"input": stdin.encode("utf-8")} if stdin is not None else {"stdin": subprocess.DEVNULL}
-        return subprocess.run(argv, capture_output=True, timeout=timeout, env=self.build_env(), **kwargs)
+        """Run one command, collecting output through temp FILES rather than pipes.
+
+        The real chrome-use starts its background daemon from the first command of a session, and that
+        daemon inherits our stdout/stderr handles. With pipes ``subprocess.run`` waits for EOF, i.e. for
+        the daemon to exit, so the very first call hangs forever; with files it only waits for the CLI.
+        """
+        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+            proc = subprocess.Popen(
+                argv,
+                stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
+                stdout=out,
+                stderr=err,
+                env=self.build_env(),
+            )
+            try:
+                if stdin is not None and proc.stdin is not None:
+                    try:
+                        proc.stdin.write(stdin.encode("utf-8"))
+                    except OSError:
+                        pass
+                    finally:
+                        try:
+                            proc.stdin.close()
+                        except OSError:
+                            pass
+                proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                raise
+            out.seek(0)
+            err.seek(0)
+            return subprocess.CompletedProcess(argv, proc.returncode, out.read(), err.read())
 
     async def run(self, *args: str, stdin: str | None = None, timeout: float | None = None) -> dict[str, Any]:
         args = tuple(str(a) for a in args)

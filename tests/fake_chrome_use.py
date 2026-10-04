@@ -37,6 +37,25 @@ def reply(data=None, *, ok=True, error=None, code=None) -> None:
     sys.exit(0 if ok else (code if code is not None else 1))
 
 
+def verb_is_first_call() -> bool:
+    return sum(1 for _ in CALLS.open(encoding="utf-8")) == 1
+
+
+def spawn_daemon(seconds: float) -> None:
+    """Like the real chrome-use: the first command leaves a background daemon that inherits our stdout/stderr."""
+    import subprocess
+
+    flags = 0
+    if os.name == "nt":
+        flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen(
+        [sys.executable, "-c", f"import time; time.sleep({seconds})"],
+        creationflags=flags,
+        stdin=subprocess.DEVNULL,
+        close_fds=False,
+    )
+
+
 def main() -> None:
     argv = sys.argv[1:]
     args: list[str] = []
@@ -60,6 +79,8 @@ def main() -> None:
         fh.write(json.dumps({"argv": args, "flags": flags, "stdin": stdin, "env": env}) + "\n")
 
     state = load()
+    if state.get("daemon") and verb_is_first_call():
+        spawn_daemon(float(state["daemon"]))
     if state.get("sleep"):
         time.sleep(float(state["sleep"]))
     if state.get("garbage"):
