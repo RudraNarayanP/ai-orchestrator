@@ -74,6 +74,20 @@ class LiveChromeNeedsUser(LiveChromeRefused):
         )
 
 
+def extension_problem(status: dict[str, Any]) -> str | None:
+    """Read ``chrome-use status --json`` data: why the extension route is not usable, or None."""
+    ext = status.get("extension")
+    if not isinstance(ext, dict):
+        return None
+    if ext.get("hostInstalled") is False:
+        return "the chrome-use native-messaging host is not registered (run: chrome-use extension install)"
+    if ext.get("hostHealthy") is False:
+        return "the chrome-use native-host launcher is broken (run: chrome-use doctor)"
+    if ext.get("relayUp") is False:
+        return "Chrome is not connected through the chrome-use extension (open Chrome and make sure the extension is installed and enabled)"
+    return None
+
+
 def _short(url: str, n: int = 90) -> str:
     return (url or "")[:n]
 
@@ -200,12 +214,16 @@ FORBIDDEN_VERBS = frozenset(
 
 # Child-process environment: switch OFF chrome-use's stealth and humanising knobs and
 # strip the ones that would hide automation or change the browser identity.
-CHILD_ENV_FORCE = {"AGENT_BROWSER_STEALTH": "0", "AGENT_BROWSER_HUMANIZE": "off"}
+# AUTO_CONNECT=1 makes chrome-use attach through the extension and fail (rather than quietly launch
+# a throwaway browser of its own) when the extension is not reachable.
+CHILD_ENV_FORCE = {"AGENT_BROWSER_STEALTH": "0", "AGENT_BROWSER_HUMANIZE": "off", "AGENT_BROWSER_AUTO_CONNECT": "1"}
 CHILD_ENV_DROP = (
     "AGENT_BROWSER_HIDE_CANVAS", "AGENT_BROWSER_BLOCK_WEBRTC", "AGENT_BROWSER_TIMEZONE",
     "AGENT_BROWSER_LOCALE", "AGENT_BROWSER_USER_AGENT", "AGENT_BROWSER_PROFILE",
     "AGENT_BROWSER_ALLOWED_DOMAINS", "AGENT_BROWSER_INIT_SCRIPTS", "AGENT_BROWSER_EXTENSIONS",
     "AGENT_BROWSER_PROVIDER", "AGENT_BROWSER_ENABLE", "AGENT_BROWSER_SESSION",
+    "AGENT_BROWSER_FORCE_LAUNCH", "AGENT_BROWSER_NO_AUTO_CONNECT", "AGENT_BROWSER_ENGINE", "AGENT_BROWSER_CDP",
+    "AGENT_BROWSER_ARGS", "AGENT_BROWSER_EXECUTABLE_PATH", "AGENT_BROWSER_PROXY", "CI",
 )
 
 
@@ -703,6 +721,7 @@ class LiveChromeEngine:
         self._focus_lock = asyncio.Lock()
         self._open_lock = asyncio.Lock()
         self._selected: str | None = None
+        self._verified = False
         self.log: list[str] = []
 
     def _note(self, message: str) -> None:
@@ -715,12 +734,35 @@ class LiveChromeEngine:
     # ---- lifecycle
     async def start(self) -> None:
         try:
-            await self.runner.run("status")
-            self._note("live Chrome driver: chrome-use answered `status`")
+            status = await self.runner.run("status")
         except LiveChromeUnavailable:
             raise
-        except LiveChromeError as exc:  # installed but e.g. extension not connected yet: say so, keep going
+        except LiveChromeError as exc:  # installed but unhealthy: say so, keep going
             self._note(f"live Chrome driver: chrome-use status was not healthy ({exc}); will retry on first use")
+            return
+        problem = extension_problem(status)
+        self._note(
+            f"live Chrome driver: chrome-use answered `status`"
+            + (f" -- but {problem}; the first tab will fail until that is fixed" if problem else "")
+        )
+
+    async def _verify_live_chrome(self, page: "LivePage") -> None:
+        """After the first tab: refuse to go on unless chrome-use is attached through the extension.
+
+        (If it were not, chrome-use could be driving a browser it launched itself -- not your Chrome.)
+        """
+        if self._verified:
+            return
+        problem = extension_problem(await self.runner.run("status"))
+        if problem:  # caller holds the command lock, so close through the runner directly
+            try:
+                await self.runner.run("tab", "close", page.tab_id)
+            finally:
+                page._closed = True
+                self._selected = None
+                self._pages.pop(page.key, None)
+            raise LiveChromeUnavailable(f"refusing to continue: {problem}")
+        self._verified = True
 
     async def stop(self, keep_windows: bool | None = None) -> None:
         keep = self.settings.browser.keep_windows_open if keep_windows is None else keep_windows
@@ -769,6 +811,7 @@ class LiveChromeEngine:
                 self._note(f"opened a new tab {tab_id} for {provider} in your Chrome")
                 now = str((await self.runner.run("get", "url")).get("url") or page.url)
                 page._url = now
+                await self._verify_live_chrome(page)
             assert_allowed_url(now, where=f"{provider} tab after load")
             return page
 

@@ -31,7 +31,12 @@ for _s in (sys.stdout, sys.stderr):
         pass
 
 from backend.browser.factory import create_engine  # noqa: E402
-from backend.browser.live_chrome import LiveChromeError, LiveChromeNeedsUser, LiveChromeUnavailable  # noqa: E402
+from backend.browser.live_chrome import (  # noqa: E402
+    LiveChromeError,
+    LiveChromeNeedsUser,
+    LiveChromeUnavailable,
+    extension_problem,
+)
 from backend.providers.registry import ProviderCatalog  # noqa: E402
 from backend.settings import load_settings  # noqa: E402
 
@@ -60,7 +65,11 @@ async def main() -> int:
     try:
         await engine.start()
         status = await engine.runner.run("status")
-        print(f"      status: {status}")
+        ext = status.get("extension") or {}
+        print(f"      chrome-use {status.get('cliVersion')}; host installed={ext.get('hostInstalled')} healthy={ext.get('hostHealthy')} relay up={ext.get('relayUp')} extension={ext.get('liveVersion')} profile={ext.get('profileEmail') or ext.get('profileId')}")
+        problem = extension_problem(status)
+        if problem:
+            print(f"      WARNING: {problem}\n      (continuing: the first tab will tell for sure; OmniBrain refuses to go on if Chrome is not attached via the extension)")
     except LiveChromeUnavailable as exc:
         print(f"      NOT READY: {exc}\n      -> run scripts\\install_chrome_use.ps1 first")
         return 3

@@ -55,7 +55,7 @@ def main() -> None:
         args.append(a)
         i += 1
     stdin = "" if sys.stdin is None or sys.stdin.isatty() else sys.stdin.buffer.read().decode("utf-8")
-    env = {k: v for k, v in os.environ.items() if k.startswith("AGENT_BROWSER_")}
+    env = {k: v for k, v in os.environ.items() if k.startswith("AGENT_BROWSER_") or k == "CI"}
     with CALLS.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps({"argv": args, "flags": flags, "stdin": stdin, "env": env}) + "\n")
 
@@ -76,7 +76,9 @@ def main() -> None:
         return state.get("redirects", {}).get(url, url)
 
     if verb == "status":
-        reply({"daemon": True, "extension": {"connected": True}})
+        ext = {"hostInstalled": True, "hostHealthy": True, "relayUp": True, "liveVersion": "0.5.29"}
+        ext.update(state.get("extension", {}))
+        reply({"cliVersion": "1.5.157", "extension": ext, "currentSession": {"name": "omnibrain", "running": True}, "sessions": []})
     if verb == "tab":
         sub = args[1] if len(args) > 1 else ""
         if sub == "new":

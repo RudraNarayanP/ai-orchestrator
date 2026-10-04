@@ -209,11 +209,16 @@ async def test_child_process_has_the_stealth_and_humanize_knobs_forced_off(fake,
         "AGENT_BROWSER_USER_AGENT": "spoof",
         "AGENT_BROWSER_PROFILE": "auto",
         "AGENT_BROWSER_ALLOWED_DOMAINS": "x.com",
+        "AGENT_BROWSER_FORCE_LAUNCH": "1",  # would make chrome-use launch its own browser
+        "AGENT_BROWSER_NO_AUTO_CONNECT": "1",
+        "AGENT_BROWSER_CDP": "9222",
+        "AGENT_BROWSER_ENGINE": "lightpanda",
+        "CI": "true",  # chrome-use treats CI as force-launch
     }.items():
         monkeypatch.setenv(k, v)
     await fake.runner.run("status")
     env = fake.calls()[0]["env"]
-    assert env == {"AGENT_BROWSER_STEALTH": "0", "AGENT_BROWSER_HUMANIZE": "off"}
+    assert env == {"AGENT_BROWSER_STEALTH": "0", "AGENT_BROWSER_HUMANIZE": "off", "AGENT_BROWSER_AUTO_CONNECT": "1"}
 
 
 async def test_argv_shape_is_session_then_json_then_command(fake):
@@ -557,6 +562,30 @@ async def test_start_tolerates_an_unhealthy_status(fake):
     eng = LiveChromeEngine(live_settings(), runner=fake.runner)
     await eng.start()  # no raise: the first real command will say what is wrong
     assert any("not healthy" in line for line in eng.log)
+
+
+async def test_start_says_when_the_extension_route_is_not_ready(fake):
+    fake.update(extension={"relayUp": False})
+    eng = LiveChromeEngine(live_settings(), runner=fake.runner)
+    await eng.start()
+    assert any("not connected through the chrome-use extension" in line for line in eng.log)
+    fake.update(extension={"relayUp": True, "hostInstalled": False})
+    await LiveChromeEngine(live_settings(), runner=fake.runner).start()
+
+
+async def test_the_first_tab_is_refused_and_closed_if_chrome_is_not_attached_through_the_extension(fake, engine):
+    """If the relay is down chrome-use might be driving a browser it launched itself: not the user's Chrome."""
+    fake.update(extension={"relayUp": False})
+    with pytest.raises(LiveChromeUnavailable, match="refusing to continue"):
+        await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    assert set(fake.read()["tabs"]) == {"t1"}, "the tab it made is closed again"
+    assert not any(v[0] in ("eval", "keyboard", "press", "click") for v in fake.verbs())
+    # once the relay is up it works, and the status check is only repeated until it has passed once
+    fake.update(extension={"relayUp": True})
+    await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    fake.clear_calls()
+    await engine.open_research_page("gemini", "https://gemini.google.com/app")
+    assert not any(v[0] == "status" for v in fake.verbs())
 
 
 async def test_a_closed_page_refuses_further_use(fake, engine):
