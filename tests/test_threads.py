@@ -155,7 +155,7 @@ async def test_typing_and_sending_hold_the_focus_lock_and_release_it_even_on_fai
         held.append(lock.locked())
         return True
 
-    async def submit(p):
+    async def submit(p, prompt=''):
         held.append(lock.locked())
         raise RuntimeError("stop here")
 

@@ -88,6 +88,13 @@ async def main() -> int:
         print("[3/4] readiness (read-only DOM probe)")
         adapter = ProviderCatalog(settings, engine).adapter(args.provider)
         state = await adapter.readiness(page)
+        for _ in range(8):  # heavy single-page apps (meta.ai) need a few seconds before their composer exists
+            if state.get("state") in ("ready", "login_wall", "blocked", "rate_limited"):
+                break
+            await page.wait_for_timeout(2500)
+            if _ == 0:  # background tabs: some apps render nothing until the tab is shown
+                await page.bring_to_front()
+            state = await adapter.readiness(page)
         print(f"      state : {state.get('state')}  (input visible: {state.get('inputHere')}, login wall: {state.get('loginWall')})")
         if state.get("state") != "ready":
             print("      -> not ready: if this is a sign-in / captcha / age page, complete it yourself in that tab, then re-run.")

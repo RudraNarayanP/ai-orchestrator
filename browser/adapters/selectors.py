@@ -309,7 +309,7 @@ SELECTORS: dict[str, SelectorSet] = {
         send=FieldSet(aria=["Send", "Send message"], text_regex=r"^(send|go)$", verified="guess"),
         stop=FieldSet(aria=["Stop"], verified="guess"),
         response_root=["[role='log']", "main"],
-        assistant_message=['[data-message-author-role="assistant"]', ".x1y2bd81", "[role='listitem']"],
+        assistant_message=['.ur-markdown', '[data-message-author-role="assistant"]', ".x1y2bd81", "[role='listitem']"],  # .ur-markdown: signed-in meta.ai seen live 2026-10-04
         streaming=["[aria-busy='true']"],
         sources=["a[href^='http']"],
         login_wall=['a[href*="login"]', 'button[name="login"]'],
@@ -423,7 +423,7 @@ SELECTORS: dict[str, SelectorSet] = {
         ),
         stop=FieldSet(aria=["Stop", "Stop generating"], css=['[class*="stop"]'], verified="guess"),
         response_root=['[role="log"]', "main", "#root"],
-        assistant_message=['[class*="markdown"]', '[data-message-id]', '[class*="answer"]'],
+        assistant_message=['.ds-assistant-message-main-content', '[class*="markdown"]', '[data-message-id]', '[class*="answer"]'],  # first: signed-in chat.deepseek.com seen live 2026-10-04 (the thinking block is also .ds-markdown)
         streaming=['[class*="loading"]', '[aria-busy="true"]'],
         sources=["a[href^='http']"],
         login_wall=['button:has-text("Sign in")', 'a[href*="login"]', 'button:has-text("Log in")'],

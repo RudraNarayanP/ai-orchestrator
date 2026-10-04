@@ -281,6 +281,12 @@ class ChatAdapter:
                 return state
             if state["state"] in {"login_wall", "blocked", "rate_limited"}:
                 return state
+            if attempt == 0 and hasattr(page, "check_gate"):
+                # live Chrome drives new tabs in the background; some apps (meta.ai) render nothing until the tab is shown
+                try:
+                    await page.bring_to_front()
+                except Exception:  # noqa: BLE001
+                    pass
             await page.wait_for_timeout(1200 * (attempt + 1))
         return state
 
