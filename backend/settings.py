@@ -88,9 +88,13 @@ class BrowserConfig(BaseModel):
 
     chrome_use_timeout_s: float = 60.0
 
+    chrome_use_background: bool = False
+    """False (default): OmniBrain's tab is brought to the front of your Chrome so you can watch it work.
+    True: tabs are opened and driven in the background and your window is never raised, except for the providers in
+    ``chrome_use_front_providers`` and a provider that fails unseen (``chrome_use_front_on_failure``)."""
+
     chrome_use_front_providers: list[str] = Field(default_factory=list)
-    """Providers whose tab may be brought to the front of your Chrome before typing/sending (default: none).
-    OmniBrain's tabs are opened and driven in the background so your own window is never stolen."""
+    """Only with ``chrome_use_background: true``: providers whose tab may still be raised before typing/sending."""
 
     chrome_use_front_on_failure: bool = True
     """If a provider cannot be driven in the background (page never renders its composer, text does not land),

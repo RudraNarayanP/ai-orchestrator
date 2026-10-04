@@ -88,8 +88,8 @@ port on its own profile; nothing in OmniBrain copies session data to get around
 any of this.
 
 **Optional, off by default: the live-Chrome driver.** If you do want OmniBrain to use the
-Chrome you are already signed into, set `browser.driver: chrome_use`. Tabs open and are driven in the **background** (your window is not raised;
-`browser.chrome_use_front_providers` opts a provider in, and `chrome_use_front_on_failure` raises just one provider's tab, once, if it cannot work unseen). It drives **new tabs**
+Chrome you are already signed into, set `browser.driver: chrome_use`. OmniBrain's own new tab is shown in front so you can watch it work
+(`browser.chrome_use_background: true` drives tabs unseen instead; then `chrome_use_front_providers` / `chrome_use_front_on_failure` decide what may still be raised). It drives **new tabs**
 in that Chrome through the third-party [`chrome-use`](https://github.com/leeguooooo/chrome-use)
 CLI and its Chrome extension (native messaging, no debug port, no copied cookies or profile).
 Hard limits enforced in OmniBrain's own code (`backend/browser/live_chrome.py`, tested against

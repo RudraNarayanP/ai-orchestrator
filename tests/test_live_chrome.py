@@ -504,35 +504,51 @@ def _activations(fake) -> list[list[str]]:
     return [v for v in fake.verbs() if "--activate" in v]
 
 
-async def test_tabs_are_opened_and_driven_in_the_background_by_default(fake, engine):
+def _bg(fake, tmp_path, **browser) -> LiveChromeEngine:
+    return LiveChromeEngine(live_settings(str(tmp_path / "a"), chrome_use_background=True, **browser), runner=fake.runner)
+
+
+async def test_default_is_foreground_the_new_omnibrain_tab_is_shown_and_only_that_tab(fake, engine):
     page = await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    assert ["tab", "select", "t2", "--activate"] in fake.verbs()
     other = await engine.open_research_page("gemini", "https://gemini.google.com/app")
+    fake.clear_calls()
+    await engine.focus_tab(page)
+    assert ["tab", "select", "t2", "--activate"] in fake.verbs()
+    assert not [v for v in fake.verbs() if v[:2] == ["tab", "select"] and v[2] == "t1"], "the user's own tab is never selected"
+    assert engine.escalate_focus("chatgpt") is False  # nothing to escalate: everything is already shown
+    assert other.tab_id == "t3"
+
+
+async def test_background_mode_never_raises_a_tab_by_default(fake, tmp_path):
+    eng = _bg(fake, tmp_path)
+    page = await eng.open_research_page("chatgpt", "https://chatgpt.com/")
+    other = await eng.open_research_page("gemini", "https://gemini.google.com/app")
     await page.evaluate("() => 1")
     await other.evaluate("() => 2")
-    await page.wait_for_timeout(1)
-    await engine.focus_tab(page)
+    await eng.focus_tab(page)
     await page.bring_to_front()
     assert _activations(fake) == [], "nothing may raise a tab unless the provider is opted in or escalated"
-    assert not any(v[:2] == ["tab", "new"] and "--activate" in v for v in fake.verbs())
 
 
-async def test_bring_to_front_activates_only_our_tab_when_the_provider_is_opted_in(fake, tmp_path):
-    eng = LiveChromeEngine(live_settings(str(tmp_path / "a"), chrome_use_front_providers=["chatgpt"]), runner=fake.runner)
+async def test_background_mode_opt_in_provider_is_raised_others_stay_back(fake, tmp_path):
+    eng = _bg(fake, tmp_path, chrome_use_front_providers=["chatgpt"])
     page = await eng.open_research_page("chatgpt", "https://chatgpt.com/")
     gem = await eng.open_research_page("gemini", "https://gemini.google.com/app")
     fake.clear_calls()
     await eng.focus_tab(page)
     assert ["tab", "select", "t2", "--activate"] in fake.verbs()
     fake.clear_calls()
-    await eng.focus_tab(gem)  # not opted in: stays in the background
+    await eng.focus_tab(gem)
     assert _activations(fake) == []
 
 
-async def test_a_provider_that_fails_in_the_background_is_escalated_once_and_only_that_one(fake, engine):
-    page = await engine.open_research_page("chatgpt", "https://chatgpt.com/")
-    gem = await engine.open_research_page("gemini", "https://gemini.google.com/app")
-    assert engine.escalate_focus("gemini") is True
-    assert engine.escalate_focus("gemini") is False
+async def test_background_mode_escalates_only_the_failing_provider_once(fake, tmp_path):
+    eng = _bg(fake, tmp_path)
+    page = await eng.open_research_page("chatgpt", "https://chatgpt.com/")
+    gem = await eng.open_research_page("gemini", "https://gemini.google.com/app")
+    assert eng.escalate_focus("gemini") is True
+    assert eng.escalate_focus("gemini") is False
     fake.clear_calls()
     await page.bring_to_front()
     assert _activations(fake) == []
@@ -540,22 +556,23 @@ async def test_a_provider_that_fails_in_the_background_is_escalated_once_and_onl
     assert ["tab", "select", "t3", "--activate"] in fake.verbs()
 
 
-async def test_escalation_can_be_switched_off_and_force_is_for_explicit_user_actions(fake, tmp_path):
-    eng = LiveChromeEngine(live_settings(str(tmp_path / "a"), chrome_use_front_on_failure=False), runner=fake.runner)
+async def test_background_mode_escalation_can_be_off_and_force_is_for_explicit_user_actions(fake, tmp_path):
+    eng = _bg(fake, tmp_path, chrome_use_front_on_failure=False)
     page = await eng.open_research_page("chatgpt", "https://chatgpt.com/")
     assert eng.escalate_focus("chatgpt") is False
     fake.clear_calls()
     await page.bring_to_front()
     assert _activations(fake) == []
-    await page.bring_to_front(force=True)  # e.g. the user clicked "sign in"
+    await page.bring_to_front(force=True)
     assert ["tab", "select", "t2", "--activate"] in fake.verbs()
 
 
-async def test_the_adapter_escalates_only_after_the_background_attempt_failed(fake, engine):
+async def test_the_adapter_escalates_only_after_the_background_attempt_failed(fake, tmp_path):
     from browser.adapters import build_adapter
 
-    page = await engine.open_research_page("chatgpt", "https://chatgpt.com/")
-    adapter = build_adapter("chatgpt", engine, engine.settings, engine.settings.providers["chatgpt"])
+    eng = _bg(fake, tmp_path)
+    page = await eng.open_research_page("chatgpt", "https://chatgpt.com/")
+    adapter = build_adapter("chatgpt", eng, eng.settings, eng.settings.providers["chatgpt"])
     fake.clear_calls()
     assert _activations(fake) == []
     assert await adapter._escalate_focus(page) is True

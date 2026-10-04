@@ -894,6 +894,8 @@ class LiveChromeEngine:
                     await asyncio.sleep(0.25)
                 page._url = now
                 await self._verify_live_chrome(page)
+                if not self.settings.browser.chrome_use_background:
+                    await self._select(page, activate=True)  # watch it work: show OmniBrain's own new tab
             try:
                 assert_allowed_url(now, where=f"{provider} tab after load")
             except LiveChromeNeedsUser:
@@ -916,12 +918,14 @@ class LiveChromeEngine:
             self._selected = None
 
     def front_allowed(self, provider: str) -> bool:
-        return provider in self._escalated or provider in set(self.settings.browser.chrome_use_front_providers)
+        cfg = self.settings.browser
+        return (not cfg.chrome_use_background) or provider in self._escalated or provider in set(cfg.chrome_use_front_providers)
 
     def escalate_focus(self, provider: str) -> bool:
         """A provider failed to work in the background: allow raising ITS tab from now on. True only the first time."""
-        if provider in self._escalated or not self.settings.browser.chrome_use_front_on_failure:
-            return False
+        if not self.settings.browser.chrome_use_background or provider in self._escalated \
+                or not self.settings.browser.chrome_use_front_on_failure:
+            return False  # foreground mode already shows every tab
         self._escalated.add(provider)
         self._note(f"{provider} did not work in a background tab; bringing only that tab to the front from now on")
         return True
