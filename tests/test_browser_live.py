@@ -293,6 +293,27 @@ async def test_safe_dismiss_closes_banners_but_never_accepts_or_agrees(browser_s
         assert "acc" in await page.evaluate("() => window.clicked")
     finally:
         await engine.stop(keep_windows=False)
+async def test_signed_in_deepseek_answer_excludes_the_thinking_block(browser_settings, fixture_server):
+    """Live (2026-10-04): no main/#root, and the thinking text ('We need answer single word...') leaked into the answer."""
+    url = fixture_server.rsplit("/", 1)[0] + "/deepseek_signed_in_2026.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"deepseek": {"enabled": True, "label": "DeepSeek", "url": url, "max_retries": 0}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("deepseek", engine, settings, settings.providers["deepseek"])
+        adapter.sel.stable_ms = 700
+        adapter.sel.tiny_fragment_ms = 1500
+        adapter.sel.never_started_ms = 12000
+        adapter.sel.force_capture_ms = 25000
+        adapter.sel.hard_timeout_ms = 45000
+        response = await adapter.ask("jobd", "When was the Eiffel Tower completed and how tall is it?", 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        assert "March 31, 1889" in response.answer_text, response.answer_text
+        assert "Must comply" not in response.answer_text, response.answer_text
+    finally:
+        await engine.stop(keep_windows=False)
 def test_clean_source_url_strips_only_the_chatgpt_tracking_parameter():
     from browser.adapters.chatgpt import clean_source_url
 

@@ -422,8 +422,8 @@ SELECTORS: dict[str, SelectorSet] = {
             verified="guess",
         ),
         stop=FieldSet(aria=["Stop", "Stop generating"], css=['[class*="stop"]'], verified="guess"),
-        response_root=['[role="log"]', "main", "#root"],
-        assistant_message=['.ds-assistant-message-main-content', '[class*="markdown"]', '[data-message-id]', '[class*="answer"]'],  # first: signed-in chat.deepseek.com seen live 2026-10-04 (the thinking block is also .ds-markdown)
+        response_root=['[role="log"]', "main", "#root", ".ds-virtual-list", "body"],  # signed-in DeepSeek has none of the first three
+        assistant_message=['.ds-assistant-message-main-content', '.ds-markdown:not(.ds-think-content .ds-markdown)', '[data-message-id]', '[class*="answer"]'],  # first: signed-in chat.deepseek.com seen live 2026-10-04 (the thinking block is also .ds-markdown)
         streaming=['[class*="loading"]', '[aria-busy="true"]'],
         sources=["a[href^='http']"],
         login_wall=['button:has-text("Sign in")', 'a[href*="login"]', 'button:has-text("Log in")'],

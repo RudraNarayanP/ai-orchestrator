@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DeepSeek (signed-in 2026-10-04 DOM fixture)</title>
+<!-- No <main>, no #root, no [role=log]. The thinking block is div.ds-think-content > div.ds-markdown and must not leak into the
+     answer; the answer is div.ds-markdown.ds-assistant-message-main-content. -->
+<style>body{font-family:system-ui;background:#111;color:#eee} .c{position:fixed;bottom:12px;left:12px;right:12px;display:flex;gap:8px} textarea{flex:1;height:48px}</style>
+</head>
+<body>
+<div class="ds-virtual-list"><div id="t" class="ds-virtual-list-items"></div></div>
+<div class="c"><textarea placeholder="Message DeepSeek" id="in"></textarea><div role="button" aria-label="Send" id="send" style="width:34px;height:34px;background:#46f"></div></div>
+<script>
+const t = document.getElementById('t'), input = document.getElementById('in');
+function go() {
+  const text = input.value.trim(); if (!text) return; input.value = '';
+  const u = document.createElement('div'); u.className = 'user-message'; u.textContent = text; t.appendChild(u);
+  setTimeout(() => {
+    const m = document.createElement('div'); m.className = 'ds-message';
+    m.innerHTML = '<div class="ds-think-content"><div class="ds-markdown"><p class="ds-markdown-paragraph">We need to answer with the Eiffel facts. Must comply.</p></div></div>' +
+      '<div class="ds-markdown ds-assistant-message-main-content"><p class="ds-markdown-paragraph">The Eiffel Tower was completed on March 31, 1889 and is about 330 metres tall.</p></div>';
+    t.appendChild(m);
+  }, 700);
+}
+document.getElementById('send').addEventListener('click', e => { if (e.isTrusted) go(); });
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+</script>
+</body>
+</html>
