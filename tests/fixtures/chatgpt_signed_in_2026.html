@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ChatGPT (signed-in 2026-10-04 DOM fixture)</title>
+<!-- Mirrors signed-in chatgpt.com in a real Chrome on 2026-10-04: no [data-message-author-role]; each turn is a
+     div[data-content-search-unit-key="fallback-turn-N:M:user|assistant"] and the answer text sits in
+     div[data-markdown-text-style=assistant-message]; sr-only "You said:" / "ChatGPT said:" headings. -->
+<style>body{font-family:system-ui;background:#111;color:#eee} .c{position:fixed;bottom:12px;left:12px;right:12px;display:flex;gap:8px} textarea{flex:1;height:48px}</style>
+</head>
+<body>
+<main><div id="t"></div></main>
+<div class="c">
+  <textarea id="prompt-textarea" aria-label="Chat with ChatGPT" placeholder="Ask anything"></textarea>
+  <button aria-label="Send prompt" data-testid="send-button" id="send">Send</button>
+</div>
+<script>
+const t = document.getElementById('t');
+const input = document.getElementById('prompt-textarea');
+let n = 0;
+function turn(role, label, html) {
+  const d = document.createElement('div');
+  d.setAttribute('data-content-search-unit-key', 'fallback-turn-0:' + (++n) + ':' + role);
+  d.innerHTML = '<h5 class="sr-only">' + label + '</h5>' +
+    (role === 'assistant' ? '<div data-markdown-text-style="assistant-message" class="MarkdownRoot">' + html + '</div>' : '<div class="bubble"></div>');
+  t.appendChild(d);
+  return d;
+}
+function go() {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  turn('user', 'You said:', '').lastChild.textContent = text;
+  setTimeout(() => turn('assistant', 'ChatGPT said:', '<p>The Eiffel Tower was completed on March 31, 1889 and is about 330 metres tall.</p>'), 700);
+}
+document.getElementById('send').onclick = go;
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+</script>
+</body>
+</html>

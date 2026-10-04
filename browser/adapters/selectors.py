@@ -134,6 +134,10 @@ SELECTORS: dict[str, SelectorSet] = {
         assistant_message=[
             '[data-message-author-role="assistant"]',
             'li[data-message-role="assistant"]',
+            # signed-in ChatGPT in a real Chrome (observed live 2026-10-04): no author-role attribute any more; the
+            # answer text sits in a div marked data-markdown-text-style=assistant-message
+            '[data-markdown-text-style="assistant-message"]',
+            '[data-content-search-unit-key$=":assistant"]',
             "div[data-message-id] .markdown",
             "article",
         ],

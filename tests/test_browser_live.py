@@ -229,6 +229,28 @@ async def test_logged_out_chatgpt_transcript_dom_is_captured(browser_settings, f
     finally:
         await engine.stop(keep_windows=False)
 
+async def test_signed_in_chatgpt_without_author_role_attribute_is_captured(browser_settings, fixture_server):
+    """Live via chrome-use on the user's signed-in Chrome (2026-10-04): 'answer captured but empty after cleaning' because
+    the answer sits in div[data-markdown-text-style=assistant-message] and there is no data-message-author-role."""
+    url = fixture_server.rsplit("/", 1)[0] + "/chatgpt_signed_in_2026.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"chatgpt": {"enabled": True, "label": "ChatGPT", "url": url, "max_retries": 0}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("chatgpt", engine, settings, settings.providers["chatgpt"])
+        adapter.sel.stable_ms = 700
+        adapter.sel.tiny_fragment_ms = 1500
+        adapter.sel.never_started_ms = 12000
+        adapter.sel.force_capture_ms = 25000
+        adapter.sel.hard_timeout_ms = 45000
+        response = await adapter.ask("jobs", "When was the Eiffel Tower completed and how tall is it?", 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        assert "March 31, 1889" in response.answer_text and "330 metres" in response.answer_text, response.answer_text
+        assert "ChatGPT said" not in response.answer_text and "You said" not in response.answer_text
+    finally:
+        await engine.stop(keep_windows=False)
 def test_clean_source_url_strips_only_the_chatgpt_tracking_parameter():
     from browser.adapters.chatgpt import clean_source_url
 
