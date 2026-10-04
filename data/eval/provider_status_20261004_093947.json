@@ -1,0 +1,11 @@
+[
+ {
+  "provider": "le_chat",
+  "status": "logged_out",
+  "detail": "readiness=login_wall after sending (page moved to: https://v2.auth.mistral.ai/login?flow=dfb2ae05-afbb-43ba-8eb5-35eb455105f0)",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 17
+ }
+]

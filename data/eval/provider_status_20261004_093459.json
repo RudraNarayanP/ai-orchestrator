@@ -1,0 +1,11 @@
+[
+ {
+  "provider": "le_chat",
+  "status": "failed",
+  "detail": "answer captured but empty after cleaning",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 34
+ }
+]
