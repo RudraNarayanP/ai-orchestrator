@@ -348,6 +348,8 @@ class ChromeUseRunner:
                 stdout=out,
                 stderr=err,
                 env=self.build_env(),
+                # hundreds of short chrome-use calls per job: never let each one flash a console / shell window
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
             )
             try:
                 if stdin is not None and proc.stdin is not None:

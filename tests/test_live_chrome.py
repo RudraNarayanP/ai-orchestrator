@@ -844,3 +844,38 @@ async def test_copilot_redirect_to_copilot_com_is_followed_but_a_microsoft_login
     fake.set_tab_url("t2", "https://login.microsoftonline.com/common/oauth2/authorize")
     with pytest.raises(LiveChromeNeedsUser):
         await page.evaluate("() => 1")
+
+
+def test_chrome_use_calls_never_open_a_window_and_the_code_never_opens_explorer():
+    """The user saw windows popping up repeatedly while the live driver ran. Each chrome-use call must be windowless and
+    nothing in OmniBrain may open files/folders through the shell (os.startfile, explorer, start, Invoke-Item)."""
+    import re
+    import subprocess as sp
+
+    seen = {}
+    real = sp.Popen
+
+    class Spy(real):
+        def __init__(self, *a, **kw):
+            seen.update(kw)
+            super().__init__(*a, **kw)
+
+    runner = ChromeUseRunner([sys.executable, "-c", "print('{\"success\": true, \"data\": {}}')"])
+    sp.Popen = Spy
+    try:
+        runner._run_sync(runner.build_argv(["status"])[:2] + ["-c", "print(1)"], None, 20)
+    finally:
+        sp.Popen = real
+    if sys.platform == "win32":
+        assert seen.get("creationflags", 0) & sp.CREATE_NO_WINDOW
+    assert seen.get("shell") in (None, False)
+
+    root = Path(__file__).resolve().parent.parent
+    bad = re.compile(r"os\.startfile|explorer(\.exe)?\b['\"\s]|Invoke-Item|shell\s*=\s*True|os\.system\(|webbrowser\.open\(\s*(?!url|f?['\"]http)")
+    offenders = []
+    for sub in ("backend", "browser", "scripts"):
+        for f in (root / sub).rglob("*.py"):
+            for n, line in enumerate(f.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                if bad.search(line) and "re.compile" not in line:
+                    offenders.append(f"{f.relative_to(root)}:{n}: {line.strip()[:90]}")
+    assert not offenders, offenders
