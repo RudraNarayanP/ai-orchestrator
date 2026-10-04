@@ -251,6 +251,27 @@ async def test_signed_in_chatgpt_without_author_role_attribute_is_captured(brows
         assert "ChatGPT said" not in response.answer_text and "You said" not in response.answer_text
     finally:
         await engine.stop(keep_windows=False)
+async def test_a_site_that_ignores_the_scripted_send_click_is_sent_with_enter(browser_settings, fixture_server):
+    """Live (chat.deepseek.com in the user's Chrome): clickSend reported ok but the untrusted click did nothing and the
+    prompt sat in the composer until timeout. If the prompt is still in the composer after the click, press Enter."""
+    url = fixture_server.rsplit("/", 1)[0] + "/chat_ignores_scripted_click.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"chatgpt": {"enabled": True, "label": "ChatGPT", "url": url, "max_retries": 0}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("chatgpt", engine, settings, settings.providers["chatgpt"])
+        adapter.sel.stable_ms = 700
+        adapter.sel.tiny_fragment_ms = 1500
+        adapter.sel.never_started_ms = 12000
+        adapter.sel.force_capture_ms = 25000
+        adapter.sel.hard_timeout_ms = 45000
+        response = await adapter.ask("jobe", "When was the Eiffel Tower completed and how tall is it?", 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        assert "March 31, 1889" in response.answer_text, response.answer_text
+    finally:
+        await engine.stop(keep_windows=False)
 def test_clean_source_url_strips_only_the_chatgpt_tracking_parameter():
     from browser.adapters.chatgpt import clean_source_url
 

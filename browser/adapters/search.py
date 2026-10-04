@@ -80,7 +80,7 @@ class SearchAdapter(ChatAdapter):
             if not typed:
                 response.note(ProviderStatus.BROKEN, error="no search box found")
                 return self._finish(response)
-            await self._submit(page)
+            await self._submit(page, prompt)
 
             harvested = await self._await_results(page, baseline, emit, round_no)
             if not harvested:

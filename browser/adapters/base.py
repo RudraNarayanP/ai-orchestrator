@@ -442,7 +442,7 @@ class ChatAdapter:
                     return False
 
             await emit("provider", f"{self.provider}: prompt sent — waiting for answer", self.provider, round_no)
-            await self._submit(page)
+            await self._submit(page, prompt)
             if lock is not None:
                 await asyncio.sleep(1.5)  # let the site take the message before the next tab comes forward
         finally:
@@ -686,7 +686,7 @@ class ChatAdapter:
             length = 0
         return bool(length and length >= min(40, int(len(prompt) * 0.4)))
 
-    async def _submit(self, page) -> None:
+    async def _submit(self, page, prompt: str = "") -> None:
         self._prompt_sent = True
         clicked = await self._call(page, "clickSend", self._sel_dict)
         if isinstance(clicked, str):
@@ -695,7 +695,17 @@ class ChatAdapter:
             except json.JSONDecodeError:
                 clicked = {}
         if clicked and clicked.get("ok"):
-            return
+            # A scripted click is not a trusted event: some sites (seen live: chat.deepseek.com in a real Chrome)
+            # ignore it and leave the prompt sitting in the composer. If it is still there, press Enter like a person.
+            if not prompt:
+                return
+            try:
+                await page.wait_for_timeout(1500)
+                unsent = await self._verify_composer(page, prompt)
+            except Exception:  # noqa: BLE001
+                return
+            if not unsent:
+                return
         try:
             await page.keyboard.press("Enter")
         except Exception:  # noqa: BLE001

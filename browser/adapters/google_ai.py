@@ -40,7 +40,7 @@ class GoogleAIAdapter(ChatAdapter):
         if not await self._type(page, prompt):
             response.note(ProviderStatus.BROKEN, error="no AI Mode input found")
             return False
-        await self._submit(page)
+        await self._submit(page, prompt)
 
         deadline = time.time() + self.sel.hard_timeout_ms / 1000.0
         # Logged out, AI Mode can sit on animated dots forever (observed: nothing after 400 s). It is slow when it

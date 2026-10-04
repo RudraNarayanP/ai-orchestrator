@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chat (ignores scripted clicks fixture)</title>
+<!-- Mirrors chat.deepseek.com in a real Chrome (2026-10-04): the send control is a div[role=button] that ignores
+     untrusted (scripted) clicks, so only a real Enter key sends. There is no [data-message-author-role]. -->
+<style>body{font-family:system-ui;background:#111;color:#eee} .c{position:fixed;bottom:12px;left:12px;right:12px;display:flex;gap:8px} textarea{flex:1;height:48px}</style>
+</head>
+<body>
+<main><div id="t"></div></main>
+<div class="c">
+  <textarea id="prompt-textarea" aria-label="Chat input" placeholder="Message the assistant"></textarea>
+  <div role="button" aria-label="Send message" id="send" style="width:34px;height:34px;background:#46f;border-radius:17px"></div>
+</div>
+<script>
+const t = document.getElementById('t');
+const input = document.getElementById('prompt-textarea');
+function go() {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  const u = document.createElement('div'); u.className = 'user-message'; u.textContent = text; t.appendChild(u);
+  setTimeout(() => { const a = document.createElement('div'); a.setAttribute('data-message-author-role', 'assistant');
+    a.innerHTML = '<p>The Eiffel Tower was completed on March 31, 1889 and is about 330 metres tall.</p>'; t.appendChild(a); }, 700);
+}
+document.getElementById('send').addEventListener('click', e => { if (e.isTrusted) go(); });
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+</script>
+</body>
+</html>
