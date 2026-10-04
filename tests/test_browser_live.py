@@ -329,6 +329,7 @@ async def test_ai_mode_that_never_answers_gives_up_early_and_is_not_retried(brow
         response = await adapter.ask("jobq", "Is anything there?", 1, emit=emit)
         assert response.status.value == "broken", (response.status, response.error, events)
         assert "no-response-element" in (response.error or "")
+        assert "AI Mode response is ready" in (response.detail or ""), "the failure must say what the page was showing"
         assert time.time() - started < 30, "should give up long before the hard timeout"
         assert not any("retrying" in e for e in events), events
     finally:

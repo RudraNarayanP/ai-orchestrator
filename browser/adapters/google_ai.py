@@ -77,7 +77,18 @@ class GoogleAIAdapter(ChatAdapter):
             await asyncio.sleep(self.settings.research.response_stability_poll_ms / 1000.0)
 
         if not best or not (best.get("text") or "").strip():
-            response.note(ProviderStatus.BROKEN, error="no-response-element: AI Mode produced no answer block")
+            # Say what the page WAS showing: live (2026-10-04) it sat on the animated "thinking" dots for 140 s with only
+            # the screen-reader line "AI Mode response is ready" in the DOM and no answer text at all.
+            seen = ""
+            try:
+                seen = " ".join(((await page.evaluate("() => (document.body ? document.body.innerText : '')")) or "").split())[-200:]
+            except Exception:  # noqa: BLE001
+                pass
+            response.note(
+                ProviderStatus.BROKEN,
+                error="no-response-element: AI Mode produced no answer block",
+                detail=f"page showed only: {seen}" if seen else None,
+            )
             return False
         from backend.models import Citation
 

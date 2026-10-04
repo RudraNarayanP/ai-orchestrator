@@ -4,6 +4,9 @@
 <!-- Logged-out Google AI Mode in the live run: the page loads, the question is accepted, and no answer block ever
      appears. Nothing here reacts to the submit. -->
 <main id="main"><div id="search"></div></main>
+<!-- Real DOM on 2026-10-04: the only text is the screen-reader live region; the animated dots are a bare element. -->
+<div aria-live="polite" style="position:absolute;left:-9999px">AI Mode response is ready</div>
+<div class="dots" style="width:40px;height:12px;background:radial-gradient(#999 40%,transparent 41%) 0 0/12px 12px"></div>
 <textarea aria-label="Ask anything" id="q" style="width:600px;height:40px"></textarea>
 <button aria-label="Search">Search</button>
 </body></html>
