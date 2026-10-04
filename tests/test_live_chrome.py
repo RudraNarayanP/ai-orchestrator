@@ -9,6 +9,7 @@ that a login / captcha / age page is reported as the user's, never touched.
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -702,3 +703,29 @@ async def test_a_new_tab_that_lands_off_the_allowlist_is_refused_and_our_tab_clo
         await engine.open_research_page("chatgpt", "https://chatgpt.com/")
     assert "t2" not in fake.read()["tabs"]
     assert "t1" in fake.read()["tabs"]
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs node to run the wrapper JS")
+def test_wrapped_script_survives_dom_nodes_and_cycles():
+    """Live regression (Gemini): a script returning an element / cyclic object must not throw."""
+    import subprocess
+
+    probe = (
+        "class Node {}; globalThis.Node = Node; class Window {}; globalThis.Window = Window;"
+        "const cyc = {a: 1}; cyc.self = cyc;"
+        "const run = async (js) => JSON.parse(await eval(js));"
+        "(async () => { const out = [];"
+        "out.push(await run(" + json.dumps(lc.wrap_for_cli("(async () => new Node())()")) + "));"
+        "out.push(await run(" + json.dumps(lc.wrap_for_cli("(async () => cyc)()")) + "));"
+        "out.push(await run(" + json.dumps(lc.wrap_for_cli("(async () => ({n: 1, f() {}, s: 'x'}))()")) + "));"
+        "out.push(await run(" + json.dumps(lc.wrap_for_cli("(async () => { throw new Error('boom'); })()")) + "));"
+        "console.log(JSON.stringify(out)); })();"
+    )
+    done = subprocess.run(["node", "-e", probe], capture_output=True, text=True, timeout=30)
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == [
+        {"ok": True, "v": {}},
+        {"ok": True, "v": {"a": 1, "self": None}},
+        {"ok": True, "v": {"n": 1, "s": "x"}},
+        {"ok": False, "e": "boom"},
+    ]

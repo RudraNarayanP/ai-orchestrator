@@ -499,10 +499,21 @@ def build_call_js(expression: str, arg: Any = _UNSET) -> str:
 
 
 def wrap_for_cli(call_js: str) -> str:
-    """Wrap so the CLI always returns a JSON string: ``{"ok":true,"v":..}`` or ``{"ok":false,"e":..}``."""
+    """Wrap so the CLI always returns a JSON string: ``{"ok":true,"v":..}`` or ``{"ok":false,"e":..}``.
+
+    The serializer is cycle-safe and maps DOM nodes/windows to ``{}`` the way Playwright's ``evaluate``
+    does (a script that ends in ``el.click()`` or returns an element must not blow up -- seen live on Gemini).
+    """
     return (
         "(async () => { try { const __r = await " + call_js + ";"
-        " return JSON.stringify({ok: true, v: (__r === undefined ? null : __r)}); }"
+        " const __seen = new WeakSet();"
+        " const __rep = (k, v) => { if (typeof v === 'function' || typeof v === 'symbol') return undefined;"
+        " if (typeof v === 'bigint') return Number(v);"
+        " if (v && typeof v === 'object') {"
+        " if ((typeof Node !== 'undefined' && v instanceof Node) || (typeof Window !== 'undefined' && v instanceof Window)) return {};"
+        " if (__seen.has(v)) return null; __seen.add(v); }"
+        " return v; };"
+        " return JSON.stringify({ok: true, v: (__r === undefined ? null : __r)}, __rep); }"
         " catch (e) { return JSON.stringify({ok: false, e: String((e && e.message) || e)}); } })()"
     )
 
