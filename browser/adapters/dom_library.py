@@ -382,10 +382,13 @@ DOM_LIBRARY_JS = r"""
     dismiss(cfg) {
       const clicked = [];
       const cfgd = cfg.dismiss || {};
+      // safe_dismiss (the live-Chrome driver, the person's own browser): never click anything that accepts / agrees / allows
+      const unsafe = /(accept|agree|allow|consent|\byes\b)/i;
       const want = /(accept all|accept all cookies|i agree|got it|no thanks|not now|maybe later|close|dismiss|allow all|decline all|reject all|continue without|one ?time|later today|use week)/i;
       for (const c of candidates(cfgd, {css: cfgd.css || [], text_regex: cfgd.text_regex, aria: cfgd.aria || [], testids: cfgd.testids}, {kind: 'button'})) {
         const t = c.desc.text + ' ' + (c.desc.aria || '');
         if (!want.test(t)) continue;
+        if (cfg.safe_dismiss && unsafe.test(t)) continue;
         if (inTermsGate(c.el)) continue;
         try { c.el.click({beacon: false}); clicked.push(norm(t).slice(0, 60)); } catch (e) {}
         if (clicked.length >= 4) break;
@@ -393,7 +396,7 @@ DOM_LIBRARY_JS = r"""
       for (const sel of ['form[role="dialog"]', '#layers .zPTDog', '[data-testid="popup"]']) {
         queryAll(sel).forEach(dlg => {
           Array.from(dlg.querySelectorAll('button')).forEach(b => {
-            if (want.test(norm(b.innerText)) && visible(b) && !inTermsGate(b)) { try { b.click(); clicked.push('modal:' + norm(b.innerText).slice(0, 40)); } catch (e) {} }
+            if (want.test(norm(b.innerText)) && !(cfg.safe_dismiss && unsafe.test(norm(b.innerText))) && visible(b) && !inTermsGate(b)) { try { b.click(); clicked.push('modal:' + norm(b.innerText).slice(0, 40)); } catch (e) {} }
           });
         });
       }

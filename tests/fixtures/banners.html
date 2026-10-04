@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Banner fixture</title></head>
+<body>
+<div id="cookie"><p>We use cookies.</p><button id="acc">Accept all cookies</button> <button id="agree">I agree</button> <button id="rej">Reject all</button></div>
+<div id="promo"><p>New feature!</p><button id="got">Got it</button></div>
+<script>
+window.clicked = [];
+for (const id of ['acc', 'agree', 'rej', 'got']) document.getElementById(id).addEventListener('click', () => window.clicked.push(id));
+</script>
+</body>
+</html>

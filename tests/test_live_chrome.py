@@ -729,3 +729,25 @@ def test_wrapped_script_survives_dom_nodes_and_cycles():
         {"ok": True, "v": {"n": 1, "s": "x"}},
         {"ok": False, "e": "boom"},
     ]
+
+
+async def test_a_dialog_over_the_page_is_the_users_to_answer_but_escape_still_works(fake, engine):
+    """Live (pi.ai): 'Memory just got better ... Continue to Pi' sat over the composer; clicks landed on it."""
+    page = await engine.open_research_page("pi", "https://pi.ai/")
+    fake.rule("captchaFrame", value={"captchaFrame": False, "cf": False, "human": False, "age": False, "title": "Pi",
+                                     "modal": "Memory just got better  Now Pi can remember relevant details across your chats"})
+    with pytest.raises(LiveChromeNeedsUser) as ei:
+        await page.check_gate()
+    assert ei.value.kind == "consent" and "Memory just got better" in str(ei.value)
+    fake.clear_calls()
+    with pytest.raises(LiveChromeNeedsUser):
+        await page.keyboard.insert_text("my question")
+    with pytest.raises(LiveChromeNeedsUser):
+        await page.mouse.click(10, 10)
+    assert not [v for v in fake.verbs() if v[0] in ("click", "keyboard")], "nothing may be typed/clicked under a dialog"
+    await page.keyboard.press("Escape")  # closing a dialog is always allowed
+    assert ["press", "Escape"] in fake.verbs()
+    # and a clean page passes
+    fake.update(rules=[])
+    fake.rule("captchaFrame", value={"captchaFrame": False, "cf": False, "human": False, "age": False, "title": "Pi", "modal": ""})
+    await page.check_gate()

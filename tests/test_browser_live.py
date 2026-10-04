@@ -272,6 +272,27 @@ async def test_a_site_that_ignores_the_scripted_send_click_is_sent_with_enter(br
         assert "March 31, 1889" in response.answer_text, response.answer_text
     finally:
         await engine.stop(keep_windows=False)
+async def test_safe_dismiss_closes_banners_but_never_accepts_or_agrees(browser_settings, fixture_server):
+    """On the person's own Chrome (live driver) 'Accept all cookies' / 'I agree' must never be clicked; 'Got it' / 'Reject all' may."""
+    url = fixture_server.rsplit("/", 1)[0] + "/banners.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"chatgpt": {"enabled": True, "label": "ChatGPT", "url": url, "max_retries": 0}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("chatgpt", engine, settings, settings.providers["chatgpt"])
+        page = await engine.open_research_page("chatgpt", url)
+        await adapter._install(page)
+        await adapter._call(page, "dismiss", {**adapter._sel_dict, "safe_dismiss": True})
+        clicked = await page.evaluate("() => window.clicked")
+        assert "acc" not in clicked and "agree" not in clicked, clicked
+        assert "got" in clicked, clicked
+        await page.evaluate("() => { window.clicked.length = 0; }")
+        await adapter._call(page, "dismiss", adapter._sel_dict)  # the dedicated-profile behaviour is unchanged
+        assert "acc" in await page.evaluate("() => window.clicked")
+    finally:
+        await engine.stop(keep_windows=False)
 def test_clean_source_url_strips_only_the_chatgpt_tracking_parameter():
     from browser.adapters.chatgpt import clean_source_url
 

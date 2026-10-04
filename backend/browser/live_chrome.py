@@ -526,7 +526,15 @@ _CHALLENGE_JS = r"""(() => {
   const cf = /just a moment|attention required|performing security verification|checking your browser/i.test(title + ' ' + text.slice(0, 600));
   const human = /verify (that )?you are (a )?human|are you a robot|press and hold|i'?m not a robot/i.test(text);
   const age = /(confirm|verify) (that )?you('| a)re (over |at least )?(18|eighteen)|age verification|date of birth/i.test(text.slice(0, 1500));
-  return {captchaFrame, cf, human, age, title};
+  // a modal sitting over the middle of the page that does not hold the composer: an announcement / consent /
+  // terms notice the person has to answer themselves (seen live: pi.ai "Memory just got better ... Continue")
+  let modal = '';
+  try {
+    const mid = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+    const dlg = mid && mid.closest('[role=dialog],[role=alertdialog],[aria-modal=true]');
+    if (dlg && !dlg.querySelector('textarea,[contenteditable=true],[role=textbox]')) modal = (dlg.innerText || '').trim().slice(0, 120);
+  } catch (e) {}
+  return {captchaFrame, cf, human, age, title, modal};
 })()"""
 
 
@@ -545,7 +553,8 @@ class _Keyboard:
             await self._p._act(("keyboard", "type", text[i : i + 4000]), input_action=True)
 
     async def press(self, key: str, delay: float | None = None) -> None:
-        await self._p._act(("press", key), input_action=True)
+        # Escape only ever closes a dialog, so it may be pressed while one is open (e.g. the source-chip dialog)
+        await self._p._act(("press", key), input_action=True, allow_modal=(key == "Escape"))
 
 
 class _Mouse:
@@ -605,15 +614,21 @@ class LivePage:
 
     # ---- the one gate every action passes through
     async def _act(
-        self, args: Sequence[str], *, stdin: str | None = None, input_action: bool = False, timeout: float | None = None
+        self,
+        args: Sequence[str],
+        *,
+        stdin: str | None = None,
+        input_action: bool = False,
+        timeout: float | None = None,
+        allow_modal: bool = False,
     ) -> dict[str, Any]:
         if self._closed:
             raise LiveChromeError("tab was closed")
         async with self._engine._cmd_lock:
-            await self._guard(input_action=input_action)
+            await self._guard(input_action=input_action, allow_modal=allow_modal)
             return await self._engine.runner.run(*args, stdin=stdin, timeout=timeout)
 
-    async def _guard(self, *, input_action: bool) -> None:
+    async def _guard(self, *, input_action: bool, allow_modal: bool = False) -> None:
         """Select this tab, re-read its URL, refuse unless it is a provider page."""
         eng = self._engine
         await eng._select(self)
@@ -626,9 +641,14 @@ class LivePage:
             eng._note(f"refused to act on {self.key}: tab is at {_short(url, 70)}")
             assert_allowed_url(url, where=f"{self.key} tab moved off the provider")
         if input_action:
-            await self._refuse_if_challenge()
+            await self._refuse_if_challenge(allow_modal)
 
-    async def _refuse_if_challenge(self) -> None:
+    async def check_gate(self) -> None:
+        """Raise NeedsUser if a captcha / age gate / consent dialog is up (adapters call this before typing)."""
+        async with self._engine._cmd_lock:
+            await self._guard(input_action=True)
+
+    async def _refuse_if_challenge(self, allow_modal: bool = False) -> None:
         raw = await self._engine.runner.run("eval", "--stdin", stdin=wrap_for_cli(_CHALLENGE_JS))
         info = _unwrap(raw)
         if not isinstance(info, dict):
@@ -637,6 +657,8 @@ class LivePage:
             raise LiveChromeNeedsUser("captcha", self._url, str(info.get("title") or "")[:60])
         if info.get("age"):
             raise LiveChromeNeedsUser("age", self._url)
+        if info.get("modal") and not allow_modal:
+            raise LiveChromeNeedsUser("consent", self._url, "a dialog is covering the page: " + " ".join(str(info["modal"]).split())[:80])
 
     # ---- evaluate
     async def _eval_value(self, call_js: str, *, input_action: bool = False) -> Any:

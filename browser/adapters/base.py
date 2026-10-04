@@ -251,12 +251,18 @@ class ChatAdapter:
             pass
         await page.wait_for_timeout(self.settings.browser.settle_ms)
 
+    def _dismiss_cfg(self, page) -> dict[str, Any]:
+        """On the person's own Chrome (live driver) banners may be closed but never accepted / agreed to."""
+        if hasattr(page, "check_gate"):
+            return {**self._sel_dict, "safe_dismiss": True}
+        return self._sel_dict
+
     async def prepare(self, page, emit: EventHook, round_no: int) -> dict[str, Any]:
         """Dismiss chrome that blocks the composer, then confirm we can type."""
         state: dict[str, Any] = {"ok": False}
         for attempt in range(3):
             try:
-                clicked = await self._call(page, "dismiss", self._sel_dict)
+                clicked = await self._call(page, "dismiss", self._dismiss_cfg(page))
             except DOMUnavailable as exc:
                 if needs_user_in(exc):
                     raise  # live-Chrome driver: a login/captcha/age page is the user's, reported by _ask_dom
@@ -268,6 +274,9 @@ class ChatAdapter:
                 await emit("provider", f"{self.provider}: dismissed {'/'.join(clicked[:2])}", self.provider, round_no)
             state = await self.readiness(page)
             if state["state"] == "ready":
+                check_gate = getattr(page, "check_gate", None)
+                if check_gate is not None:
+                    await check_gate()  # live Chrome: a consent / announcement dialog over the page is the person's to answer
                 state["ok"] = True
                 return state
             if state["state"] in {"login_wall", "blocked", "rate_limited"}:
@@ -607,7 +616,7 @@ class ChatAdapter:
                 continue
             await page.wait_for_timeout(1500)
             try:
-                await self._call(page, "dismiss", self._sel_dict)
+                await self._call(page, "dismiss", self._dismiss_cfg(page))
             except Exception:  # noqa: BLE001
                 pass
             if await self._verify_composer(page, prompt):
