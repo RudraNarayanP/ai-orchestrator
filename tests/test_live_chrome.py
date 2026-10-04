@@ -579,6 +579,18 @@ def test_default_driver_is_still_playwright():
     assert isinstance(create_engine(live_settings()), LiveChromeEngine)
 
 
+def test_chrome_use_is_found_on_path_or_in_the_installer_folder(tmp_path, monkeypatch):
+    exe = tmp_path / "Programs" / "chrome-use" / "chrome-use.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"MZ")
+    monkeypatch.setenv("PATH", str(tmp_path / "nowhere"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert lc.resolve_chrome_use() == str(exe)
+    assert lc.resolve_chrome_use(r"D:\tools\chrome-use.exe") == r"D:\tools\chrome-use.exe"
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "empty"))
+    assert lc.resolve_chrome_use() == "chrome-use"
+
+
 def test_example_config_documents_the_driver_and_keeps_the_default():
     from backend.settings import CONFIG_DIR
     import yaml

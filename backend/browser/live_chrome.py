@@ -35,6 +35,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -264,6 +265,22 @@ def _check_argv(args: Sequence[str]) -> None:
         need(not rest, "takes no arguments")
     else:
         raise LiveChromeRefused(f"refused: chrome-use {verb!r} is not in OmniBrain's allowed command set")
+
+
+def resolve_chrome_use(configured: str | None = None) -> str:
+    """The chrome-use executable: the configured path, else PATH, else where
+    scripts/install_chrome_use.ps1 puts it (%LOCALAPPDATA%\\Programs\\chrome-use)."""
+    if configured:
+        return configured
+    found = shutil.which("chrome-use")
+    if found:
+        return found
+    base = os.environ.get("LOCALAPPDATA")
+    if base:
+        candidate = Path(base) / "Programs" / "chrome-use" / "chrome-use.exe"
+        if candidate.exists():
+            return str(candidate)
+    return "chrome-use"
 
 
 class ChromeUseRunner:
@@ -676,7 +693,7 @@ class LiveChromeEngine:
         self.settings = settings
         cfg = settings.browser
         self.runner = runner or ChromeUseRunner(
-            [cfg.chrome_use_path or "chrome-use"],
+            [resolve_chrome_use(cfg.chrome_use_path)],
             session=cfg.chrome_use_session,
             browser=cfg.chrome_use_browser,
             timeout_s=cfg.chrome_use_timeout_s,
