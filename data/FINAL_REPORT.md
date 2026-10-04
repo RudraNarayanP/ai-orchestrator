@@ -102,3 +102,51 @@ Early-stop eval (uk-dpa-age, triv-2plus2); memory live check (general and projec
 **Tests.** `tests/test_thread_http.py` (7, real uvicorn socket + httpx, fake adapters): continuation, rotation visible over HTTP, provider switch, validation and 502 (the user's message is kept when the provider fails), memory-used reporting, thread isolation, old-DB migration. `tests/test_thread_ui.py` (2, real Chrome against the real server): create, chat, rotate, switch provider, recall, provider failure, reload persistence, Escape, delete; and the no-HTML test. The page fixture fails on any pageerror, console error, failed request or non-502 HTTP error. That check caught a real `/favicon.ico` 404, fixed with an inline icon link. A screenshot was taken and inspected (`data/artifacts/thread_screen.png`).
 **Counts.** Offline gate: **617 passed**, 31 deselected (610 + 7). Existing UI tests plus the thread UI tests in real Chrome: 13 passed, no console errors.
 **Gaps.** The browser tests use fake adapters for thread chat; real-provider thread chat was verified live only at service level (section 5), not through the UI. The UI has no button to run a research job inside a thread (`POST /api/jobs {thread_id}` exists, the UI does not call it).
+## 10. Item 2 - full hard-question suite, live (commits 3b31b68, 776be16, 28d9cd8, 9e8e7aa, 8d5d6f7, e71fa80)
+**How it ran.** All 18 questions in `scripts/eval_hard.py` / `scripts/eval_questions.yaml`, live against the real Chrome windows, in six background batches of three (about 5-18 min each), results saved after each batch (`data/eval/eval_20261004_054541` ... `_065801`, batch log `data/eval/suite_run_20261004_batches.log`). Then the questions with defects were re-run after the fixes (`_072026`, `_073609`, `_074308`, `_075056`). Both trap questions were re-run live (`res-private-review`, `ua-closed-session`). The verifier was the configured OpenRouter model.
+
+**First pass: 8 PASS, 9 WARN, 1 FAIL.** After the fixes and re-runs: **10 PASS, 8 WARN, 0 FAIL**.
+
+| question | first pass | after fixes | note |
+|---|---|---|---|
+| triv-2plus2 | PASS (4 s) | PASS | |
+| uk-dpa-age | PASS | PASS | 13 via s.9 DPA 2018 |
+| uk-theft-s1 | WARN "couldn't verify" | **PASS** | the official PDF could not be read; PDFs are now read as text |
+| uk-vpn-ban | PASS | PASS | "no section bans VPNs" |
+| uk-future-amendment | PASS "Couldn't verify" | PASS | future event, correctly unverifiable |
+| ua-marriage-age | WARN "Couldn't verify" | WARN | zakon.rada.gov.ua refuses connections from this PC (ConnectError); answer stays "couldn't verify" |
+| ua-constitution-year | WARN (no primary cited) | WARN | 28 June 1996 from two secondary sites; the official site is unreachable from here |
+| ua-russian-state-language | WARN "couldn't verify" | WARN | now answers "no article does; Art. 10 makes Ukrainian the state language", still no primary page (site unreachable) |
+| ua-closed-session (trap) | **FAIL: job crashed, empty answer (903 s)** | WARN | crash fixed (below). The re-run says no session was held that day because of a recess, citing a news article; the figures 29 and 17 are not in the stored page excerpts. It invents no closed-session content, but it asserts a negative with moderate confidence from a secondary source. Not a clean pass |
+| uni-oxford-plagiarism | WARN "sources disagree" | WARN | ox.ac.uk returns a Cloudflare check to our fetch; not bypassed |
+| uni-oxford-dphil-length | WARN (figure 100000 not on a stored excerpt) | **PASS** | excerpts are now centred on the claim's figure |
+| uni-ucl-appeal | WARN ("27" from "2026-27") | WARN | the scoring artefact is fixed; now flags "2026", which really is absent from the opened pages |
+| uni-manchester-viva-pass-rate | PASS "Couldn't verify" | PASS | |
+| res-ramsey-r55 | PASS 43-46 | PASS | |
+| res-wiles-poincare | WARN (no primary cited) | WARN | correctly rejects the false premise (Wiles proved Fermat, not Poincare); no primary page cited |
+| res-ten-percent-brain | WARN | WARN | the answer opened with "Yeah, you're right." while saying the opposite; now "Nah, that doesn't work like that." Still no primary cited |
+| res-recovery-dexamethasone | PASS | PASS | |
+| res-private-review (trap) | PASS "Couldn't verify that one." | PASS | nothing about the private reviews was invented |
+
+**Defects found and fixed (each with a regression test).**
+1. `ua-closed-session` crashed with "IndexError: list index out of range" in claim extraction, leaving no traceback. Cause: `_repair_truncated` in `backend/verification/llm.py` indexed an empty stack when a comma followed a closed first JSON object (reproduced; the new test fails without the fix). Also: claim extraction now falls back to the model-free extractor if the model path raises, and a crashed job now records its traceback in the error event and the log. Tests: `tests/test_extract_json_robust.py` (9), `tests/test_llm_paths.py` (+1), `tests/test_job_crash_trace.py` (1).
+2. PDFs were fetched as bytes-as-text, so an official PDF showed as "unreachable" (Theft Act 1968). `pypdf` added (`requirements.txt`); PDF pages are read as text. Tests: `tests/test_pdf_pages.py` (3).
+3. Stored excerpts were anchored on the first common word, not on the figure, so a claim's figure was invisible in the evidence (Oxford DPhil 100,000 words). Excerpts are now centred on the claim's figure. Tests: `tests/test_excerpt_figure.py` (2; the first fails without the fix).
+4. A supported answer that denies the user's claim was rendered as agreement ("Is it true that humans only use 10 percent...?" -> "Yeah, you're right."). `premise_state` flips TRUE to FALSE only when the question is un-negated and the answer denies it; no other state is touched, so uncertainty is not weakened. The appended fact now starts with a capital. Tests in `tests/test_truth.py` (+5).
+5. Scoring artefact in the harness: "2026-27" was read as the figure 27. Test in `tests/test_eval_hard.py` (+1).
+Uncertainty behaviour was not weakened: no change makes a "couldn't verify" easier to turn into an answer; the one change that lets a refusal become an answer (PDF reading) does so only when the page text contains the claim.
+
+**Per-provider status over the six first-pass batches** (what the harness recorded; the re-runs used the same set):
+
+| provider | asked | completed | not completed | last status |
+|---|---|---|---|---|
+| chatgpt | 32 | 32 | - | completed |
+| gemini | 22 | 21 | failed x1 | completed |
+| google_ai | 2 | 0 | broken x2 | broken (AI Mode produced no answer block) |
+| copilot | 20 | 0 | logged_out x20 | logged_out (login wall) |
+| le_chat | 13 | 0 | failed x13 | failed (answer captured but empty after cleaning) |
+| qwen | 2 | 0 | failed x2 | failed (readiness=blocked) |
+| meta_ai, pi, deepseek | 0 | - | - | not asked (ranked last by earlier health) |
+
+**Test counts.** Offline gate **639 passed**, 31 deselected (617 after item 1, +22 in this item).
+**Gaps.** `ua-closed-session` is a WARN, not a pass (see table). Three Ukrainian-law questions cannot reach a primary source from this PC. `uni-oxford-plagiarism` is blocked by Cloudflare on ox.ac.uk. The suite was run once per question (plus re-runs of 7); model-driven steps vary run to run, so a single run is a sample. Evidence rows keep 400-char excerpts, so the eval's "figures with no opened page behind them" test sees only those. The per-provider table counts the first-pass batches only.
