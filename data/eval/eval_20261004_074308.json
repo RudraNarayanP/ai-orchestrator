@@ -1,0 +1,301 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "google_ai",
+   "copilot",
+   "meta_ai",
+   "le_chat",
+   "pi",
+   "qwen",
+   "deepseek"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "uni-oxford-dphil-length",
+   "category": "university",
+   "kind": "answer",
+   "question": "What is the maximum thesis length for an Oxford DPhil, and does it differ by division?",
+   "answer": "Oxford's current Linguistics, Philology & Phonetics regulations specify a 100,000-word DPhil limit: I couldn't find that documented. Oxford University's current regulations for the DPhil in Linguistics, Philology and Phonetics specify a maximum thesis length of 100,000 words.",
+   "why": "5 pages we opened, from an independent site, state this.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The AI reviewer wasn't available, so this rests only on the pages I could open and check."
+   ],
+   "sources": [
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdimandmodelang",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdinbiolsciences",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdispoliandinte",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdtsaidbusischo",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdipandinterela",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdil-philandphon"
+   ],
+   "primary_domains": [
+    "ox.ac.uk"
+   ],
+   "primary_opened": [
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdimandmodelang",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdimandmodelang",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdimandmodelang",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdimandmodelang",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdimandmodelang",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdimandmodelang"
+   ],
+   "primary_cited": [
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdimandmodelang",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdinbiolsciences",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdispoliandinte",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdtsaidbusischo",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdipandinterela",
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdil-philandphon"
+   ],
+   "pages_opened": 84,
+   "pages_confirmed": 82,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "confirmed",
+     "initial_claim": "For an Oxford DPhil, **100,000 words is the most common maximum, but it is not a University-wide maximum that applies to every DPhil**. The limit is set in the regulations for the particular subject/course, and there are important exceptions. For example, **Medieval & Modern Languages has an 80,000-",
+     "follow_up_result": "Yes. The original answer was **correct** on the point you asked me to re-investigate. Oxford's **2026/27 Examination Regulations for Research Degrees in Medieval & Modern Languages** state explicitly that a DPhil thesis **\"should not exceed 80,000 words\"**, excluding the bibliography and text being ",
+     "final_position": "For an Oxford DPhil, **100,000 words is the most common maximum, but it is not a University-wide maximum that applies to every DPhil**. The limit is set in the regulations for the particular subject/course, and there are important exceptions. For example, **Medieval & Modern Languages has an 80,000-"
+    }
+   ],
+   "ai_opened": {
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdimandmodelang": true,
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdinbiolsciences": null,
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdispoliandinte": true,
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdtsaidbusischo": true,
+    "https://www.ox.ac.uk/admissions/graduate/courses/dphil-english": true,
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdipandinterela": true,
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rdil-philandphon": true,
+    "https://examregs.admin.ox.ac.uk/Documents/ExaminationRegulations2023.pdf": false,
+    "https://www.ox.ac.uk/admissions/graduate/courses/dphil-medieval-and-modern-languages": true,
+    "https://examregs.admin.ox.ac.uk/Regulation?code=rditdofconteduc": true,
+    "https://oess.web.ox.ac.uk/sitefiles/dphil-handbook-2025-v1.0.pdf": true,
+    "https://www.ling-phil.ox.ac.uk/files/lpp_graduate_handbook%202025-26%20VER%201.0%20FINAL.pdf": true
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 4182,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 397.9,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "uni-ucl-appeal",
+   "category": "university",
+   "kind": "answer",
+   "question": "What are the grounds for appealing an academic misconduct decision at University College London?",
+   "answer": "Under UCL's 2026-27 Student Academic Misconduct Procedure, an appeal against an academic misconduct decision can be heard on four grounds: procedural failure, fresh evidence, unreasonable judgment, and significant impact of the penalty.",
+   "why": "2 pages we opened, from an independent site, state this.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "Only one independent site backs this."
+   ],
+   "sources": [
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-appeals"
+   ],
+   "primary_domains": [
+    "ucl.ac.uk"
+   ],
+   "primary_opened": [
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework/section-9-student-academic-misconduct-procedure",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals"
+   ],
+   "primary_cited": [
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals",
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework",
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-appeals"
+   ],
+   "pages_opened": 26,
+   "pages_confirmed": 16,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt"
+   ],
+   "providers_failed": [],
+   "rounds": 1,
+   "verifier_model": "deterministic ledger (no verifier call)",
+   "browser_sessions": 1,
+   "verifier_calls": 0,
+   "stop_reason": "evidence sufficient after the primary researcher; no escalation earned",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework/section-9-student-academic-misconduct-procedure": true,
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-misconduct-allegations-and-appeals": true,
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/non-academic-misconduct": false,
+    "https://www.ucl.ac.uk/study/current-students/academic-manual/chapters/chapter-6-student-casework-framework": true,
+    "https://www.ucl.ac.uk/srs/news/2021/jul/updated-academic-misconduct-procedures": true,
+    "https://www.ucl.ac.uk/study/sites/study/files/chapter_6_student_casework_framework_2025-26.pdf": true,
+    "https://www.ucl.ac.uk/study/current-students/appeals-and-complaints/academic-appeals": false
+   },
+   "unsupported_figures": [
+    "2026"
+   ],
+   "claim_text_len": 2035,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 62.0,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "figures with no opened page behind them: 2026"
+    ]
+   }
+  }
+ ]
+}

@@ -11,3 +11,6 @@ __pycache__/
 config/settings.yaml
 
 data/eval/_*
+
+data/eval/console_*.txt
+data/tmp_*
