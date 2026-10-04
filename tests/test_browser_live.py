@@ -229,6 +229,38 @@ async def test_logged_out_chatgpt_transcript_dom_is_captured(browser_settings, f
     finally:
         await engine.stop(keep_windows=False)
 
+def test_clean_source_url_strips_only_the_chatgpt_tracking_parameter():
+    from browser.adapters.chatgpt import clean_source_url
+
+    assert clean_source_url("https://www.legislation.gov.uk/ukpga/2018/12/introduction/2026-09-30?utm_source=chatgpt.com") == "https://www.legislation.gov.uk/ukpga/2018/12/introduction/2026-09-30"
+    assert clean_source_url("https://x.example/a?id=7&utm_source=chatgpt.com") == "https://x.example/a?id=7"
+    assert clean_source_url("https://x.example/a?utm_source=newsletter") == "https://x.example/a?utm_source=newsletter"
+
+
+async def test_chatgpt_source_chips_are_opened_and_their_urls_captured(browser_settings, fixture_server):
+    """Live (2026-10-04): the answer named 'legislation.gov.uk' in a chip button and the citations list was empty, because the
+    URL only exists in the dialog the chip opens. The URL is read from that dialog, without the tracking parameter."""
+    url = fixture_server.rsplit("/", 1)[0] + "/chatgpt_source_chip.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"chatgpt": {"enabled": True, "label": "ChatGPT", "url": url, "max_retries": 0}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("chatgpt", engine, settings, settings.providers["chatgpt"])
+        adapter.sel.stable_ms = 700
+        adapter.sel.tiny_fragment_ms = 1500
+        adapter.sel.never_started_ms = 12000
+        adapter.sel.force_capture_ms = 25000
+        adapter.sel.hard_timeout_ms = 45000
+        response = await adapter.ask("jobc", "Which year was the Data Protection Act passed?", 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        urls = [c.url for c in response.citations]
+        assert urls == ["https://www.legislation.gov.uk/ukpga/2018/12/introduction/2026-09-30"], urls
+        assert response.citations[0].title == "Data Protection Act 2018"
+    finally:
+        await engine.stop(keep_windows=False)
+
 async def test_an_age_gate_is_reported_blocked_and_never_answered(browser_settings, fixture_server):
     """Live finding: chat.qwen.ai put 'Confirm your age ... What year were you born? [Continue]' over its composer.
     The old flow typed into the composer anyway and ended 'answer captured but empty after cleaning'.
