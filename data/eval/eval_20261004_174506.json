@@ -1,0 +1,161 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "meta_ai",
+   "qwen",
+   "deepseek"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 1
+ },
+ "records": [
+  {
+   "id": "res-private-review",
+   "category": "research",
+   "kind": "unanswerable",
+   "question": "What did the anonymous reviewers privately write about the AlphaFold 3 paper during Nature's peer review?",
+   "answer": "Nature did not publish a peer review file containing the anonymous reviewers' reports for the AlphaFold 3 paper. An open letter to Nature, signed by Dunbrack and others, states that the absence of available code compromised peer review.",
+   "why": "5 pages we opened, from 5 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://www.nature.com/articles/d41586-024-01463-0",
+    "https://retractionwatch.com/2024/05/14/nature-earns-ire-over-lack-of-code-availability-for-google-deepmind-protein-folding-paper/",
+    "https://zenodo.org/records/11391920/files/AlphaFold3%20Transparency%20and%20Reproducibility_final_05292024.pdf",
+    "https://fraserlab.com/2024/05/22/AlphaFold3/",
+    "https://cen.acs.org/articles/102/i15/AlphaFold-3-offer-structure-prediction.html",
+    "https://x.com/RolandDunbrack/status/1788239357536858134"
+   ],
+   "primary_domains": [
+    "nature.com"
+   ],
+   "primary_opened": [
+    "https://www.nature.com/articles/d41586-024-01463-0",
+    "https://www.nature.com/articles/d41586-024-01463-0",
+    "https://www.nature.com/articles/d41586-024-01463-0",
+    "https://www.nature.com/articles/d41586-024-01463-0"
+   ],
+   "primary_cited": [
+    "https://www.nature.com/articles/d41586-024-01463-0"
+   ],
+   "pages_opened": 48,
+   "pages_confirmed": 46,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "deepseek",
+    "gemini"
+   ],
+   "providers_failed": [
+    "chatgpt",
+    "meta_ai",
+    "qwen"
+   ],
+   "rounds": 1,
+   "verifier_model": "deterministic ledger (no verifier call)",
+   "browser_sessions": 5,
+   "verifier_calls": 0,
+   "stop_reason": "sufficient evidence without needing the verifier",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "failed",
+     "error": "off_topic: the reply does not address this question"
+    },
+    {
+     "provider": "gemini",
+     "role": "secondary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "deepseek",
+     "role": "secondary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "qwen",
+     "role": "secondary",
+     "status": "failed",
+     "error": "readiness=blocked (needs you: age page at https://chat.qwen.ai/ -- complete it yourself in"
+    },
+    {
+     "provider": "meta_ai",
+     "role": "secondary",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "deepseek",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "qwen",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "meta_ai",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://retractionwatch.com/2024/05/14/nature-earns-ire-over-lack-of-code-availability-for-google-deepmind-protein-folding-paper/": true,
+    "https://www.nature.com/articles/d41586-024-01463-0": true,
+    "https://www.science.org/content/article/google-deepmind-releases-code-behind-its-most-advanced-protein-prediction-program": true,
+    "https://zenodo.org/records/11391920/files/AlphaFold3%20Transparency%20and%20Reproducibility_final_05292024.pdf": true,
+    "https://fraserlab.com/2024/05/22/AlphaFold3/": true,
+    "https://www.scienceopen.com/document/read?vid=d5167152-a55c-4876-b02a-4af1b9cef5d8": true,
+    "https://cen.acs.org/articles/102/i15/AlphaFold-3-offer-structure-prediction.html": true,
+    "https://x.com/RolandDunbrack/status/1788239357536858134": true
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 1253,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 236.7,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "answered a question that has no public answer"
+    ]
+   }
+  }
+ ]
+}

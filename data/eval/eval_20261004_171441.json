@@ -1,0 +1,61 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "google_ai",
+   "meta_ai",
+   "qwen",
+   "deepseek"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 1
+ },
+ "records": [
+  {
+   "id": "triv-2plus2",
+   "category": "trivial",
+   "kind": "answer",
+   "question": "What is 2 + 2?",
+   "answer": "4",
+   "why": "",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [],
+   "primary_domains": [],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 0,
+   "pages_confirmed": 0,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [],
+   "providers_failed": [],
+   "rounds": 0,
+   "verifier_model": null,
+   "browser_sessions": 0,
+   "verifier_calls": 0,
+   "stop_reason": "question answered at level 0; no investigation earned",
+   "provider_log": [],
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [],
+   "claim_text_len": 0,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 4.0,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  }
+ ]
+}
