@@ -1,0 +1,92 @@
+[
+ {
+  "provider": "chatgpt",
+  "status": "completed",
+  "detail": "",
+  "answer": "The UK Data Protection Act was passed in **2018** (Royal Assent: 23 May 2018). legislation.gov.uk  Official legislation.gov.uk pagelegislation.gov.uk  Sources",
+  "citations": 0,
+  "conversation_url": "https://chatgpt.com/uc/6ac1bcac-fe54-83ea-a9c9-6a5352de1410",
+  "seconds": 8
+ },
+ {
+  "provider": "le_chat",
+  "status": "failed",
+  "detail": "answer captured but empty after cleaning",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 42
+ },
+ {
+  "provider": "google_ai",
+  "status": "broken",
+  "detail": "no-response-element: AI Mode produced no answer block",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 92
+ },
+ {
+  "provider": "copilot",
+  "status": "logged_out",
+  "detail": "readiness=login_wall",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 4
+ },
+ {
+  "provider": "meta_ai",
+  "status": "logged_out",
+  "detail": "readiness=login_wall",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 1
+ },
+ {
+  "provider": "pi",
+  "status": "logged_out",
+  "detail": "readiness=login_wall",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 6
+ },
+ {
+  "provider": "deepseek",
+  "status": "logged_out",
+  "detail": "readiness=login_wall",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 3
+ },
+ {
+  "provider": "qwen",
+  "status": "failed",
+  "detail": "readiness=blocked",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 19
+ },
+ {
+  "provider": "perplexity",
+  "status": "failed",
+  "detail": "AttributeError: 'NoneType' object has no attribute 'ask'",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 0
+ },
+ {
+  "provider": "grok",
+  "status": "failed",
+  "detail": "AttributeError: 'NoneType' object has no attribute 'ask'",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 0
+ }
+]

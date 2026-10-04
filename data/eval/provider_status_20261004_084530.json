@@ -1,0 +1,38 @@
+[
+ {
+  "provider": "qwen",
+  "status": "failed",
+  "detail": "readiness=blocked (age/identity check or bot check)",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 17
+ },
+ {
+  "provider": "grok",
+  "status": "logged_out",
+  "detail": "readiness=login_wall",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 17
+ },
+ {
+  "provider": "perplexity",
+  "status": "failed",
+  "detail": "readiness=blocked",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 20
+ },
+ {
+  "provider": "le_chat",
+  "status": "failed",
+  "detail": "readiness=blocked (terms-of-service acceptance required)",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 3
+ }
+]

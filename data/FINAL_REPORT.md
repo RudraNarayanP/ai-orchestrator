@@ -150,3 +150,27 @@ Uncertainty behaviour was not weakened: no change makes a "couldn't verify" easi
 
 **Test counts.** Offline gate **639 passed**, 31 deselected (617 after item 1, +22 in this item).
 **Gaps.** `ua-closed-session` is a WARN, not a pass (see table). Three Ukrainian-law questions cannot reach a primary source from this PC. `uni-oxford-plagiarism` is blocked by Cloudflare on ox.ac.uk. The suite was run once per question (plus re-runs of 7); model-driven steps vary run to run, so a single run is a sample. Evidence rows keep 400-char excerpts, so the eval's "figures with no opened page behind them" test sees only those. The per-provider table counts the first-pass batches only.
+## 11. Item 3 - blocked/broken providers (2026-10-04)
+
+Probe files: `data/eval/provider_status_20261004_081341.*` and `provider_status_20261004_084530.*`. Nothing was clicked, accepted, signed in or filled on any provider site.
+
+| provider | status | what the page shows | action |
+|---|---|---|---|
+| chatgpt | completed | answer fine; had 0 citations | FIXED: URLs now read from the sources-chip dialog, utm_source=chatgpt.com stripped. Live check: legislation.gov.uk citation captured |
+| gemini | completed | - | none |
+| le_chat | blocked | modal "Vibe Terms of Service - You must accept our Terms of Service and Privacy Policy" over the composer | FIXED the diagnosis: was "empty after cleaning", now "blocked (terms-of-service acceptance required)". Needs the user to accept |
+| google_ai (udm=50) | broken | after submit: the prompt, thinking dots and "AI Mode response is ready", static for 140 s, no answer text | wait logic was already sound (gives up early, no retry). Failure detail now says what the page showed. Not bypassed |
+| copilot | logged_out | "Sign in to Copilot" (Microsoft/Apple/Google) | manual sign-in |
+| meta_ai | logged_out | "Sign in to get started" dialog | manual login |
+| pi | logged_out | composer absent; "Log in" prompts | manual login |
+| deepseek | logged_out | redirected to chat.deepseek.com/sign_in | manual login |
+| qwen | blocked | composer visible, blocked after submit (age/identity check) | user must complete it themselves |
+| grok | logged_out | "Sign in / Sign up" and a cookie preference dialog | manual login (disabled in config) |
+| perplexity | blocked | Cloudflare "Performing security verification" | not bypassed (disabled in config) |
+
+Code changes: `dom_library.py` ToS-gate detection (`dismiss` never clicks inside such a dialog); Google AI failure detail; `chatgpt.py` `clean_source_url` / `_harvest_source_chips`; `scripts/provider_status.py` probes explicitly named providers even if disabled.
+Regression tests (in `tests/test_browser_live.py`, real Chrome, fixtures in `tests/fixtures/`): ToS gate, AI-mode detail, `clean_source_url`, source-chip harvest.
+
+Manual steps for the user: run `run.py login <provider>` and sign in yourself for copilot, meta_ai, pi, deepseek (and grok if wanted); accept the Le Chat terms yourself; complete Qwen's age check yourself; look at the Google AI Mode window to see whether it wants a sign-in or is rate-limiting anonymous use. Perplexity needs a human to pass Cloudflare.
+
+Gaps: ChatGPT raw text still carries the chip labels ("Sources" and domain names glued together) in the answer text; the Qwen block was seen at submit, not on the landing page; Google AI Mode cause is unconfirmed.
