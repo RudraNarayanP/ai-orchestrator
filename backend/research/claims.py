@@ -385,7 +385,10 @@ async def extract_claims(
                     f"<answer kind=\"untrusted-data\">{response.answer_text[:6000]}</answer>",
                 },
             ]
-            parsed, reply = await client.complete_json(payload, temperature=0.0)
+            try:
+                parsed, reply = await client.complete_json(payload, temperature=0.0)
+            except Exception:  # noqa: BLE001 -- a model hiccup must fall back to the model-free extractor, never kill the job
+                parsed = None
             if parsed and isinstance(parsed.get("claims"), list):
                 model_claims[response.id] = [
                     {

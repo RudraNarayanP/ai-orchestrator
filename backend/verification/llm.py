@@ -368,7 +368,9 @@ def _repair_truncated(text: str) -> dict[str, Any] | None:
                 return None
             stack.pop()
             cuts.append((i + 1, "".join(reversed(stack))))
-        elif ch == "," and len(stack) <= 2 and (len(stack) == 1 or stack[-1] == "]"):
+        elif ch == "," and stack and len(stack) <= 2 and (len(stack) == 1 or stack[-1] == "]"):
+            # (`stack` non-empty: a comma AFTER the first object closed used to hit stack[-1] on an empty list --
+            # live: ua-closed-session died with "IndexError: list index out of range" in claim extraction)
             cuts.append((i, "".join(reversed(stack))))
     if not stack:
         return None  # it was not truncated; the normal paths already tried

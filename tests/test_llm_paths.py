@@ -325,6 +325,17 @@ async def test_failed_responses_are_not_sent_to_the_model(fake_openai):
     assert out == [] and fake_openai.requests == []
 
 
+async def test_a_model_exception_in_claim_extraction_falls_back_to_the_heuristic(fake_openai, monkeypatch):
+    from backend.verification.llm import LLMClient
+
+    async def boom(self, *a, **k):
+        raise IndexError("list index out of range")
+
+    monkeypatch.setattr(LLMClient, "complete_json", boom)
+    text = "KEY CLAIMS\n1. The Acme Bolt costs $549 at launch in the United States."
+    out = await claim_ops.extract_claims([completed("chatgpt", text)], "j", endpoint=endpoint_for(fake_openai))
+    assert any("$549" in c.claim for c in out)
+
 # ------------------------------------------------------- analysis (runner paths)
 
 

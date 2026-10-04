@@ -1,0 +1,196 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "google_ai",
+   "copilot",
+   "meta_ai",
+   "le_chat",
+   "pi",
+   "qwen",
+   "deepseek"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "ua-closed-session",
+   "category": "ua-law",
+   "kind": "unanswerable",
+   "question": "What exactly did the Verkhovna Rada discuss in the closed part of its session last Tuesday?",
+   "answer": "The Verkhovna Rada did not hold any session, closed or otherwise, on 29 September 2026 because parliament was in a scheduled recess from 17 September to 13 October 2026; therefore there was no closed part to discuss any topic. ⚖️",
+   "why": "The UNN article from 19 September 2026 explicitly states that the Verkhovna Rada suspended its plenary sessions from 17 September through 13 October 2026, meaning no plenary sittings occurred on 29 September. Since there was no session, there could not be a closed part to discuss any topic.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "The Rada's official calendar and chronology pages for 29 September 2026 timed out during attempts to open them, so the exact classification could not be directly verified from the primary source."
+   ],
+   "sources": [
+    "https://unn.ua/en/news/the-verkhovna-rada-has-suspended-plenary-sessions-for-nearly-a-month-mps-will-return-on-october-13"
+   ],
+   "primary_domains": [
+    "zakon.rada.gov.ua"
+   ],
+   "primary_opened": [
+    "https://zakon.rada.gov.ua/laws/main/dayp20260929"
+   ],
+   "primary_cited": [],
+   "pages_opened": 12,
+   "pages_confirmed": 3,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "google_ai",
+    "le_chat",
+    "qwen"
+   ],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 6,
+   "verifier_calls": 1,
+   "stop_reason": "15 material claim(s) still unconfirmed; an explicit inability to verify appeared in the answers",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "secondary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "secondary",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "secondary",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "qwen",
+     "role": "secondary",
+     "status": "failed",
+     "error": "readiness=blocked"
+    },
+    {
+     "provider": "google_ai",
+     "role": "secondary",
+     "status": "broken",
+     "error": "no-response-element: AI Mode produced no answer block"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "qwen",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "google_ai",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "cannot_establish",
+     "initial_claim": "I could not substantiate the premise that the **Verkhovna Rada itself held a closed part of a session last Tuesday, 29 September 2026**. The Rada's official parliamentary calendar and meeting records show that **29 September was a non-plenary week and no plenary agenda items were considered that day",
+     "follow_up_result": "I re-investigated the three points against the Verkhovna Rada's own current records. The important correction to my earlier wording is that **the search results themselves now provide the exact official pages and their contents**, but the browser's separate `open` operation timed out on the two date",
+     "final_position": ""
+    }
+   ],
+   "ai_opened": {
+    "https://www.rada.gov.ua/meeting/awt": true,
+    "https://meeting.rada.gov.ua/work/vote/agenda/ed20260929/sps%3Amax100?lang=uk": false,
+    "https://meeting.rada.gov.ua/work/vote/chron/ed20260929": false,
+    "https://zakon.rada.gov.ua/laws/main/dayp20260929": false,
+    "https://meeting.rada.gov.ua/work/vote/agenda/ed20260929/sps%3Amax100": false,
+    "https://meeting.rada.gov.ua/work/vote/chron/ed20260929?lang=uk": false,
+    "https://english.nv.ua/nation/ukraine-s-verkhovna-rada-begins-26-day-recess-amid-financial-crisis-warning-50642807.html": true,
+    "https://unn.ua/en/news/the-verkhovna-rada-has-suspended-plenary-sessions-for-nearly-a-month-mps-will-return-on-october-13": true,
+    "https://www.youtube.com/watch?v=cgmbndyqr54": null
+   },
+   "unsupported_figures": [
+    "29",
+    "17"
+   ],
+   "claim_text_len": 2944,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 361.1,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "says nothing public exists, but asserts figures/dates no opened page contains: 29, 17"
+    ]
+   }
+  }
+ ]
+}
