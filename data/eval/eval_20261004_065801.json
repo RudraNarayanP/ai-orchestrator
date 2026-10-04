@@ -1,0 +1,531 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "google_ai",
+   "copilot",
+   "meta_ai",
+   "le_chat",
+   "pi",
+   "qwen",
+   "deepseek"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "res-ten-percent-brain",
+   "category": "research",
+   "kind": "myth",
+   "question": "Is it true that humans only use 10 percent of their brains?",
+   "answer": "Yeah, you're right. humans do not use only 10% of their brains; they use all of it, though not all at once. ✅",
+   "why": "The BrainFacts page titled 'The Ten Percent Myth' directly states that the idea we only use 10% of our brains is a myth and explains that we use 100% of the brain, just not all at once. The Nature Neuroscience editorial 'Brain myths' similarly debunks the 10% claim, citing surveys showing its persistence despite being false.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The exact proportion of brain active at any given moment varies with task, but this does not support the 10% myth."
+   ],
+   "sources": [
+    "https://www.nature.com/articles/nn0203-99",
+    "https://www.brainfacts.org/brain-anatomy-and-function/anatomy/2014/lucy-and-the-10-percent-brain-myth",
+    "https://www.brainfacts.org/thinking-sensing-and-behaving/thinking-and-awareness/2014/the-ten-percent-myth",
+    "https://en.wikisource.org/wiki/The_Energies_of_Men"
+   ],
+   "primary_domains": [
+    "nih.gov",
+    "ncbi.nlm.nih.gov",
+    "pubmed.ncbi.nlm.nih.gov"
+   ],
+   "primary_opened": [
+    "https://pubmed.ncbi.nlm.nih.gov/15271497/",
+    "https://www.ncbi.nlm.nih.gov/books/NBK20367/",
+    "https://www.ncbi.nlm.nih.gov/books/NBK28194/",
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC8998888/",
+    "https://pmc.ncbi.nlm.nih.gov/articles/124895/",
+    "https://pubmed.ncbi.nlm.nih.gov/10880854/"
+   ],
+   "primary_cited": [],
+   "pages_opened": 42,
+   "pages_confirmed": 32,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "cannot_establish",
+     "initial_claim": "No. The claim that humans use only 10% of their brains is a myth. Research instead shows that the brain is broadly active across its different regions and functions, although **not every neuron or brain region is maximally active at the same moment**.",
+     "follow_up_result": "Your first and third claims are **confirmed**. The second needs a more precise formulation. - The human brain is about 2% of body mass and accounts for about 20% of total body oxygen consumption in the cited literature. Shulman et al. state this explicitly in their 2004 review. - Shulman et al. also",
+     "final_position": ""
+    }
+   ],
+   "ai_opened": {
+    "https://www.brainfacts.org/brain-anatomy-and-function/anatomy/2014/lucy-and-the-10-percent-brain-myth": false,
+    "https://www.nature.com/articles/nn0203-99": true,
+    "https://pubmed.ncbi.nlm.nih.gov/15271497/": true,
+    "https://www.ncbi.nlm.nih.gov/books/NBK20367/": true,
+    "https://www.ncbi.nlm.nih.gov/books/NBK28194/": true,
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC8998888/": true,
+    "https://www.brainfacts.org/thinking-sensing-and-behaving/thinking-and-awareness/2014/the-ten-percent-myth": true,
+    "https://www.scientificamerican.com/article/do-we-really-use-only-10/": true,
+    "https://pmc.ncbi.nlm.nih.gov/articles/124895/": false,
+    "https://en.wikisource.org/wiki/The_Energies_of_Men": true,
+    "https://www.jstor.org/stable/2177575?seq=1": true,
+    "https://socialskillswisdom.com/introduction-a-shortcut-to-distinction-by-lowell-thomas/": true,
+    "https://humanorigins.si.edu/human-characteristics/brains": false,
+    "https://www.pnas.org/doi/10.1073/pnas.98.2.676": false,
+    "https://pubmed.ncbi.nlm.nih.gov/10880854/": false,
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC3078506/": true
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 4084,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 244.3,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "no primary source cited"
+    ]
+   }
+  },
+  {
+   "id": "res-recovery-dexamethasone",
+   "category": "research",
+   "kind": "answer",
+   "question": "What did the RECOVERY trial report in 2020 about dexamethasone and 28-day mortality in hospitalised COVID-19 patients on ventilation or oxygen?",
+   "answer": "The RECOVERY trial reported that dexamethasone 6 mg once daily for up to 10 days reduced 28‑day mortality in hospitalized COVID‑19 patients receiving respiratory support (invasive mechanical ventilation or oxygen alone). 🧪",
+   "why": "",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://www.recoverytrial.net/news/low-cost-dexamethasone-reduces-death-by-up-to-one-third-in-hospitalised-patients-with-severe-respiratory-complications-of-covid-19",
+    "https://www.nejm.org/doi/full/10.1056/NEJMoa2021436"
+   ],
+   "primary_domains": [
+    "nejm.org",
+    "ox.ac.uk",
+    "recoverytrial.net",
+    "pubmed.ncbi.nlm.nih.gov"
+   ],
+   "primary_opened": [
+    "https://www.nejm.org/doi/full/10.1056/NEJMoa2021436",
+    "https://www.recoverytrial.net/news/low-cost-dexamethasone-reduces-death-by-up-to-one-third-in-hospitalised-patients-with-severe-respiratory-complications-of-covid-19",
+    "https://www.recoverytrial.net/files/recovery_dexamethasone_statement_160620_v2final.pdf",
+    "https://www.recoverytrial.net/files/recovery-collaborators-meeting-2020-06-29.pdf",
+    "https://www.nejm.org/doi/abs/10.1056/NEJMoa2021436",
+    "https://pubmed.ncbi.nlm.nih.gov/32678530/"
+   ],
+   "primary_cited": [
+    "https://www.recoverytrial.net/news/low-cost-dexamethasone-reduces-death-by-up-to-one-third-in-hospitalised-patients-with-severe-respiratory-complications-of-covid-19",
+    "https://www.nejm.org/doi/full/10.1056/NEJMoa2021436"
+   ],
+   "pages_opened": 8,
+   "pages_confirmed": 6,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "unclear",
+     "initial_claim": "The 2020 RECOVERY trial reported that **dexamethasone 6 mg once daily for up to 10 days reduced 28-day mortality in hospitalised COVID-19 patients who were receiving respiratory support**. Among patients already on **invasive mechanical ventilation**, mortality was **29.3% with dexamethasone versus ",
+     "follow_up_result": "Yes. I re-investigated the specific claim against the **primary RECOVERY trial report**, and the claim was **correct**. The paper states that **482 of 2,104 patients (22.9%)** assigned to dexamethasone died within 28 days, compared with **1,110 of 4,321 patients (25.7%)** assigned to usual care. The",
+     "final_position": ""
+    }
+   ],
+   "ai_opened": {
+    "https://www.nejm.org/doi/full/10.1056/NEJMoa2021436": false,
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC7383595/": true,
+    "https://www.recoverytrial.net/news/low-cost-dexamethasone-reduces-death-by-up-to-one-third-in-hospitalised-patients-with-severe-respiratory-complications-of-covid-19": true,
+    "https://www.recoverytrial.net/files/recovery_dexamethasone_statement_160620_v2final.pdf": false,
+    "https://www.recoverytrial.net/files/recovery-collaborators-meeting-2020-06-29.pdf": false,
+    "https://www.nejm.org/doi/abs/10.1056/NEJMoa2021436": false,
+    "https://pubmed.ncbi.nlm.nih.gov/32678530/": false,
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC7780596/": false
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 1727,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 259.5,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "res-private-review",
+   "category": "research",
+   "kind": "unanswerable",
+   "question": "What did the anonymous reviewers privately write about the AlphaFold 3 paper during Nature's peer review?",
+   "answer": "Couldn't verify that one.",
+   "why": "Nature’s peer‑review reports are confidential; the only public commentary comes from Roland Dunbrack’s later statements reproduced in a Techmeme archive, which are not the original private reports. No primary source reveals the reviewers’ confidential comments.",
+   "confidence": "Insufficient evidence",
+   "caveats": [
+    "The original X post could not be accessed due to HTTP 403, limiting verification of Dunbrack's public statements."
+   ],
+   "sources": [
+    "https://www.nature.com/articles/s41586-024-07487-w",
+    "https://www.techmeme.com/240508/p3"
+   ],
+   "primary_domains": [
+    "nature.com"
+   ],
+   "primary_opened": [
+    "https://www.nature.com/articles/s41586-024-07487-w",
+    "https://www.nature.com/articles/s41586-024-07487-w"
+   ],
+   "primary_cited": [
+    "https://www.nature.com/articles/s41586-024-07487-w"
+   ],
+   "pages_opened": 15,
+   "pages_confirmed": 8,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": true
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "corrected",
+     "initial_claim": "I could not find the anonymous reviewers’ actual private reports to Nature. The public record establishes that **Roland Dunbrack was Reviewer #3**, that he thought AlphaFold 3 was exciting and got good results from the server, but that he **strongly objected during review to the lack of downloadable",
+     "follow_up_result": "The three-reviewer claim is **confirmed by Nature's published paper**: Nature explicitly says, “Nature thanks Justas Dapkunas, Roland Dunbrack and Hashim Al-Hashimi” for their peer-review contribution. I opened the Nature article record and also the same article on PubMed Central. The second and thi",
+     "final_position": "The three-reviewer claim is **confirmed by Nature's published paper**: Nature explicitly says, “Nature thanks Justas Dapkunas, Roland Dunbrack and Hashim Al-Hashimi” for their peer-review contribution. I opened the Nature article record and also the same article on PubMed Central. The second and thi"
+    }
+   ],
+   "ai_opened": {
+    "https://www.nature.com/articles/s41586-024-07487-w": true,
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC11168924/": true,
+    "https://bsky.app/profile/rolanddunbrack.bsky.social/post/3mnpp7eewf22x": false,
+    "https://www.techmeme.com/240508/p3": true,
+    "https://ngntipkolamrenang.twstalker.com/fowler_nick": false,
+    "https://www.researchgate.net/publication/380445200_Accurate_structure_prediction_of_biomolecular_interactions_with_AlphaFold_3": false,
+    "https://bsky.app/profile/rolanddunbrack.bsky.social": false
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 2249,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 234.7,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  }
+ ]
+}

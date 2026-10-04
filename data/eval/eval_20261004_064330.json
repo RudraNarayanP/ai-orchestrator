@@ -1,0 +1,562 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "google_ai",
+   "copilot",
+   "meta_ai",
+   "le_chat",
+   "pi",
+   "qwen",
+   "deepseek"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "uni-manchester-viva-pass-rate",
+   "category": "university",
+   "kind": "unanswerable",
+   "question": "What percentage of PhD vivas at the University of Manchester ended in outright failure last year?",
+   "answer": "Couldn't verify that one.",
+   "why": "The University of Manchester's own documents (DocID=7445 and DocID=75431) describe examination outcome categories but contain no aggregate viva-failure statistics. The only FOI-derived figure found — about 4% unsuccessful across 14 universities from 2006–2017 — is neither Manchester-specific nor from 2025, and the underlying Manchester FOI response was not located.",
+   "confidence": "Insufficient evidence",
+   "caveats": [
+    "The DiscoverPhDs FOI analysis is from 2020 and covers 2006–2017, not 2025."
+   ],
+   "sources": [
+    "https://www.doctoral-academy.bmh.manchester.ac.uk/essential-information/thesis-submission/result/",
+    "https://www.pgr-handbook.bmh.manchester.ac.uk/your-programme/writing-up-and-submitting/",
+    "https://documents.manchester.ac.uk/display.aspx?DocID=7445",
+    "https://tesify.uk/phd-completion-attrition-rates-uk/"
+   ],
+   "primary_domains": [
+    "manchester.ac.uk"
+   ],
+   "primary_opened": [
+    "https://www.doctoral-academy.bmh.manchester.ac.uk/essential-information/thesis-submission/result/",
+    "https://www.doctoral-academy.bmh.manchester.ac.uk/essential-information/thesis-submission/result/",
+    "https://www.doctoral-academy.bmh.manchester.ac.uk/essential-information/thesis-submission/result/",
+    "https://www.eps.manchester.ac.uk/doctoral-academy/research/thesis-submission/viva/",
+    "https://www.manchester.ac.uk/about/privacy-information/freedom-information/publication-scheme/",
+    "https://www.pgr-handbook.bmh.manchester.ac.uk/your-programme/writing-up-and-submitting/"
+   ],
+   "primary_cited": [
+    "https://www.doctoral-academy.bmh.manchester.ac.uk/essential-information/thesis-submission/result/",
+    "https://www.pgr-handbook.bmh.manchester.ac.uk/your-programme/writing-up-and-submitting/",
+    "https://documents.manchester.ac.uk/display.aspx?DocID=7445"
+   ],
+   "pages_opened": 18,
+   "pages_confirmed": 15,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "cannot_establish",
+     "initial_claim": "I could **not establish a 2025 percentage for outright PhD-viva failure at the University of Manchester from publicly available sources**. I couldn't find that documented. The closest Manchester-specific figure I found is from an older Freedom of Information dataset covering **2008/09–2017/18**; the",
+     "follow_up_result": "I **cannot establish the three points in my earlier answer to the standard you requested**. I confirmed that the University of Manchester's current public guidance documents several doctoral examination outcomes, including no corrections, minor corrections, resubmission/re-examination and rejection ",
+     "final_position": ""
+    }
+   ],
+   "ai_opened": {
+    "https://www.doctoral-academy.bmh.manchester.ac.uk/essential-information/thesis-submission/result/": true,
+    "https://www.eps.manchester.ac.uk/doctoral-academy/research/thesis-submission/viva/": false,
+    "https://www.discoverphds.com/advice/doing/phd-failure-rate": true,
+    "https://www.manchester.ac.uk/about/privacy-information/freedom-information/publication-scheme/": true,
+    "https://www.pgr-handbook.bmh.manchester.ac.uk/your-programme/writing-up-and-submitting/": true,
+    "https://documents.manchester.ac.uk/display.aspx?DocID=7445": true,
+    "https://www.manchester.ac.uk/about/privacy-information/freedom-information/freedom-of-information-request/": true,
+    "https://www.manchester.ac.uk/about/privacy-information/freedom-information/": true,
+    "https://documents.manchester.ac.uk/display.aspx?DocID=75431": false
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 4406,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 313.5,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "res-ramsey-r55",
+   "category": "research",
+   "kind": "answer",
+   "question": "What are the best known lower and upper bounds for the Ramsey number R(5,5)?",
+   "answer": "The best known lower bound is 43 and the best known upper bound is 46, so 43 ≤ R(5,5) ≤ 46. ✅",
+   "why": "The lower bound 43 comes from Exoo's 1989 construction of a 42‑vertex two‑colored K₄₂ with no monochromatic K₅, verified by the journal’s official record. The upper bound 46 is proved by Angeltveit and McKay’s 2024 arXiv preprint using linear programming and extensive computer case checking.",
+   "confidence": "High confidence",
+   "caveats": [
+    "The upper bound relies on a preprint that has not yet appeared in a peer‑reviewed journal, though the authors are established experts."
+   ],
+   "sources": [
+    "https://arxiv.org/abs/2409.15709",
+    "https://leapsinbounds.org/constants/ramsey-5-5/",
+    "https://arxiv.org/abs/2212.12630",
+    "https://www.limitsregistry.com/limits/LR-003110"
+   ],
+   "primary_domains": [
+    "arxiv.org"
+   ],
+   "primary_opened": [
+    "https://arxiv.org/abs/2409.15709",
+    "https://arxiv.org/abs/2409.15709",
+    "https://arxiv.org/abs/2409.15709",
+    "https://arxiv.org/abs/1703.08768",
+    "https://arxiv.org/abs/2212.12630",
+    "https://arxiv.org/abs/2409.15709"
+   ],
+   "primary_cited": [
+    "https://arxiv.org/abs/2409.15709",
+    "https://arxiv.org/abs/2212.12630"
+   ],
+   "pages_opened": 21,
+   "pages_confirmed": 14,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "unclear",
+     "initial_claim": "The best known bounds I found are 43≤R(5,5)≤46.\\boxed{43 \\le R(5,5) \\le 46}. So the exact value is still unknown. The lower bound 4343 has stood since Exoo's 1989 construction, while the upper bound was improved from 4848 to 4646 by Angeltveit and McKay in their 2024 preprint, revised in 2025. arXiv",
+     "follow_up_result": "My original answer was **right on the three points you asked me to re-investigate**. - 43≤R(5,5)≤4643 \\le R(5,5) \\le 46. - The lower bound R(5,5)≥43R(5,5)\\ge43 was established by Geoffrey Exoo in 1989. - Exoo's construction is a two-colouring of the edges of K42K_{42} containing no monochromatic K5K",
+     "final_position": ""
+    }
+   ],
+   "ai_opened": {
+    "https://arxiv.org/abs/2409.15709": true,
+    "https://www.sciencedirect.com/science/article/pii/S0095895696917414": true,
+    "https://www.cs.umd.edu/~gasarch/BLOGPAPERS/Rof5LE49.pdf": true,
+    "https://arxiv.org/abs/1703.08768": true,
+    "https://www.cs.rit.edu/~spr/PUBL/publ.html": true,
+    "https://pascal-francis.inist.fr/vibad/index.php?action=getRecordDetail&idt=7351667": true,
+    "https://mathconjectures.com/references/Radziszowski2026Ramsey": true,
+    "https://www.limitsregistry.com/limits/LR-003110": false,
+    "https://leapsinbounds.org/constants/ramsey-5-5/": true,
+    "https://onlinelibrary.wiley.com/doi/10.1002/jgt.3190130113": true,
+    "https://onlinelibrary.wiley.com/doi/pdf/10.1002/jgt.3190130113": true,
+    "https://arxiv.org/abs/2212.12630": true,
+    "https://www.combinatorics.org/files/Surveys/ds1/ds1v12-2009.pdf": true
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 3508,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 313.6,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "res-wiles-poincare",
+   "category": "research",
+   "kind": "false_premise",
+   "question": "Explain the main steps of Andrew Wiles's 1995 proof of the Poincare conjecture.",
+   "answer": "Andrew Wiles did not prove the Poincaré conjecture; his 1995 work proved Fermat's Last Theorem by showing every semistable elliptic curve over Q is modular. ✅",
+   "why": "The Annals of Mathematics paper by Wiles (1995) is titled 'Modular elliptic curves and Fermat's Last Theorem' and proves the modularity of semistable elliptic curves, which via Ribet's theorem yields Fermat's Last Theorem. The companion Taylor–Wiles paper details the R≅T isomorphism. These primary sources confirm each step listed in the answer.",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://annals.math.princeton.edu/1995/141-3/p01",
+    "https://annals.math.princeton.edu/1995/141-3/p02",
+    "https://www.ae-info.org/ae/Member/Wiles_Andrew/Publications",
+    "https://pubs.ams.org/journals/jams/1999-12-02/S0894-0347-99-00287-8"
+   ],
+   "primary_domains": [
+    "arxiv.org"
+   ],
+   "primary_opened": [
+    "https://arxiv.org/abs/math/0211159",
+    "https://arxiv.org/abs/math/0303109"
+   ],
+   "primary_cited": [],
+   "pages_opened": 35,
+   "pages_confirmed": 18,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "gemini",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "failed",
+     "error": "off_topic: the reply does not address this question"
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "confirmed",
+     "initial_claim": "The premise is mistaken: **Andrew Wiles did not prove the Poincaré conjecture in 1995**. His 1995 work proved **Fermat’s Last Theorem**, by proving that every **semistable elliptic curve over Q\\mathbb Q is modular**. The Poincaré conjecture was proved by **Grigoriy Perelman**, in work posted in 2002",
+     "follow_up_result": "Both claims are **confirmed**, but the second needs a small precision. - Perelman: Yes. The Clay Mathematics Institute's official Poincaré Conjecture page explicitly says that Perelman's solution was “announced in preprints posted on ArXiv.org in 2002 and 2003.” I also opened Perelman's two relevant",
+     "final_position": "The premise is mistaken: **Andrew Wiles did not prove the Poincaré conjecture in 1995**. His 1995 work proved **Fermat’s Last Theorem**, by proving that every **semistable elliptic curve over Q\\mathbb Q is modular**. The Poincaré conjecture was proved by **Grigoriy Perelman**, in work posted in 2002"
+    }
+   ],
+   "ai_opened": {
+    "https://www.claymath.org/millennium/poincare-conjecture/": true,
+    "https://www.claymath.org/resource/ricci-flow-and-the-poincare-conjecture/": true,
+    "https://annals.math.princeton.edu/1995/141-3/p01": true,
+    "https://jontallen.ece.illinois.edu/uploads/537.F18/Papers/Public/Wiles-Fermat.95.pdf": true,
+    "https://annals.math.princeton.edu/1995/141-3/p02": true,
+    "https://www.math.utah.edu/~mayer/math/faltings.pdf": true,
+    "https://www.jstor.org/stable/i310703": false,
+    "https://www.ae-info.org/ae/Member/Wiles_Andrew/Publications": false,
+    "https://www.claymath.org/wp-content/uploads/2022/06/Poincare-press-release.pdf": false,
+    "https://arxiv.org/abs/math/0211159": true,
+    "https://arxiv.org/abs/math/0303109": true,
+    "https://scienzamedia.uniroma2.it/~eal/Wiles-Fermat.pdf": false
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 2614,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 235.3,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "no primary source cited"
+    ]
+   }
+  }
+ ]
+}

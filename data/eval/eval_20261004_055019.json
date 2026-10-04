@@ -1,0 +1,527 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "google_ai",
+   "copilot",
+   "meta_ai",
+   "le_chat",
+   "pi",
+   "qwen",
+   "deepseek"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "uk-vpn-ban",
+   "category": "uk-law",
+   "kind": "false_premise",
+   "question": "Which section of the Online Safety Act 2023 bans the use of VPNs in the UK?",
+   "answer": "No section of the Online Safety Act 2023 bans the use of VPNs by individuals in the UK. ❌",
+   "why": "The official text of the Online Safety Act 2023 (sections 80 and 81) sets out duties for providers of regulated pornographic content to use age verification or age estimation, but it does not include any clause that makes VPN use by individuals an offence. Ofcom's own guidance discusses VPNs solely as circumvention techniques that service providers should address, not as prohibited activity for users.",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://www.legislation.gov.uk/ukpga/2023/50",
+    "https://www.legislation.gov.uk/ukpga/2023/50/notes/division/6/index.htm"
+   ],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/2023/50",
+    "https://www.legislation.gov.uk/ukpga/2023/50/notes/division/6/index.htm",
+    "https://www.legislation.gov.uk/ukpga/2023/50/pdfs/ukpga_20230050_en.pdf",
+    "https://www.legislation.gov.uk/ukpga/2023/50",
+    "https://www.legislation.gov.uk/ukpga/2023/50",
+    "https://www.legislation.gov.uk/ukpga/2023/50"
+   ],
+   "primary_cited": [
+    "https://www.legislation.gov.uk/ukpga/2023/50",
+    "https://www.legislation.gov.uk/ukpga/2023/50/notes/division/6/index.htm"
+   ],
+   "pages_opened": 42,
+   "pages_confirmed": 39,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "unclear",
+     "initial_claim": "**No section of the UK Online Safety Act 2023 bans the use of VPNs by people in the UK.** I found no provision in the Act that makes using a VPN itself unlawful. The provision commonly being described as a “VPN ban” is actually **section 81**, read with **section 80**, which requires certain online ",
+     "follow_up_result": "I re-investigated the two claims against the **official legislation itself**, and they are **confirmed**. - Section 80(1)–(2) says that a provider of an internet service falling within section 80(2) must comply with the duties in section 81, and defines such a service as one where regulated provider",
+     "final_position": ""
+    }
+   ],
+   "ai_opened": {
+    "https://www.legislation.gov.uk/ukpga/2023/50": true,
+    "https://www.legislation.gov.uk/ukpga/2023/50/notes/division/6/index.htm": true,
+    "https://www.legislation.gov.uk/ukpga/2023/50/pdfs/ukpga_20230050_en.pdf": true,
+    "https://www.ofcom.org.uk/online-safety/protecting-children/use-of-age-assurance-report-2026": true,
+    "https://www.ofcom.org.uk/online-safety/illegal-and-harmful-content/childrens-access-assessment-duties-under-the-online-safety-act": true,
+    "https://www.legislation.gov.uk/ukpga/2023/50/scotland/2024-12-10/data.html": true,
+    "https://www.legislation.gov.uk/ukpga/2023/50/pdfs/ukpga_20230050_en.pdf?ref=verifymy": true,
+    "https://merchantadvice.co.uk/resources/online-safety-act-age-verification/": null,
+    "https://www.phb.co.uk/article/online-safety-act-age-checks-individuals-2026/": true
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 3944,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 257.8,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "uk-future-amendment",
+   "category": "uk-law",
+   "kind": "unanswerable",
+   "question": "Which amendments will Parliament make to the Employment Rights Act 1996 during 2028?",
+   "answer": "Couldn't verify that one.",
+   "why": "",
+   "confidence": "Low confidence",
+   "caveats": [
+    "One AI answer claimed: \"As of the latest official timetable (updated 25 September 2026), no parliamentary amendments to the Employment Rights Act 1996 are scheduled for 2028; the timetable notes that longer-term timings remain under review.\" I couldn't confirm that from any page I opened."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/2025/36/enacted",
+    "https://www.legislation.gov.uk/ukpga/2025/36/enacted",
+    "https://www.legislation.gov.uk/ukpga/2025/36/enacted",
+    "https://www.legislation.gov.uk/ukpga/2025/36/enacted",
+    "https://www.legislation.gov.uk/ukpga/2025/36/enacted",
+    "https://www.legislation.gov.uk/ukpga/2025/36/body/made"
+   ],
+   "primary_cited": [],
+   "pages_opened": 76,
+   "pages_confirmed": 72,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": true
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "corrected",
+     "initial_claim": "As of **4 October 2026**, I found **no authoritative parliamentary programme specifying amendments that Parliament will make to the Employment Rights Act 1996 during 2028**. The important distinction is that the UK Government has a **planned Employment Rights Act 2025 implementation timetable**, but",
+     "follow_up_result": "**Today's date context: 4 October 2026.** I re-investigated both points against current official UK Government, legislation.gov.uk and UK Parliament sources. **My original answer was partly too categorical.** I can establish that the official material I found **does not document a 2028 parliamentary",
+     "final_position": "**Today's date context: 4 October 2026.** I re-investigated both points against current official UK Government, legislation.gov.uk and UK Parliament sources. **My original answer was partly too categorical.** I can establish that the official material I found **does not document a 2028 parliamentary"
+    }
+   ],
+   "ai_opened": {
+    "https://assets.publishing.service.gov.uk/media/695d3ebfbd1c076f787e7399/employment-rights-act-2025-economic-analysis.pdf": true,
+    "https://www.gov.uk/government/news/upcoming-changes-due-to-the-employment-rights-act-2025": false,
+    "https://www.gov.uk/government/consultations/fair-pay-agreement-process-in-adult-social-care/outcome/fair-pay-agreement-process-in-adult-social-care-government-response": true,
+    "https://www.gov.uk/government/publications/implementing-the-plan-to-make-work-pay-and-employment-rights-act/plan-to-make-work-pay-and-employment-rights-act-timeline-update": true,
+    "https://www.legislation.gov.uk/ukpga/2025/36/enacted": true,
+    "https://www.legislation.gov.uk/ukpga/2025/36/body/made": true,
+    "https://bills.parliament.uk/bills/3737/publications": true,
+    "https://api.parliament.uk/bill-papers/bills/3737": true,
+    "https://www.gov.uk/government/collections/make-work-pay": true,
+    "https://www.gov.uk/government/publications/implementing-the-plan-to-make-work-pay-and-employment-rights-act": true,
+    "https://www.legislation.gov.uk/ukpga/2025/36/part/3/chapter/2/made": true,
+    "https://www.legislation.gov.uk/ukpga/2025/36/contents/made/data.xht": true,
+    "https://www.gov.uk/government/speeches/the-kings-speech-2026": true,
+    "https://www.legislation.gov.uk/ukpga/2025/36/notes/division/3/index.htm": true,
+    "https://www.pinsentmasons.com/out-law/guides/employment-rights-bill-timeline-2026-beyond": true,
+    "https://knowledge.dlapiper.com/dlapiperknowledge/globalemploymentlatestdevelopments/2026/revised-timeline-for-implementation-of-the-employment-rights-act-2025": true,
+    "https://www.vwv.co.uk/insights/articles/tracker-employment-rights-act/": true
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 2243,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 360.6,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "ua-marriage-age",
+   "category": "ua-law",
+   "kind": "answer",
+   "question": "Under the Family Code of Ukraine, what is the minimum marriageable age and can a court allow it earlier?",
+   "answer": "Couldn't verify that one.",
+   "why": "",
+   "confidence": "Low confidence",
+   "caveats": [
+    "One AI answer claimed: \"Under the current Family Code of Ukraine, the minimum marriageable age is 18 for both men and women (Article 22), and a court may allow marriage earlier only for a person who has reached 16, and only if the court determines it is in that person's interests...\" I couldn't confirm that from any page I opened."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "zakon.rada.gov.ua"
+   ],
+   "primary_opened": [
+    "https://zakon.rada.gov.ua/laws/show/en/2947-14?dark=1&lang=en",
+    "https://zakon.rada.gov.ua/laws/show/en/2947-14/comp20241115",
+    "https://zakon.rada.gov.ua/laws/show/2947-14/ed20110512/comp20120408",
+    "https://zakon.rada.gov.ua/laws/anot/en/2947-14"
+   ],
+   "primary_cited": [],
+   "pages_opened": 15,
+   "pages_confirmed": 1,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "google_ai",
+    "le_chat",
+    "qwen"
+   ],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 6,
+   "verifier_calls": 1,
+   "stop_reason": "sources still conflict on Ukraine marriageable age|figure; reported as unresolved rather than averaged",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "secondary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "secondary",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "secondary",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "qwen",
+     "role": "secondary",
+     "status": "failed",
+     "error": "readiness=blocked"
+    },
+    {
+     "provider": "google_ai",
+     "role": "secondary",
+     "status": "broken",
+     "error": "no-response-element: AI Mode produced no answer block"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "qwen",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "google_ai",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "confirmed",
+     "initial_claim": "Under the **current Family Code of Ukraine**, the minimum ordinary marriageable age is **18 for both men and women**. A court **can allow marriage earlier**, but only for a person who has **reached 16**, and only if the court determines that granting the right to marry is in that person's interests.",
+     "follow_up_result": "**My original answer was right on this point.** Article 22 of the Family Code of Ukraine expressly provides that the marriageable age **for men and women is 18 years**. It also expressly states that persons wishing to register a marriage must have reached the marriageable age **on the day of registr",
+     "final_position": "Under the **current Family Code of Ukraine**, the minimum ordinary marriageable age is **18 for both men and women**. A court **can allow marriage earlier**, but only for a person who has **reached 16**, and only if the court determines that granting the right to marry is in that person's interests."
+    }
+   ],
+   "ai_opened": {
+    "https://zakon.rada.gov.ua/laws/show/en/2947-14?dark=1&lang=en": true,
+    "https://zakon.rada.gov.ua/laws/show/en/2947-14/comp20241115": false,
+    "https://zakon.rada.gov.ua/laws/show/2947-14/ed20110512/comp20120408": false,
+    "https://zakon.rada.gov.ua/laws/anot/en/2947-14": false,
+    "https://eu-ua.kmu.gov.ua/wp-content/uploads/ukraine_questionnaire_part_1_vol_2.pdf": false,
+    "https://cis-legislation.com/document.fwx?rgn=51222": false,
+    "https://natlex.ilo.org/dyn/natlex2/natlex2/files/download/61639/UKR-61639%20%28EN%29.pdf": false,
+    "https://mfa.gov.ua/npas/simeyniy-kodeks-ukraini": true,
+    "https://data.rada.gov.ua/ogd/zak/perv/text/d95712.htm": true,
+    "http://jafbase.fr/docEstEurope/FAMILY_CODE_OF_UKRAINE.pdf": true,
+    "https://pravoua.com.ua/storage/files/magazines/files/content-family-codex-eng-2-1.pdf": true,
+    "https://faolex.fao.org/docs/pdf/ukr208273.pdf": null
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 2785,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 479.9,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "said it could not answer an answerable question"
+    ]
+   }
+  }
+ ]
+}

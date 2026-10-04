@@ -1,0 +1,295 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "google_ai",
+   "copilot",
+   "meta_ai",
+   "le_chat",
+   "pi",
+   "qwen",
+   "deepseek"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "triv-2plus2",
+   "category": "trivial",
+   "kind": "answer",
+   "question": "What is 2 + 2?",
+   "answer": "4",
+   "why": "",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [],
+   "primary_domains": [],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 0,
+   "pages_confirmed": 0,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [],
+   "providers_failed": [],
+   "rounds": 0,
+   "verifier_model": null,
+   "browser_sessions": 0,
+   "verifier_calls": 0,
+   "stop_reason": "question answered at level 0; no investigation earned",
+   "provider_log": [],
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [],
+   "claim_text_len": 0,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 4.1,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "uk-dpa-age",
+   "category": "uk-law",
+   "kind": "answer",
+   "question": "Under the Data Protection Act 2018, what is the minimum age at which a child can consent to information society services in the UK?",
+   "answer": "Yeah, the idea is right, but the number part is a bit off — Section 9 of the Data Protection Act 2018 changes the UK age in Article 8(1) from 16 to 13 years.",
+   "why": "4 pages we opened, from 2 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25",
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr-old/what-are-the-rules-about-an-iss-and-consent/?q=parental+responsibility",
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/childrens-code-guidance-and-resources/age-appropriate-design-a-code-of-practice-for-online-services/annex-c-lawful-basis-for-processing/",
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/",
+    "https://www.legislation.gov.uk/ukpga/2018/12/notes/division/6/index.htm"
+   ],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25"
+   ],
+   "primary_cited": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25",
+    "https://www.legislation.gov.uk/ukpga/2018/12/notes/division/6/index.htm"
+   ],
+   "pages_opened": 21,
+   "pages_confirmed": 20,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt"
+   ],
+   "providers_failed": [],
+   "rounds": 1,
+   "verifier_model": "deterministic ledger (no verifier call)",
+   "browser_sessions": 1,
+   "verifier_calls": 0,
+   "stop_reason": "evidence sufficient after the primary researcher; no escalation earned",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/childrens-code-guidance-and-resources/age-appropriate-design-a-code-of-practice-for-online-services/annex-c-lawful-basis-for-processing/": true,
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25": true,
+    "https://www.legislation.gov.uk/ukpga/2018/12/2026-09-30?timeline=false": true,
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/": true,
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr-old/what-are-the-rules-about-an-iss-and-consent/?q=parental+responsibility": true,
+    "https://www.legislation.gov.uk/ukpga/2018/12/notes/division/6/index.htm": false
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 937,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 56.5,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "uk-theft-s1",
+   "category": "uk-law",
+   "kind": "answer",
+   "question": "How does section 1 of the Theft Act 1968 define theft?",
+   "answer": "I couldn't verify that reliably. None of the pages I opened confirms an answer, so I won't guess.",
+   "why": "",
+   "confidence": "Low confidence",
+   "caveats": [
+    "One AI answer claimed: \"Section 1 of the Theft Act 1968 defines theft as a person being guilty of theft if he dishonestly appropriates property belonging to another with the intention of permanently depriving the other of it.\" I couldn't confirm that from any page I opened."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft/1996-12-18?view=plain",
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft/1996-12-18?view=plain",
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft/1996-12-18?view=plain",
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft/1996-12-18?view=plain",
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft/1996-12-18?view=plain",
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft/1996-12-18?view=plain"
+   ],
+   "primary_cited": [],
+   "pages_opened": 41,
+   "pages_confirmed": 36,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (3) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "logged_out",
+     "error": "readiness=login_wall"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": true
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "corrected",
+     "initial_claim": "Section 1(1) of the **Theft Act 1968** defines theft as occurring where a person **“dishonestly appropriates property belonging to another with the intention of permanently depriving the other of it.”** Section 1(2) adds that it does not matter whether the appropriation is made with a view to gain o",
+     "follow_up_result": "Your specific point was **right**: legislation.gov.uk has a **point-in-time version of the Theft Act 1968 dated 18 December 1996**. I also found and opened the primary source explaining why that date matters: the **Theft (Amendment) Act 1996**, which received Royal Assent on 18 December 1996 and ame",
+     "final_position": "Your specific point was **right**: legislation.gov.uk has a **point-in-time version of the Theft Act 1968 dated 18 December 1996**. I also found and opened the primary source explaining why that date matters: the **Theft (Amendment) Act 1996**, which received Royal Assent on 18 December 1996 and ame"
+    }
+   ],
+   "ai_opened": {
+    "https://www.legislation.gov.uk/ukpga/1968/60/crossheading/definition-of-theft/1996-12-18?view=plain": true,
+    "https://www.legislation.gov.uk/ukpga/1968/60/pdfs/ukpga_19680060_en.pdf": true,
+    "https://www.legislation.gov.uk/ukpga/1968/60/contents": false,
+    "https://www.legislation.gov.uk/cy/ukpga/1968/60/crossheading/theft-robbery-burglary-etc/1996-12-18": true,
+    "https://www.legislation.gov.uk/ukpga/1968/60": null,
+    "https://www.youtube.com/watch?v=bc_xYffRHms": null
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 2754,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 208.9,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "said it could not answer an answerable question"
+    ]
+   }
+  }
+ ]
+}
