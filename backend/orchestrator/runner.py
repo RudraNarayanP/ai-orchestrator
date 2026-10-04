@@ -12,8 +12,10 @@ because an answer sounded confident.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import time
+import traceback
 from typing import Any, Awaitable, Callable, Protocol
 
 from backend.evidence.pool import build_pool
@@ -142,7 +144,11 @@ class ResearchRunner:
         except Exception as exc:  # noqa: BLE001
             job.status = JobStatus.FAILED
             job.error = f"{type(exc).__name__}: {exc}"
-            await self._emit("error", f"research job failed: {job.error}", job=job)
+            # An unexpected crash must leave its traceback behind: a bare "IndexError: list index out of range" in an
+            # event row cannot be debugged (live: ua-closed-session failed this way and left nothing to follow).
+            tb = traceback.format_exc()
+            logging.getLogger("omnibrain.runner").error("research job %s failed:\n%s", job.id, tb)
+            await self._emit("error", f"research job failed: {job.error}", job=job, traceback=tb[-3000:])
             return job
 
     async def _run(self, job: Job) -> Job:
