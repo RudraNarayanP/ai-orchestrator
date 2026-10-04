@@ -25,6 +25,7 @@ from dataclasses import asdict
 from typing import Any, Awaitable, Callable
 
 from backend.browser.engine import BrowserEngine
+from backend.browser.live_chrome import LiveChromeNeedsUser, needs_user_in
 from backend.cancel import CancelToken, JobCancelled
 from backend.models import Citation, ProviderResponse, ProviderStatus, new_id
 from backend.settings import ProviderConfig, Settings
@@ -257,6 +258,8 @@ class ChatAdapter:
             try:
                 clicked = await self._call(page, "dismiss", self._sel_dict)
             except DOMUnavailable as exc:
+                if needs_user_in(exc):
+                    raise  # live-Chrome driver: a login/captcha/age page is the user's, reported by _ask_dom
                 state = {"state": "broken", "reason": str(exc)}
                 await emit("provider", f"{self.provider}: DOM unavailable ({exc})", self.provider, round_no)
                 return state
@@ -348,9 +351,15 @@ class ChatAdapter:
                 await self._close_tab_on_cancel()
                 raise
             except DOMUnavailable as exc:
+                gate = needs_user_in(exc)
+                if gate:
+                    return self._needs_user(response, gate)
                 response.note(ProviderStatus.BROKEN, error=str(exc)[:400])
                 return self._finish(response)
             except Exception as exc:  # noqa: BLE001 -- one provider must never kill the job
+                gate = needs_user_in(exc)
+                if gate:
+                    return self._needs_user(response, gate)
                 response.note(ProviderStatus.FAILED, error=f"{type(exc).__name__}: {exc}"[:400])
                 await emit("provider", f"{self.provider}: attempt {attempt + 1} failed ({type(exc).__name__})", self.provider, round_no)
                 if attempt + 1 < attempts:
@@ -371,6 +380,16 @@ class ChatAdapter:
                 return self._finish(response)
             response.status = ProviderStatus.LAUNCHING
             await emit("provider", f"{self.provider}: retrying ({response.error or 'no usable answer'})", self.provider, round_no)
+        return self._finish(response)
+
+    def _needs_user(self, response: ProviderResponse, gate: LiveChromeNeedsUser) -> ProviderResponse:
+        """Live-Chrome driver reached a login / captcha / consent / age page: report it, never touch it."""
+        login = gate.kind == "login"
+        response.note(
+            ProviderStatus.LOGGED_OUT if login else ProviderStatus.FAILED,
+            error=f"readiness={'login_wall' if login else 'blocked'} ({gate})"[:400],
+            detail=gate.url[:300],
+        )
         return self._finish(response)
 
     async def _attempt(self, *, page_setup: bool, response: ProviderResponse, prompt: str, round_no: int, emit: EventHook) -> bool:

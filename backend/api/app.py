@@ -22,6 +22,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingRes
 from pydantic import BaseModel
 
 from backend.browser.engine import BrowserEngine
+from backend.browser.factory import create_engine
 from backend.cancel import CancelToken
 from backend.export import export_filename, job_markdown
 from backend.logs import get_logger
@@ -144,7 +145,7 @@ class JobManager:
 
     async def engine_get(self) -> BrowserEngine:
         if self.engine is None:
-            self.engine = BrowserEngine(self.settings)
+            self.engine = create_engine(self.settings)
             await self.engine.start()
         return self.engine
 
@@ -274,6 +275,8 @@ class JobManager:
             "instruction": (
                 f"A dedicated OmniBrain window for {cfg.label} is now open -- sign in there once. "
                 "It uses its own browser profile and never touches the Chrome you work in."
+                if not getattr(engine, "live", False)
+                else f"A new tab for {cfg.label} is open in your own Chrome (live-Chrome driver) -- sign in there if needed."
             ),
         }
 

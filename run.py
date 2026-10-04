@@ -192,7 +192,7 @@ async def _one_shot(question: str, mode: str | None, rounds: int | None, args: a
     from backend.logs import get_logger
 
     log = get_logger("cli")
-    from backend.browser.engine import BrowserEngine
+    from backend.browser.factory import create_engine
     from backend.models import Job, ResearchMode
     from backend.orchestrator.runner import ResearchRunner
     from backend.providers.registry import ProviderCatalog, endpoint_for
@@ -219,7 +219,7 @@ async def _one_shot(question: str, mode: str | None, rounds: int | None, args: a
         async def emit(self, kind, message, provider=None, round_no=None, **payload):
             await emit(kind, message, provider=provider, round_no=round_no, **payload)
 
-    engine = BrowserEngine(settings)
+    engine = create_engine(settings)
     await engine.start()
     try:
         catalog = ProviderCatalog(settings, engine)
@@ -271,9 +271,9 @@ def cmd_login(args: argparse.Namespace) -> int:
     settings = load()
 
     async def go() -> int:
-        from backend.browser.engine import BrowserEngine
+        from backend.browser.factory import create_engine
 
-        engine = BrowserEngine(settings)
+        engine = create_engine(settings)
         await engine.start()
         for provider in args.providers:
             cfg = settings.providers.get(provider)
@@ -283,7 +283,10 @@ def cmd_login(args: argparse.Namespace) -> int:
             page = await engine.open_research_page(provider, cfg.url)
             await page.bring_to_front()
             print(f"\n{cfg.label}: window open at {page.url}")
-        print("\nSign in inside those windows. They are separate OmniBrain profiles -- your normal Chrome is untouched.")
+        if getattr(engine, "live", False):
+            print("\nThese are NEW tabs in your own Chrome (browser.driver = chrome_use). Sign in there if a site asks.")
+        else:
+            print("\nSign in inside those windows. They are separate OmniBrain profiles -- your normal Chrome is untouched.")
         input("Press Enter here once you have finished signing in (windows will then close)... ")
         await engine.stop(keep_windows=False)
         print("saved. Profiles live under browser/profiles/ and are reused from now on.")

@@ -69,6 +69,25 @@ class BrowserConfig(BaseModel):
     profile, so that Chrome must be launched by you with a non-default
     --user-data-dir. Nothing here copies or reads your cookies."""
 
+    driver: Literal["playwright", "chrome_use"] = "playwright"
+    """playwright (default): OmniBrain's own dedicated Chrome profile, as described above.
+       chrome_use: OPT-IN. Drive new tabs in your everyday, already-signed-in Chrome through
+       the third-party ``chrome-use`` CLI + its Chrome extension (see backend/browser/live_chrome.py).
+       Hard-limited in code to the AI provider domains; no cookies/profile are copied or read;
+       captcha / Cloudflare / age / sign-in pages are reported as needing you, never touched."""
+
+    chrome_use_path: str | None = None
+    """Full path to chrome-use(.exe) if it is not on PATH (scripts/install_chrome_use.ps1 installs it
+    under %LOCALAPPDATA%; pass that path here if PATH was not refreshed)."""
+
+    chrome_use_session: str = "omnibrain"
+    """chrome-use session name: OmniBrain's tabs live in their own colored tab group."""
+
+    chrome_use_browser: str | None = None
+    """Pin a Chrome profile (id or Google-account e-mail) when several profiles run the extension."""
+
+    chrome_use_timeout_s: float = 60.0
+
     nav_timeout_ms: int = 45000
     settle_ms: int = 900
     locale: str = "en-US"

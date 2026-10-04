@@ -95,8 +95,10 @@ class BrowserEngine:
       window_mode="per_provider" an isolated profile and window per site
       cdp_url=...                attach to a Chrome you started yourself
 
-    There is deliberately no mode that reaches into your everyday browser by
-    copying its session. Chrome 136+ blocks remote debugging on the default
+    There is deliberately no mode here that reaches into your everyday browser by
+    copying its session. (The separate, opt-in ``browser.driver: chrome_use`` in
+    backend/browser/live_chrome.py drives NEW tabs in your live Chrome without copying
+    anything, and only on the AI provider domains.) Chrome 136+ blocks remote debugging on the default
     profile for exactly that reason, and the workaround -- duplicating a signed-in
     profile -- is credential handling I would rather not automate. Sign into the
     OmniBrain profile once instead, or point cdp_url at a Chrome you launched.
