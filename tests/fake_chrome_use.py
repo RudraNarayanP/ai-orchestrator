@@ -105,7 +105,7 @@ def main() -> None:
         if sub == "new":
             state["next"] = state.get("next", 1) + 1
             tid = f"t{state['next']}"
-            tabs[tid] = {"url": redirect(args[2]), "title": "New tab"}
+            tabs[tid] = {"url": redirect(args[2]), "title": "New tab", "blank": state.get("blank_gets", 0)}
             state["active"] = tid
             save(state)
             reply({"tabId": tid, "targetId": f"T{tid}", "label": None, "url": tabs[tid]["url"], "total": len(tabs)})
@@ -126,6 +126,10 @@ def main() -> None:
     if verb == "get":
         if active not in tabs:
             reply(ok=False, error="no active tab")
+        if args[1] == "url" and tabs[active].get("blank", 0) > 0:
+            tabs[active]["blank"] -= 1  # a fresh real-Chrome tab reads about:blank until its navigation commits
+            save(state)
+            reply({"url": "about:blank"})
         reply({"url": tabs[active]["url"]} if args[1] == "url" else {"title": tabs[active].get("title", "")})
     if verb == "open":
         tabs[active]["url"] = redirect(args[1])

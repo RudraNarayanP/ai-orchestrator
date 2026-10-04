@@ -677,3 +677,28 @@ async def test_a_background_daemon_holding_our_output_handles_does_not_hang_the_
     data = await fake.runner.run("status")
     assert data["cliVersion"]
     assert time.monotonic() - t0 < 8
+
+
+async def test_a_new_tab_that_still_reads_about_blank_is_waited_for_not_refused(fake, engine):
+    """Live regression: right after `tab new <url>` real Chrome reports about:blank for a moment."""
+    fake.update(blank_gets=3)
+    page = await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    assert page.url == "https://chatgpt.com/"
+
+
+async def test_a_new_tab_stuck_on_about_blank_is_an_error_and_is_closed(fake, engine, monkeypatch):
+    monkeypatch.setattr(lc, "NEW_TAB_SETTLE_S", 0.6)
+    fake.update(blank_gets=1000)
+    with pytest.raises(LiveChromeError, match="about:blank"):
+        await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    assert ["tab", "close", "t2"] in fake.verbs()
+    assert "t2" not in fake.read()["tabs"]
+    assert "t1" in fake.read()["tabs"]  # the user's own tab was never touched
+
+
+async def test_a_new_tab_that_lands_off_the_allowlist_is_refused_and_our_tab_closed(fake, engine):
+    fake.update(redirects={"https://chatgpt.com/": "https://evil.example/"})
+    with pytest.raises(LiveChromeRefused):
+        await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    assert "t2" not in fake.read()["tabs"]
+    assert "t1" in fake.read()["tabs"]

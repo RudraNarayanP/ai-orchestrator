@@ -216,6 +216,7 @@ FORBIDDEN_VERBS = frozenset(
 # strip the ones that would hide automation or change the browser identity.
 # AUTO_CONNECT=1 makes chrome-use attach through the extension and fail (rather than quietly launch
 # a throwaway browser of its own) when the extension is not reachable.
+NEW_TAB_SETTLE_S = 12.0
 CHILD_ENV_FORCE = {"AGENT_BROWSER_STEALTH": "0", "AGENT_BROWSER_HUMANIZE": "off", "AGENT_BROWSER_AUTO_CONNECT": "1"}
 CHILD_ENV_DROP = (
     "AGENT_BROWSER_HIDE_CANVAS", "AGENT_BROWSER_BLOCK_WEBRTC", "AGENT_BROWSER_TIMEZONE",
@@ -840,11 +841,38 @@ class LiveChromeEngine:
                 page = LivePage(self, tab_id, str(data.get("url") or url), tab_key)
                 self._pages[tab_key] = page
                 self._note(f"opened a new tab {tab_id} for {provider} in your Chrome")
-                now = str((await self.runner.run("get", "url")).get("url") or page.url)
+                # a brand-new tab reports about:blank until its first navigation commits (seen on real Chrome)
+                deadline = time.monotonic() + NEW_TAB_SETTLE_S
+                while True:
+                    now = str((await self.runner.run("get", "url")).get("url") or "")
+                    if now and not now.startswith("about:blank"):
+                        break
+                    if time.monotonic() >= deadline:
+                        await self._discard_new_tab(page)
+                        raise LiveChromeError(f"the new {provider} tab never left about:blank within {NEW_TAB_SETTLE_S:g}s")
+                    await asyncio.sleep(0.25)
                 page._url = now
                 await self._verify_live_chrome(page)
-            assert_allowed_url(now, where=f"{provider} tab after load")
+            try:
+                assert_allowed_url(now, where=f"{provider} tab after load")
+            except LiveChromeNeedsUser:
+                raise  # login / captcha: leave the tab for the user to finish
+            except LiveChromeRefused:
+                async with self._cmd_lock:  # it is OUR tab (we just opened it): don't leave it behind
+                    await self._discard_new_tab(page)
+                raise
             return page
+
+    async def _discard_new_tab(self, page: "LivePage") -> None:
+        """Close a tab OmniBrain itself just opened (caller holds ``_cmd_lock``)."""
+        self._pages.pop(page.key, None)
+        page._closed = True
+        try:
+            await self.runner.run("tab", "close", page.tab_id)
+        except LiveChromeError as exc:
+            self._note(f"could not close our new tab {page.tab_id}: {exc}")
+        if self._selected == page.tab_id:
+            self._selected = None
 
     async def focus_tab(self, page: LivePage) -> None:
         async with self._focus_lock:
