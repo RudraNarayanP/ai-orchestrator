@@ -87,6 +87,22 @@ permission dialog per connection, which needs the connector configured for it.
 port on its own profile; nothing in OmniBrain copies session data to get around
 any of this.
 
+**Optional, off by default: the live-Chrome driver.** If you do want OmniBrain to use the
+Chrome you are already signed into, set `browser.driver: chrome_use`. It drives **new tabs**
+in that Chrome through the third-party [`chrome-use`](https://github.com/leeguooooo/chrome-use)
+CLI and its Chrome extension (native messaging, no debug port, no copied cookies or profile).
+Hard limits enforced in OmniBrain's own code (`backend/browser/live_chrome.py`, tested against
+a fake chrome-use in `tests/test_live_chrome.py`): only the AI provider domains
+(chatgpt.com, gemini.google.com, copilot.microsoft.com, meta.ai, chat.mistral.ai, pi.ai,
+chat.deepseek.com, chat.qwen.ai, google.com/search?udm=50) are ever opened or acted on, and
+the tab's URL is re-read before every action; only tabs OmniBrain created are touched; a fixed
+set of chrome-use commands is allowed (no cookies, state save/load, auth, humanize, network
+or init-script commands) and chrome-use's stealth/humanize knobs are forced off; a login,
+captcha, Cloudflare, consent or age page is reported as needing you and never touched. Setup:
+`scripts/install_chrome_use.ps1`, `chrome-use extension install`, add the extension in Chrome,
+then `python scripts/live_chrome_check.py`. Caveat: chrome-use's extension can in principle
+reach any tab you have open; OmniBrain's allowlist is what keeps it to the provider tabs.
+
 This is also the only design that technically works: Chrome 136+ ignores
 `--remote-debugging-port` on the default profile, and one profile cannot be driven
 by two processes at once.

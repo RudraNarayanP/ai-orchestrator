@@ -86,6 +86,12 @@ nothing was taken.
 - One fresh conversation per research stage so a provider cannot simply agree with
   its own previous answer: `jumas45` ADR-0012.
 
+## External tool used by the optional live-Chrome driver (not vendored, not bundled)
+
+| Tool | Licence | How OmniBrain uses it |
+|---|---|---|
+| `leeguooooo/chrome-use` (CLI + Chrome extension) | **Apache-2.0** | Only when `browser.driver: chrome_use` is set: OmniBrain runs the user-installed `chrome-use` binary as a subprocess (`backend/browser/live_chrome.py`). No chrome-use code is copied into this repository; `scripts/install_chrome_use.ps1` downloads the official release and verifies its published SHA-256. |
+
 ## Licence position for OmniBrain itself
 
 OmniBrain is a private, local, single-user tool. Every port above came from MIT

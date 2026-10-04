@@ -17,7 +17,14 @@
 # would be a different, logged-out profile). The practical route is to sign into
 # the OmniBrain profile once -- run.py login -- and it is remembered.
 
+# OPTIONAL live-Chrome driver (off by default). To use your everyday, signed-in Chrome instead of the
+# dedicated profile, set driver: chrome_use. It opens NEW tabs only, on the AI provider domains only,
+# through the third-party chrome-use CLI + extension (see README and scripts/install_chrome_use.ps1).
+#   driver: chrome_use
+#   chrome_use_path: C:/Users/<you>/AppData/Local/Programs/chrome-use/chrome-use.exe   # only if not on PATH
+#   chrome_use_browser: you@gmail.com    # only if several Chrome profiles run the extension
 browser:
+  driver: playwright         # playwright (default, dedicated profile) | chrome_use (opt-in, live Chrome)
   channel: chrome            # installed Chrome; set to "msedge" to use Edge
   headless: false            # you must be able to watch it work
   window_mode: single        # single | per_provider
