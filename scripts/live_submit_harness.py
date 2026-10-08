@@ -18,7 +18,7 @@ _real = ChromeUseRunner.run
 
 
 async def _spy(self, *a, **kw):
-    if a and a[0] in ("keyboard", "press", "click"):
+    if a and (a[0] in ("keyboard", "press", "click") or "--activate" in a):
         LOG.setdefault(self.session, []).append(" ".join(a[:3]) + (f" <stdin {len(kw.get('stdin') or '')} chars>" if kw.get("stdin") else ""))
     return await _real(self, *a, **kw)
 
