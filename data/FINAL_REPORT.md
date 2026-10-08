@@ -200,3 +200,62 @@ Manual steps: Le Chat needs the user's own sign-in (`run.py login le_chat`). Goo
 **Not verified (needs the user's machine).** Nothing here has driven a real Chrome: the fake encodes my reading of chrome-use's CLI contract (`--json` envelope `{success, data|error}`, `tab new` -> `tabId`, `eval --stdin` -> `data.result`, `keyboard inserttext --stdin`, `click x y`, `mouse wheel dy dx`, `status` -> `data.extension.relayUp`). If the first live run shows a mismatch it will be in `live_chrome.py` only. Known caveats: chrome-use's extension can in principle reach any open tab, so the allowlist is OmniBrain's, not Chrome's; `bring_to_front` activates the OmniBrain tab in the user's window (typing into a background tab is unreliable); a chrome-use daemon already running for session `omnibrain` keeps the environment it was started with.
 
 **Manual steps for the user:** run `scripts\install_chrome_use.ps1`; run `chrome-use extension install`; add the chrome-use extension in Chrome (Web Store id `knfcmbamhjmaonkfnjhldjedeobeafmk`); then `python scripts\live_chrome_check.py` (read-only), optionally `python scripts\live_chrome_check.py chatgpt --ask "Reply with the single word: pong"`. To use it for real runs, set `browser.driver: chrome_use` in `config/settings.yaml`.
+
+## 14. Live driver hardening and end-to-end verification in the user's Chrome (2026-10-08, IST)
+
+**Driver changes since section 13 (commits e1e5107 .. f499866).**
+- Providers run **in parallel**: one tab per provider, each in its own chrome-use session (`omnibrain-<provider>`), with no shared "current tab" and no engine-wide lock (e1e5107).
+- Reliable submit: a strict send-button finder (never help/feedback/upgrade/attach/mode toggles), then four routes in order (click, pointer events, real Enter, DOM Enter). Each route is verified by checking that the composer was emptied or a busy/stop signal appeared. If none works the result is `submit_failed`, never a silent re-type (c0a8a8f, cffb3b8).
+- Pi: the greeting and the user's own turn are no longer read back as the answer (acfcc06, 4b1d2b9), and its "Read aloud" / "More options" control lines are dropped (46da044).
+- Background mode (`chrome_use_background`, default true) never raises a tab. A provider that cannot work hidden is reported as `needs_focus`. Foreground mode (`false`, used for this run) shows OmniBrain's own tab.
+- `browser.chrome_use_browser: edge | chrome | <profile id/email>` picks the browser by the relay's process ancestry and never falls back to the other browser (ea28254, 1320e35). Edge was not usable: the extension is not installed there. The user chose Chrome (`chrome_use_browser: chrome`).
+- An unusable live browser fails the job at once, with the reason (7f2853f).
+- **Tabs are really closed now** (25c6f0c). chrome-use refuses `tab close` on a session's last tab, and every OmniBrain tab is its session's only tab, so cancel and shutdown had never closed a tab live. OmniBrain now stops that tab's own session (`session stop <own session>`; the runner refuses any other name), and chrome-use's daemon then closes the tabs it created (never adopted or foreign ones).
+- The daemon-start race seen with 9 providers at once ("Socket directory ... not writable (os error 5)") is retried on `tab new` (e242b1d).
+- **Server shutdown** (93bf675) cancels running jobs, stops the engine (closing OmniBrain's tabs) and closes the thread and memory stores. `python run.py stop` / `POST /api/shutdown` (only from this computer, JSON only) stop a windowless server cleanly. Verified live: the server exited about 4 s after `run.py stop`, with "closed OmniBrain's chatgpt/deepseek/qwen tab (session stop)" in the log and no chrome-use session left.
+- **Thread chat failure** (c80c31a): the user's message is still stored (raw messages are never lost), but it is now marked `unanswered` with the reason, and the chat's token count is put back. The retry therefore re-sends the thread instead of "continuing" a chat that never received the message. Verified live with Qwen (age page): 502 with the reason, message marked, Qwen chat tokens 0.
+- **Mode toggles** (b1659b6, f499866): `research.provider_modes` (e.g. `deepseek: [thinking, search]`) switches the toggles beside the composer on before each question, in order. Each step is verified by reading the toggle back (`on/off`, `already`, `unavailable`, `plan_gated`, `disabled`, `state_unreadable`, `unverified`). Plan-gated, disabled or unreadable toggles are never clicked. Modes inside menus are reported, not driven.
+
+**Bugs found by the end-to-end run and fixed (each with a regression test).**
+| Bug (live) | Fix | Commit |
+|---|---|---|
+| "Under the Data Protection Act 2018, what is ...?" was treated as a yes/no claim check, so the answer opened "Yeah, you're right." | a wh-question in the last clause is a what-question unless the sentence opens as yes/no | dc70814 |
+| Gemini: "Searching the web" (no busy control) was captured as the completed answer | a reply area holding only a progress line is "still working", never the answer | 03e4fa9 |
+| No OmniBrain tab was ever closed (chrome-use "Cannot close the last tab") | close by stopping the tab's own session | 25c6f0c |
+| Stopping the server left tabs, jobs and stores open | app shutdown hook, `run.py stop` | 93bf675 |
+| A failed thread turn left a bare message and a wrong "continue" state | `unanswered` marker plus token restore | c80c31a |
+| Pi answer ended with "Read aloud / More options" | control lines dropped | 46da044 |
+| Parallel start: "Socket directory ... os error 5" | retried on `tab new` | e242b1d |
+
+**End-to-end, through the app (windowless server, live driver, Chrome foreground).**
+| Feature | Result |
+|---|---|
+| Offline gate / full suite | green: offline gate 795 passed; full suite 824 passed at the start of the session (browser tests for the new fixtures passed individually) |
+| `run.py doctor` | works: live driver, Chrome, extension connected, OpenRouter verifier/analysis/vision ready |
+| App windowless (127.0.0.1:8730) | works: UI, app.js, styles, API |
+| triv-2plus2 | works: "4", level 0, ~3 s, no browser |
+| uk-dpa-age | works: 13 years, s.9 DPA 2018. First run 517 s, level 3 (escalated on an unrelated Children's Wellbeing and Schools Act 2026 conflict), answer voice bug, Gemini progress-line bug. Re-run after the fixes: 55 s, level 1, "Section 9 of the Data Protection Act 2018 changes the Article 8 age from 16 to 13 years ..." |
+| res-private-review | works: "Couldn't verify that one." (236 s, ChatGPT + Gemini + Copilot) |
+| Thread chat | works: ChatGPT A turns 1-2 (continued chat, "Teal"); switching to DeepSeek opened "DeepSeek A" with a 286-token thread packet and personal memory, answering "teal ... BLUEHERON" |
+| Thread recall / memory recall | works: 6 messages recalled; memory search "What is my test project codename?" hit at 0.81 (test records deleted afterwards) |
+| Failed thread turn | works: 502 with the reason, message marked `unanswered` |
+| Shutdown closes tabs | works (live, see above) |
+
+**Per provider (parallel, foreground, one long prompt each, 131 s wall for 9; modes from the read-only probe).**
+| Provider | Parallel live result | Modes beside the composer |
+|---|---|---|
+| ChatGPT | completed (44 s) | Think: toggled on, verified, restored off |
+| Gemini | completed (42 s) | none as toggles; "Open mode picker, currently Flash" and "Upload and tools" menus (reported, not driven) |
+| Microsoft Copilot | completed (49 s) | none found beside the composer |
+| DeepSeek | completed (48 s) | DeepThink and Search (both on in the user's account): each flipped, verified, restored |
+| Meta AI | completed (41 s) | none |
+| Pi | completed (42 s; first `tab new` hit the os-error-5 race, now retried) | none |
+| Qwen | blocked: age page; needs the user (never touched) | n/a |
+| Le Chat | rate_limited (redirects to chat.mistral.ai/work) | n/a |
+| Google AI Mode | broken: no answer block after 123 s | n/a |
+
+**Tests.** Offline gate (`pytest -m "not browser"`): 780 -> 795 passed. Full suite at the start of this session: 824 passed. New regression tests: thread unanswered/token restore (3 + 1 HTTP), shutdown (5), tab close via session stop (3), tab-new race (2), claim-check voice (1), Pi control lines (1), progress line (2), mode toggles (2 browser).
+
+**Not done / still open.** Gemini/Meta AI briefly raised in background mode (moot now that the user runs foreground). The Le Chat rate limit and Google AI Mode were not investigated further. Copilot's mode picker was not found. ChatGPT Deep Research and the Gemini tools menu are menu items OmniBrain does not drive. The prior-art items (answer-capture ideas from AmT42/agent-council-browser, MIT; fencing provider output and recalled memory as untrusted data) are still queued.
+
+**User actions.** Qwen: complete the age page yourself in Chrome (OmniBrain will not). Le Chat: wait out or check the account's limit. Google AI Mode: check whether answers appear when you are signed in to Google. Edge (optional): add the chrome-use extension from https://chromewebstore.google.com/detail/knfcmbamhjmaonkfnjhldjedeobeafmk (Edge first asks to "Allow extensions from other stores"), sign in to the providers there, then set `chrome_use_browser: edge`.
