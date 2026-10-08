@@ -355,7 +355,8 @@ SELECTORS: dict[str, SelectorSet] = {
         # live 2026-10-08: [data-testid="chat-message-column"] is the WHOLE transcript (it read back Pi's greeting as
         # the answer); each assistant turn is a .break-anywhere block, user turns are right-aligned bubbles outside it.
         response_root=['[data-testid="chat-message-column"]', "[role='log']", "main"],
-        assistant_message=[".break-anywhere", '[data-testid*="message"]:not([data-testid="chat-message-column"])', ".markdown"],
+        # the user's turn is ALSO .break-anywhere, but right-aligned (.justify-end): exclude it structurally
+        assistant_message=[".break-anywhere:not(.justify-end)", '[data-testid*="message"]:not([data-testid="chat-message-column"])', ".markdown"],
         streaming=["[aria-busy='true']"],
         sources=["a[href^='http']"],
         login_wall=['button:has-text("Log in")', 'a[href*="login"]'],

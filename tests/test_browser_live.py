@@ -558,6 +558,7 @@ async def test_signed_in_pi_answer_is_the_new_turn_not_the_greeting(browser_sett
         assert response.status.value == "completed", f"{response.status.value}: {response.error}"
         assert "March 31, 1889" in response.answer_text and "Britannica" in response.answer_text, response.answer_text
         assert "Pi here" not in response.answer_text and "Read aloud" not in response.answer_text, response.answer_text
+        assert "When was" not in response.answer_text and "More options" not in response.answer_text, response.answer_text
         page = await engine.open_research_page("pi", url)
         assert await page.evaluate("() => window.clicked") == ["send"]
     finally:

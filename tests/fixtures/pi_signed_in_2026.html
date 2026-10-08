@@ -26,8 +26,11 @@ const actions = '<div class="flex items-center">' + ['Copy', 'Read aloud', 'Good
   .map(l => '<button aria-label="' + l + '"><p class="tip">' + l + '</p></button>').join('') + '</div>';
 function go() {
   const text = input.value.trim(); if (!text) return; input.value = '';
-  const u = document.createElement('div'); u.className = 'group flex gap-3';
-  u.innerHTML = '<div class="flex flex-col items-end"><div class="rounded-10"></div></div>'; u.querySelector('.rounded-10').textContent = text;
+  // live: the user turn ALSO carries .break-anywhere (right-aligned, with its own "More options" button)
+  const u = document.createElement('div'); u.className = 'group flex gap-3 items-center justify-end break-anywhere';
+  u.innerHTML = '<button aria-label="More options"><p class="tip">More options</p></button>' +
+    '<div class="flex items-center min-w-0 whitespace-pre-wrap"><div class="flex flex-col items-end ml-auto"><div class="rounded-10"></div></div></div>';
+  u.querySelector('.rounded-10').textContent = text;
   t.appendChild(u);
   setTimeout(() => { const a = document.createElement('div'); a.className = 'break-anywhere flex flex-col';
     a.innerHTML = '<div class="w-full"><div class="whitespace-pre-wrap">The Eiffel Tower was completed on March 31, 1889.</div>' +
