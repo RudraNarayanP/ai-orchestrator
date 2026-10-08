@@ -315,6 +315,22 @@ def cmd_login(args: argparse.Namespace) -> int:
     return asyncio.run(go())
 
 
+def cmd_stop(args: argparse.Namespace) -> int:
+    """Stop a running (e.g. windowless) server cleanly so it closes its browser tabs; killing the process would not."""
+    import urllib.error
+    import urllib.request
+
+    req = urllib.request.Request(f"http://127.0.0.1:{args.port}/api/shutdown", data=b'{"confirm": true}',
+                                 headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            print(f"server on port {args.port}: {resp.read().decode('utf-8', 'replace')}")
+    except (urllib.error.URLError, OSError) as exc:
+        print(f"no OmniBrain server answered on port {args.port}: {exc}")
+        return 1
+    return 0
+
+
 def cmd_close(_: argparse.Namespace) -> int:
     """Shut any Chrome process started from an OmniBrain profile.
 
@@ -461,6 +477,9 @@ def build_parser() -> argparse.ArgumentParser:
     promote.set_defaults(func=cmd_promote_selectors)
 
     sub.add_parser("close", help="close leftover OmniBrain browser windows").set_defaults(func=cmd_close)
+    stop = sub.add_parser("stop", help="stop a running server cleanly (closes OmniBrain's browser tabs)")
+    stop.add_argument("--port", type=int, default=8730)
+    stop.set_defaults(func=cmd_stop)
     sub.add_parser("jobs", help="list stored research jobs").set_defaults(func=cmd_jobs)
 
     return parser

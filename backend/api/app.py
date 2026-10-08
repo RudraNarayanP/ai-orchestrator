@@ -10,7 +10,9 @@ API keys never cross this boundary: /api/config returns them masked.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import signal
 import re
 import time
 import uuid
@@ -56,6 +58,14 @@ async def _json_object(request: Request) -> dict[str, Any]:
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="body must be a JSON object")
     return body
+
+
+LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
+def _request_exit() -> None:
+    """Ask uvicorn to exit the way Ctrl+C does, so the app's shutdown (tabs closed) runs."""
+    signal.raise_signal(signal.SIGINT)
 
 
 class EventBroker:
@@ -142,6 +152,33 @@ class JobManager:
                 log.warning("threads unavailable: %s", exc)
                 self._threads = None
         return self._threads
+
+    async def shutdown(self) -> None:
+        """The server is stopping: cancel running jobs, close OmniBrain's browser tabs/windows, close the local stores.
+
+        Without this a stopped server left its provider tabs open in your browser and the chrome-use sessions attached.
+        """
+        running = [t for t in self.tasks.values() if not t.done()]
+        for token in self.cancels.values():
+            token.cancel()
+        for task in running:
+            task.cancel()
+        if running:
+            await asyncio.wait(running, timeout=10)
+        engine, self.engine = self.engine, None
+        if engine is not None:
+            try:
+                await asyncio.wait_for(engine.stop(keep_windows=False), timeout=30)
+                log.info("browser engine stopped; OmniBrain's tabs closed")
+            except Exception as exc:  # noqa: BLE001
+                log.warning("browser shutdown: %s", exc)
+        for name in ("_threads", "_memory"):
+            svc = getattr(self, name, None)
+            store = getattr(svc, "store", None)
+            with contextlib.suppress(Exception):
+                if store is not None and hasattr(store, "close"):
+                    store.close()
+            setattr(self, name, None)
 
     async def engine_get(self) -> BrowserEngine:
         if self.engine is None:
@@ -303,7 +340,13 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
     store = Store(settings)
     broker = EventBroker()
     manager = JobManager(settings, store, broker)
-    app = FastAPI(title="OmniBrain", version="0.1.0")
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI):  # type: ignore[no-untyped-def]
+        yield
+        await manager.shutdown()
+
+    app = FastAPI(title="OmniBrain", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.store = store
     app.state.broker = broker
@@ -612,6 +655,20 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
                 broker.unsubscribe(job_id, queue)
 
         return StreamingResponse(pump(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.post("/api/shutdown")
+    async def shutdown_server(request: Request) -> Any:
+        """Stop a (windowless) server cleanly: jobs cancelled, OmniBrain's tabs closed. Only from this computer, and only
+        as a JSON request (a web page elsewhere cannot send one without a CORS preflight this server never grants)."""
+        host = request.client.host if request.client else ""
+        if host not in LOCAL_HOSTS:
+            raise HTTPException(status_code=403, detail="the server can only be stopped from this computer")
+        if not (request.headers.get("content-type") or "").lower().startswith("application/json"):
+            raise HTTPException(status_code=415, detail="send JSON: {\"confirm\": true}")
+        if (await _json_object(request)).get("confirm") is not True:
+            raise HTTPException(status_code=400, detail="send {\"confirm\": true} to stop the server")
+        asyncio.get_running_loop().call_later(0.3, _request_exit)
+        return {"stopping": True}
 
     @app.post("/api/jobs/{job_id}/cancel")
     async def cancel(job_id: str) -> Any:
