@@ -69,7 +69,7 @@ PROGRESS_ONLY_RE = re.compile(
 )
 STALE_UI_NOISE = re.compile(
     r"^\s*(copied!?|copy|regenerate|good response|bad response|share|more|show more|"
-    r"voice input|try again|retry|feedback|was this helpful\??|(chatgpt|gemini|copilot|you) said:?|#{1,6}\s*:?)\s*$",
+    r"voice input|read aloud|more options|try again|retry|feedback|was this helpful\??|(chatgpt|gemini|copilot|you) said:?|#{1,6}\s*:?)\s*$",
     re.I,
 )
 

@@ -67,3 +67,11 @@ def test_real_headings_survive():
 ])
 def test_age_gates_read_as_blocked(text):
     assert BROKEN_RE.search(text)
+
+
+def test_pi_read_aloud_and_more_options_controls_are_not_part_of_the_answer():
+    """Live (pi.ai 2026-10-08, parallel run): the answer ended with Pi's "Read aloud" / "More options" controls."""
+    raw = "The Eiffel Tower was completed in 1889.\nSource: Britannica.\n\nRead aloud\n\nMore options"
+    assert adapter()._clean(raw) == "The Eiffel Tower was completed in 1889.\nSource: Britannica."
+    assert "read aloud" in adapter()._clean("You can read aloud the passage below.").lower(), "only a whole control line is dropped"
+
