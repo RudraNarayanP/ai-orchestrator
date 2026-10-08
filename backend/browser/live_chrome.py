@@ -995,7 +995,7 @@ class LiveChromeEngine:
                 return cached
             await self._resolve_browser()  # before the first tab: which browser (Edge/Chrome) the sessions are pinned to
             runner = self._runner_for(tab_key)
-            data = await runner.run("tab", "new", url)
+            data = await self._new_tab(runner, url)
             tab_id = str(data.get("tabId") or "")
             if not _TAB_ID.match(tab_id):
                 raise LiveChromeError(f"chrome-use tab new returned no usable tab id: {data!r}"[:300])
@@ -1032,6 +1032,22 @@ class LiveChromeEngine:
                     await self._discard_new_tab(page)
                 raise
             return page
+
+    async def _new_tab(self, runner: ChromeUseRunner, url: str) -> dict[str, Any]:
+        """``tab new`` in the tab's own session. Live (2026-10-08, 9 providers at once): a session daemon starting next to
+        others can fail once with "Socket directory ... is not writable: Access is denied (os error 5)"; that race is
+        retried briefly. Any other error is returned at once."""
+        for attempt in range(3):
+            try:
+                return await runner.run("tab", "new", url)
+            except LiveChromeUnavailable:
+                raise
+            except LiveChromeError as exc:
+                if attempt == 2 or not re.search(r"socket directory|os error 5|access is denied", str(exc), re.I):
+                    raise
+                self._note(f"{runner.session}: chrome-use daemon start raced ({str(exc)[:80]}); retrying")
+                await asyncio.sleep(0.6 * (attempt + 1))
+        raise AssertionError("unreachable")
 
     async def _discard_new_tab(self, page: "LivePage") -> None:
         """Close a tab OmniBrain itself just opened (caller holds the page lock)."""

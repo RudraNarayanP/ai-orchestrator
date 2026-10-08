@@ -1117,3 +1117,20 @@ async def test_a_session_may_only_stop_itself():
         with pytest.raises(LiveChromeRefused):
             _check_argv(bad)
     assert runner.calls == 0, "nothing was started for a refused command"
+
+
+async def test_a_daemon_start_race_on_tab_new_is_retried(fake, engine):
+    """Live (9 providers in parallel): one session failed with "Socket directory ... not writable (os error 5)"."""
+    fake.update(fail_times={"tab": {"n": 1, "error": "Socket directory 'C:\\Users\\x\\.chrome-use' is not writable: Access is denied. (os error 5)"}})
+    page = await engine.open_research_page("pi", "https://pi.ai/")
+    assert page.tab_id == "t2" and [a for a in fake.verbs() if a[:2] == ["tab", "new"]] == [["tab", "new", "https://pi.ai/"]] * 2
+
+
+async def test_other_tab_new_errors_are_not_retried(fake, engine):
+    from backend.browser.live_chrome import LiveChromeError
+
+    fake.update(fail_times={"tab": {"n": 1, "error": "something else broke"}})
+    with pytest.raises(LiveChromeError):
+        await engine.open_research_page("pi", "https://pi.ai/")
+    assert len([a for a in fake.verbs() if a[:2] == ["tab", "new"]]) == 1
+
