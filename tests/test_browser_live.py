@@ -606,6 +606,7 @@ async def test_mode_toggles_are_found_switched_and_verified_and_gated_ones_are_n
         found = {m["mode"]: m for m in await adapter.modes(page)}
         assert set(found) == {"thinking", "search", "deep_research"}, found
         assert found["thinking"]["state"] == "off" and found["search"]["state"] == "off" and found["deep_research"]["gated"]
+        assert [m["label"] for m in await adapter.mode_menus(page)] == ["Open mode picker, currently Flash Flash"], "a mode menu is reported, not driven"
         assert (await adapter.set_mode(page, "thinking"))["status"] == "on"
         assert (await adapter.set_mode(page, "search"))["status"] == "on"
         assert (await adapter.set_mode(page, "thinking"))["status"] == "already", "a toggle that is already on is left alone"

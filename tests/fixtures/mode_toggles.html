@@ -14,9 +14,10 @@
   <form onsubmit="return false">
     <textarea id="prompt-textarea" aria-label="Chat input" placeholder="Message the assistant"></textarea>
     <div class="bar">
-      <button type="button" id="think" aria-pressed="false">DeepThink</button>
+      <div id="think" class="ds-toggle-button" aria-pressed="false" tabindex="0">DeepThink</div><!-- DeepSeek shape: a div, no role -->
       <button type="button" id="search" data-state="off">Search</button>
       <button type="button" id="deep" aria-pressed="false">Deep research (unlock with Pro)</button>
+      <button type="button" id="picker" aria-haspopup="menu" aria-label="Open mode picker, currently Flash">Flash</button>
       <button type="button" id="send" aria-label="Send message">Send</button>
     </div>
   </form>

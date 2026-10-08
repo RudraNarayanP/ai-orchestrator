@@ -388,6 +388,26 @@ DOM_LIBRARY_JS = r"""
     ['search', /(^|[^a-z])(search|web search|search the web|browse)([^a-z]|$)/i],
   ];
   const MODE_GATE_RE = /(upgrade|premium|subscribe|unlock|get plus|get pro|pro plan|limit reached|try .* free)/i;
+  // live (DeepSeek 2026-10-08): DeepThink / Search are <div class="ds-toggle-button" aria-pressed> with no role
+  const MODE_SEL = 'button, [role="button"], [role="switch"], [role="checkbox"], [role="menuitemcheckbox"], [aria-pressed], [class*="toggle-button"]';
+  const MODE_MENU_RE = /(mode picker|model picker|switch model|choose model|select model|tools|\bmodes?\b|\bmodel\b)/i;
+  function modeMenus(cfg) {
+    // Modes that live inside a menu (Gemini "Open mode picker, currently Flash", "Upload and tools") are reported, not driven.
+    const comp = (candidates(cfg.input || {}, cfg.input || {}, {kind: 'input'})[0] || {}).el || null;
+    const cr = comp ? rectOf(comp) : null;
+    const out = [];
+    for (const el of queryAll('button, [role="button"]')) {
+      if (!visible(el)) continue;
+      const pop = lower(el.getAttribute('aria-haspopup') || '');
+      if (!pop || pop === 'false') continue;
+      const label = norm([el.getAttribute('aria-label'), textOf(el)].filter(Boolean).join(' ')).slice(0, 90);
+      if (!MODE_MENU_RE.test(label)) continue;
+      const r = rectOf(el);
+      if (cr && r && Math.abs((r.top + r.bottom) / 2 - (cr.top + cr.bottom) / 2) > 220) continue;
+      out.push({label});
+    }
+    return out;
+  }
   const MODE_SKIP_RE = /(search chats|search history|search conversations|new chat|history|sidebar)/i;
   function modeState(el) {
     const pressed = el.getAttribute('aria-pressed') || el.getAttribute('aria-checked') || el.getAttribute('aria-selected');
@@ -406,7 +426,7 @@ DOM_LIBRARY_JS = r"""
     const form = comp ? comp.closest('form') : null;
     const out = [];
     const seen = new Set();
-    const els = queryAll('button, [role="button"], [role="switch"], [role="checkbox"], [role="menuitemcheckbox"]');
+    const els = queryAll(MODE_SEL);
     els.forEach((el, index) => {
       if (seen.has(el) || !visible(el)) return;
       seen.add(el);
@@ -426,13 +446,14 @@ DOM_LIBRARY_JS = r"""
   function modeElement(cfg, mode) {
     const found = modeControls(cfg).filter(c => c.mode === mode);
     if (!found.length) return [null, null];
-    const els = queryAll('button, [role="button"], [role="switch"], [role="checkbox"], [role="menuitemcheckbox"]');
+    const els = queryAll(MODE_SEL);
     return [found[0], els[found[0].index] || null];
   }
 
   const api = {
     version: 4,
     modeControls(cfg) { return modeControls(cfg); },
+    modeMenus(cfg) { return modeMenus(cfg); },
     setMode(cfg, mode, want) {
       const [info, el] = modeElement(cfg, mode);
       if (!info || !el) return {ok: false, reason: 'unavailable'};

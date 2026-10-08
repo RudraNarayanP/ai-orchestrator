@@ -236,6 +236,11 @@ class ChatAdapter:
         found = await self._call(page, "modeControls", self._sel_dict)
         return found if isinstance(found, list) else []
 
+    async def mode_menus(self, page) -> list[dict[str, Any]]:
+        """Mode/model pickers that open a menu (reported so the user knows where a mode lives; OmniBrain does not drive menus)."""
+        found = await self._call(page, "modeMenus", self._sel_dict)
+        return found if isinstance(found, list) else []
+
     async def set_mode(self, page, mode: str, on: bool = True) -> dict[str, Any]:
         """Switch one mode and VERIFY it took. Never clicks a plan-gated/disabled control or one whose state cannot be
         read (an unreadable toggle could be switched the wrong way). Result ``status``: on/off (verified), already,
