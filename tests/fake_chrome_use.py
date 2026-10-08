@@ -126,6 +126,12 @@ def main() -> None:
     if verb == "browsers":
         reply({"browsers": state.get("browsers") or [
             {"default": True, "email": "me@example.com", "id": "chrome-profile", "wsUrl": "ws://127.0.0.1:50001/chrome"}]})
+    if verb == "session" and args[1:2] == ["stop"]:
+        name = args[2] if len(args) > 2 else sess
+        for k in [k for k, v in tabs.items() if v.get("session") == name]:  # the daemon closes the tabs IT created
+            tabs.pop(k, None)
+        save(state)
+        reply({"stopped": name})
     if verb == "status":
         ext = {"hostInstalled": True, "hostHealthy": True, "relayUp": True, "liveVersion": "0.5.29"}
         ext.update(state.get("extension", {}))
@@ -135,7 +141,7 @@ def main() -> None:
         if sub == "new":
             state["next"] = state.get("next", 1) + 1
             tid = f"t{state['next']}"
-            tabs[tid] = {"url": redirect(args[2]), "title": "New tab", "blank": state.get("blank_gets", 0)}
+            tabs[tid] = {"url": redirect(args[2]), "title": "New tab", "blank": state.get("blank_gets", 0), "session": sess}
             set_active(tid)
             save(state)
             reply({"tabId": tid, "targetId": f"T{tid}", "label": None, "url": tabs[tid]["url"], "total": len(tabs)})
@@ -146,6 +152,9 @@ def main() -> None:
             save(state)
             reply({"tabId": args[2]})
         if sub == "close":
+            # real chrome-use: "Cannot close the last tab" of a session (state["last_tab_guard"] turns this on)
+            if state.get("last_tab_guard") and sum(1 for v in tabs.values() if v.get("session") == sess) <= 1:
+                reply(ok=False, error="Cannot close the last tab")
             tabs.pop(args[2], None)
             if active == args[2]:
                 set_active(None)

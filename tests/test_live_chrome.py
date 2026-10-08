@@ -1083,3 +1083,37 @@ async def test_doctor_reports_the_live_driver_and_the_missing_edge_extension(fak
     assert "Microsoft Edge -> chrome-use profile edge-profile" in text
     note = run.provider_login_note(type("C", (), {"requires_login": True})(), live_browser="Microsoft Edge")
     assert "sign in to it once in Microsoft Edge" in note and "run.py login" not in note
+
+
+# ------------------------------------------------------------------ closing tabs (live 2026-10-08)
+async def test_tabs_are_closed_even_though_chrome_use_never_closes_a_sessions_last_tab(fake, engine):
+    """Live: `tab close` answers "Cannot close the last tab" and every OmniBrain tab is its session's only tab, so
+    stop/cancel left every provider tab open. Stopping the tab's own session closes it (the daemon closes its tabs)."""
+    fake.update(last_tab_guard=True)
+    await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    await engine.open_research_page("gemini", "https://gemini.google.com/app")
+    assert len(fake.read()["tabs"]) == 3
+    await engine.stop(keep_windows=False)
+    assert list(fake.read()["tabs"]) == ["t1"], "only the user's own tab is left"
+    stops = [a for a in fake.verbs() if a[:1] == ["session"]]
+    assert sorted(a[2] for a in stops) == ["omnibrain-chatgpt", "omnibrain-gemini"], stops
+    assert any("session stop" in line for line in engine.log)
+
+
+async def test_a_cancelled_job_closes_its_tab_through_the_session(fake, engine):
+    fake.update(last_tab_guard=True)
+    await engine.open_research_page("copilot", "https://copilot.microsoft.com/")
+    assert await engine.close_tab("copilot") is True
+    assert list(fake.read()["tabs"]) == ["t1"]
+
+
+async def test_a_session_may_only_stop_itself():
+    from backend.browser.live_chrome import ChromeUseRunner, LiveChromeRefused, _check_argv
+
+    runner = ChromeUseRunner(["chrome-use-not-run"], session="omnibrain-chatgpt")
+    with pytest.raises(LiveChromeRefused):
+        await runner.run("session", "stop", "someone-elses-session")
+    for bad in (("session", "prune"), ("session", "stop"), ("session", "handoff"), ("session", "stop", "--all"), ("close",), ("close", "--all")):
+        with pytest.raises(LiveChromeRefused):
+            _check_argv(bad)
+    assert runner.calls == 0, "nothing was started for a refused command"

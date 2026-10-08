@@ -203,6 +203,7 @@ _ALLOWED_FLAGS = {"--activate", "--stdin", "--full"}
 _KEY = re.compile(r"^[A-Za-z0-9_+]{1,40}$")
 _TAB_ID = re.compile(r"^t\d{1,6}$")
 _NUM = re.compile(r"^-?\d{1,6}$")
+_SESSION_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,80}$")
 # Named so a reviewer (and a test) can see exactly what is out of bounds.
 FORBIDDEN_VERBS = frozenset(
     {
@@ -281,6 +282,8 @@ def _check_argv(args: Sequence[str]) -> None:
         need(len(rest) == 2 and all(_NUM.match(r) for r in rest), "only takes viewport coordinates <x> <y>")
     elif verb == "screenshot":
         need(len([r for r in rest if r != "--full"]) <= 1, "takes at most a path")
+    elif verb == "session":  # only ``session stop <name>``, and the runner allows a session to stop ONLY itself
+        need(len(rest) == 2 and rest[0] == "stop" and bool(_SESSION_NAME.match(rest[1])), "only supports 'stop <its own session>'")
     elif verb in ("status", "browsers"):  # browsers: read-only list of the profiles the extension is connected in
         need(not rest, "takes no arguments")
     else:
@@ -422,6 +425,8 @@ class ChromeUseRunner:
     async def run(self, *args: str, stdin: str | None = None, timeout: float | None = None) -> dict[str, Any]:
         args = tuple(str(a) for a in args)
         _check_argv(args)  # policy first: nothing below runs for a refused command
+        if args[0] == "session" and args[2] != self.session:
+            raise LiveChromeRefused(f"refused: session {self.session!r} may only stop itself, not {args[2]!r}")
         argv = self.build_argv(args)
         self.calls += 1
         if self._parent is not None:
@@ -449,6 +454,23 @@ class ChromeUseRunner:
             raise LiveChromeError(f"chrome-use {args[0]}: {message}")
         data = payload.get("data")
         return data if isinstance(data, dict) else {"value": data}
+
+
+async def close_created_tab(runner: ChromeUseRunner, tab_id: str) -> str:
+    """Close a tab OmniBrain created. Returns how it was closed.
+
+    Live (2026-10-08): chrome-use refuses ``tab close`` on a session's LAST tab, and every OmniBrain tab has its own
+    session, so no OmniBrain tab was ever closed (cancel, shutdown, refused pages all left tabs behind). Stopping
+    that session's daemon is chrome-use's documented way to reclaim it: the daemon closes the tabs IT created
+    (never adopted or foreign ones, i.e. never the user's own tabs)."""
+    try:
+        await runner.run("tab", "close", tab_id)
+        return "tab close"
+    except LiveChromeError as exc:
+        if "last tab" not in str(exc).lower():
+            raise
+    await runner.run("session", "stop", runner.session)
+    return "session stop"
 
 
 def _parse_json_line(text: str) -> dict[str, Any] | None:
@@ -819,7 +841,8 @@ class LivePage:
             return
         async with self._lock:
             try:
-                await self.runner.run("tab", "close", self.tab_id)
+                how = await close_created_tab(self.runner, self.tab_id)
+                self._engine._note(f"closed OmniBrain's {self.provider} tab {self.tab_id} ({how})")
             finally:
                 self._closed = True
                 self._selected = False
@@ -936,7 +959,7 @@ class LiveChromeEngine:
             problem = extension_problem(await self.runner.run("status"))
             if problem:  # caller holds the page lock, so close through the runner directly
                 try:
-                    await page.runner.run("tab", "close", page.tab_id)
+                    await close_created_tab(page.runner, page.tab_id)
                 finally:
                     page._closed = True
                     self._pages.pop(page.key, None)
@@ -1015,7 +1038,7 @@ class LiveChromeEngine:
         self._pages.pop(page.key, None)
         page._closed = True
         try:
-            await page.runner.run("tab", "close", page.tab_id)
+            await close_created_tab(page.runner, page.tab_id)
         except LiveChromeError as exc:
             self._note(f"could not close our new tab {page.tab_id}: {exc}")
 

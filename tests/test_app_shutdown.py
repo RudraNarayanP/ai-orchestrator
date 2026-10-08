@@ -64,6 +64,7 @@ def test_shutdown_cancels_running_jobs_and_closes_stores(tmp_path):
 def test_shutdown_closes_the_live_tabs_in_the_users_browser(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_CU_DIR", str(tmp_path))
     fake = Fake(tmp_path)
+    fake.update(last_tab_guard=True)  # like real chrome-use: a session's last tab is never closed by 'tab close'
     app = _app(tmp_path)
     engine = LiveChromeEngine(live_settings(str(tmp_path / "artifacts")), runner=fake.runner)
 
