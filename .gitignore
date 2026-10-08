@@ -14,3 +14,5 @@ data/eval/_*
 
 data/eval/console_*.txt
 data/tmp_*
+data/*.db-shm
+data/*.db-wal
