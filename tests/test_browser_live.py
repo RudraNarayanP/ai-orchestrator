@@ -576,3 +576,24 @@ async def test_a_send_button_that_only_reacts_to_pointerdown_is_still_sent_once(
         assert len(await page.evaluate("() => window.userTurns")) == 1
     finally:
         await engine.stop(keep_windows=False)
+
+
+async def test_a_progress_line_is_not_taken_as_the_answer(browser_settings, fixture_server):
+    """Live (gemini, uk-dpa-age 2026-10-08): "Searching the web" sat in the reply area with no busy control and was
+    captured as a completed answer."""
+    engine, adapter = _fixture_adapter(browser_settings, fixture_server, "progress_line_first.html")
+    try:
+        response = await adapter.ask("jobprogress", "When was the Eiffel Tower completed and how tall is it?", 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        assert "March 31, 1889" in response.answer_text and "Searching the web" not in response.answer_text, response.answer_text
+    finally:
+        await engine.stop(keep_windows=False)
+
+
+def test_progress_only_lines_are_recognised_and_real_answers_are_not():
+    from browser.adapters.base import PROGRESS_ONLY_RE
+
+    for line in ("Searching the web", "Searching the web...", "Thinking\u2026", "Show thinking Analyzing", "Generating response", "Reading 12 sites"):
+        assert PROGRESS_ONLY_RE.match(line), line
+    for line in ("13 years old.", "Searching the web shows the age is 13.", "Thinking about it, the answer is 13."):
+        assert not PROGRESS_ONLY_RE.match(line), line

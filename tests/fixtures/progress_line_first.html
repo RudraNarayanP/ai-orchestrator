@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chat (shows a progress line before the answer)</title>
+<!-- Live (gemini.google.com, 2026-10-08, uk-dpa-age): while it searched, the reply area held only "Searching the web"
+     with no stop/busy control, for longer than the stability window, and that line was captured as the answer. -->
+<style>body{font-family:system-ui} .c{position:fixed;bottom:12px;left:12px;right:12px;display:flex;gap:8px} textarea{flex:1;height:48px}</style>
+</head>
+<body>
+<main><div id="t"></div></main>
+<div class="c">
+  <textarea id="prompt-textarea" aria-label="Chat input" placeholder="Message the assistant"></textarea>
+  <button id="send" aria-label="Send message">Send</button>
+</div>
+<script>
+window.userTurns = [];
+const t = document.getElementById('t'), input = document.getElementById('prompt-textarea');
+function go() {
+  const text = input.value.trim(); if (!text) return; input.value = ''; window.userTurns.push(text);
+  const u = document.createElement('div'); u.className = 'user-message'; u.textContent = text; t.appendChild(u);
+  const a = document.createElement('div'); a.setAttribute('data-message-author-role', 'assistant');
+  setTimeout(() => { a.innerHTML = '<p>Searching the web</p>'; t.appendChild(a); }, 300);
+  setTimeout(() => { a.innerHTML = '<p>The Eiffel Tower was completed on March 31, 1889 and is about 330 metres tall.</p>'; }, 4500);
+}
+document.getElementById('send').addEventListener('click', go);
+</script>
+</body>
+</html>

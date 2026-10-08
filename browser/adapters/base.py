@@ -59,6 +59,14 @@ WEB_RESEARCH_RE = re.compile(
 GLUED_HEADING_RE = re.compile(
     r"(\S)(DIRECT ANSWER|KEY CLAIMS|EVIDENCE|SOURCE LINKS|SOURCE DATES|UNCERTAINTIES|CONTRADICTORY EVIDENCE|WHAT I MAY BE WRONG ABOUT)(?=[ \t]*(?:\n|$))"
 )
+# A reply area holding ONLY a status line means the provider is still working, not that it answered
+# (live: Gemini showed "Searching the web" with no busy control for longer than the stability window).
+PROGRESS_ONLY_RE = re.compile(
+    r"^\s*(?:show thinking\s*)?(?:searching(?: the web| for [^\n]{0,60})?|thinking|analy[sz]ing(?: [^\n]{0,40})?|researching|"
+    r"generating(?: (?:a |the )?(?:response|answer))?|looking (?:it |that )?up|reading (?:\d+ )?(?:sites|sources|pages)|"
+    r"working on it|just a (?:sec(?:ond)?|moment)|one moment)(?:\s*(?:\.{1,3}|\u2026))?\s*$",
+    re.I,
+)
 STALE_UI_NOISE = re.compile(
     r"^\s*(copied!?|copy|regenerate|good response|bad response|share|more|show more|"
     r"voice input|try again|retry|feedback|was this helpful\??|(chatgpt|gemini|copilot|you) said:?|#{1,6}\s*:?)\s*$",
@@ -556,6 +564,11 @@ class ChatAdapter:
                 return False
         response.answer_text = self._clean(text, prompt)
         response.raw_text = text
+        if response.answer_text and PROGRESS_ONLY_RE.match(response.answer_text):
+            response.note(ProviderStatus.FAILED if status is ProviderStatus.COMPLETED else status,
+                          error=f"only a progress line was captured ({response.answer_text[:40]!r}), no answer")
+            response.answer_text = ""
+            return False
         items = (capture or {}).get("items") or []
         if items and all(i.get("mediaOnly") for i in items) and not response.answer_text:
             response.answer_text = "[provider returned image or non-text output; nothing to capture]"
@@ -847,6 +860,7 @@ class ChatAdapter:
         last_nudge = started
         last_beat = started
         polls = 0
+        working = False  # a progress line ("Searching the web") was seen: the answer has started, just not its text
 
         while True:
             self._check_cancel()
@@ -865,8 +879,12 @@ class ChatAdapter:
             text = (capture.get("text") or "").strip()
             plain_len = int(capture.get("plainLength") or 0)
             busy = capture.get("busy") or []
+            progress = bool(text) and PROGRESS_ONLY_RE.match(text) is not None
+            if progress:  # only a status line so far: the provider is working, there is no answer to keep yet
+                busy = list(busy) + [f"progress line: {text[:40]}"]
+                working = True
 
-            if text and text != (baseline.get("lastText") or "")[: len(text)]:
+            if text and not progress and text != (baseline.get("lastText") or "")[: len(text)]:
                 if plain_len > 0 and (not best or plain_len > int(best.get("plainLength") or 0)):
                     best = capture
                     saw_growth = True
@@ -895,7 +913,7 @@ class ChatAdapter:
             never_ms = self._threshold("never_started_ms", hidden)
             ref_ms = self._threshold("source_block_ms", hidden)
 
-            if not saw_growth and elapsed * 1000 > never_ms:
+            if not saw_growth and not working and elapsed * 1000 > never_ms:
                 return None, ProviderStatus.BROKEN, "no-response-element: no new assistant message appeared"
 
             reference_only = bool(best and best.get("items") and all(i.get("referenceOnly") for i in (best.get("items") or [])))
