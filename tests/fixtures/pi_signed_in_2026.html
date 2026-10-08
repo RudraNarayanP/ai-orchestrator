@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pi (signed-in DOM, 2026-10-08)</title>
+<!-- Mirrors pi.ai signed in: the whole transcript is ONE [data-testid=chat-message-column]; each Pi turn is a
+     .break-anywhere block with its paragraphs and Copy/Read aloud/Good response/Bad response/More options buttons;
+     the user turn is a right-aligned bubble. A greeting from Pi is already on screen. Send is "Submit text". -->
+<style>body{font-family:system-ui} .bar{position:fixed;bottom:12px;left:12px;right:12px;display:flex;gap:8px} textarea{flex:1;height:48px}
+.tip{position:absolute;opacity:1;font-size:9px}</style>
+</head>
+<body>
+<header style="position:fixed;top:4px;right:4px"><button aria-label="Help &amp; feedback" id="help"></button></header>
+<main><div data-testid="chat-message-column" class="t-body-chat"><div class="space-y-6" id="t">
+  <div class="break-anywhere flex flex-col"><div class="w-full"><div class="whitespace-pre-wrap">Saturday</div>
+  <div class="whitespace-pre-wrap">Hi Rudra! Pi here - friendly, curious, and here for real conversation.</div></div></div>
+</div></div></main>
+<div class="bar">
+  <textarea placeholder="Talk with Pi" id="in"></textarea>
+  <button aria-label="Submit text" id="send"></button>
+</div>
+<script>
+window.clicked = [];
+const t = document.getElementById('t'), input = document.getElementById('in');
+const actions = '<div class="flex items-center">' + ['Copy', 'Read aloud', 'Good response', 'Bad response', 'More options']
+  .map(l => '<button aria-label="' + l + '"><p class="tip">' + l + '</p></button>').join('') + '</div>';
+function go() {
+  const text = input.value.trim(); if (!text) return; input.value = '';
+  const u = document.createElement('div'); u.className = 'group flex gap-3';
+  u.innerHTML = '<div class="flex flex-col items-end"><div class="rounded-10"></div></div>'; u.querySelector('.rounded-10').textContent = text;
+  t.appendChild(u);
+  setTimeout(() => { const a = document.createElement('div'); a.className = 'break-anywhere flex flex-col';
+    a.innerHTML = '<div class="w-full"><div class="whitespace-pre-wrap">The Eiffel Tower was completed on March 31, 1889.</div>' +
+      '<div class="whitespace-pre-wrap">Source: Britannica.</div></div>' + actions; t.appendChild(a); }, 700);
+}
+document.getElementById('help').addEventListener('click', () => window.clicked.push('help'));
+document.getElementById('send').addEventListener('click', () => { window.clicked.push('send'); go(); });
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+</script>
+</body>
+</html>

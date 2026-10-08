@@ -352,8 +352,10 @@ SELECTORS: dict[str, SelectorSet] = {
         # live 2026-10-08: the send control is labelled "Submit text"; "Help & feedback" sits elsewhere on the page
         send=FieldSet(css=['button[aria-label="Submit text"]', 'button[type="submit"]'], aria=["Submit text", "Send"], verified="guess"),
         stop=FieldSet(aria=["Stop"], verified="guess"),
-        response_root=["[role='log']", "main"],
-        assistant_message=['[data-testid*="message"]', ".markdown"],
+        # live 2026-10-08: [data-testid="chat-message-column"] is the WHOLE transcript (it read back Pi's greeting as
+        # the answer); each assistant turn is a .break-anywhere block, user turns are right-aligned bubbles outside it.
+        response_root=['[data-testid="chat-message-column"]', "[role='log']", "main"],
+        assistant_message=[".break-anywhere", '[data-testid*="message"]:not([data-testid="chat-message-column"])', ".markdown"],
         streaming=["[aria-busy='true']"],
         sources=["a[href^='http']"],
         login_wall=['button:has-text("Log in")', 'a[href*="login"]'],

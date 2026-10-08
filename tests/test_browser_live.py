@@ -537,3 +537,28 @@ async def test_a_prompt_the_site_never_takes_is_reported_as_submit_failed(browse
         assert counts == [2, 2], f"one try plus one retry, no more (and no second typing of the prompt): {counts}"
     finally:
         await engine.stop(keep_windows=False)
+
+
+async def test_signed_in_pi_answer_is_the_new_turn_not_the_greeting(browser_settings, fixture_server):
+    """Live (pi.ai 2026-10-08): the whole transcript was one block, so Pi's greeting was read back as the answer."""
+    url = fixture_server.rsplit("/", 1)[0] + "/pi_signed_in_2026.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"pi": {"enabled": True, "label": "Pi", "url": url, "max_retries": 0}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("pi", engine, settings, settings.providers["pi"])
+        adapter.sel.stable_ms = 700
+        adapter.sel.tiny_fragment_ms = 1500
+        adapter.sel.never_started_ms = 12000
+        adapter.sel.force_capture_ms = 25000
+        adapter.sel.hard_timeout_ms = 45000
+        response = await adapter.ask("jobpi", "When was the Eiffel Tower completed?", 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        assert "March 31, 1889" in response.answer_text and "Britannica" in response.answer_text, response.answer_text
+        assert "Pi here" not in response.answer_text and "Read aloud" not in response.answer_text, response.answer_text
+        page = await engine.open_research_page("pi", url)
+        assert await page.evaluate("() => window.clicked") == ["send"]
+    finally:
+        await engine.stop(keep_windows=False)
