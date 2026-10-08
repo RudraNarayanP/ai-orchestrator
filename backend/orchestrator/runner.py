@@ -124,6 +124,9 @@ class ResearchRunner:
         self._turns: dict[tuple[str, str], int] = {}
         self.cancel = cancel or CancelToken()
         self.politeness = politeness or PolitenessGate(settings.research)
+        # Set when the live browser driver itself is not usable (e.g. the extension is not connected in the chosen
+        # browser). Every provider would fail the same way: stop asking and tell the user what to fix.
+        self._driver_down: str | None = None
         for adapter in adapters.values():
             if hasattr(adapter, "cancel_token"):
                 adapter.cancel_token = self.cancel
@@ -215,7 +218,16 @@ class ResearchRunner:
 
     # --------------------------------------------------------------- level 1+
 
+    async def _driver_down_fail(self, job: Job) -> Job:
+        job.status = JobStatus.FAILED
+        job.error = f"the live browser is not ready: {self._driver_down}"
+        job.stop_reason = "live browser not ready; no provider could be asked"
+        await self._emit("error", job.error, job=job)
+        return job
+
     async def _investigate(self, job: Job, analysis: Any, enabled: list[str]) -> Job:
+        if self._driver_down:
+            return await self._driver_down_fail(job)
         max_rounds = max(1, job.max_rounds)
         job.status = JobStatus.RESEARCHING
         # "Answer now" shortcuts skip the provider's own research; acceptable in
@@ -258,6 +270,9 @@ class ResearchRunner:
             context=job.memory_context,
         )
         response = await self._ask(primary, prompt, round_no, role="primary", job_id=job.id)
+        if self._driver_down:
+            job.responses.extend([r for r in [response] if r])
+            return await self._driver_down_fail(job)
         responses: list[ProviderResponse] = [r for r in [response] if r]
         job.responses.extend(responses)
         record.response_ids = [r.id for r in responses]
@@ -735,14 +750,19 @@ class ResearchRunner:
             # numbered inside the slot: two requests to one AI in the same round are two turns, not one
             turn = self._turns.get(thread_key, 0) + 1
             continue_thread = bool(continue_thread and turn > 1)
-            declined = await self.politeness.before(provider, sleep=self.cancel.sleep)
-            if declined:
+            declined = None if self._driver_down else await self.politeness.before(provider, sleep=self.cancel.sleep)
+            if self._driver_down:
+                response = ProviderResponse(id=f"resp_skip_{provider}_{round_no}", job_id="", round=round_no, provider=provider, prompt=prompt)
+                response.status = ProviderStatus.FAILED
+                response.error = f"LiveChromeUnavailable: {self._driver_down}"
+                response.answer_text = ""
+            elif declined:
                 response = ProviderResponse(id=f"resp_skip_{provider}_{round_no}", job_id="", round=round_no, provider=provider, prompt=prompt)
                 response.status = ProviderStatus.RATE_LIMITED
                 response.error = declined
                 response.answer_text = ""
             else:
-                await self._emit("provider", f"{provider}: opening dedicated window ({role})", provider=provider, round_no=round_no)
+                await self._emit("provider", f"{provider}: starting ({role})", provider=provider, round_no=round_no)
                 try:
                     extra = {"continue_thread": True} if continue_thread else {}
                     response = await adapter.ask(job_id, prompt, round_no, emit=self._adapter_emit, **extra)
@@ -753,6 +773,8 @@ class ResearchRunner:
                     response.error = f"{type(exc).__name__}: {exc}"
                     response.answer_text = ""
                 self.politeness.after(provider, response.status.value)
+        if (response.error or "").startswith("LiveChromeUnavailable:") and not self._driver_down:
+            self._driver_down = response.error.split(":", 1)[1].strip()
         if (
             response.status.value == "completed"
             and not continue_thread
@@ -779,6 +801,8 @@ class ResearchRunner:
         response.failure_signals = router.is_failure_phrase(response.answer_text or response.raw_text or "")
         if response.status.value == "completed":
             self.health[provider] = "completed"
+        elif (response.error or "").startswith("LiveChromeUnavailable:"):
+            pass  # the browser driver was down, not this provider: say nothing about the provider's health
         elif response.status.value in {"logged_out", "rate_limited", "broken", "failed", "timeout"}:
             self.health[provider] = response.status.value
         await self._emit(

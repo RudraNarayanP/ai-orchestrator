@@ -26,7 +26,7 @@ from dataclasses import asdict
 from typing import Any, Awaitable, Callable
 
 from backend.browser.engine import BrowserEngine
-from backend.browser.live_chrome import LiveChromeNeedsUser, needs_user_in
+from backend.browser.live_chrome import LiveChromeNeedsUser, LiveChromeUnavailable, needs_user_in
 from backend.cancel import CancelToken, JobCancelled
 from backend.models import Citation, ProviderResponse, ProviderStatus, new_id
 from backend.settings import ProviderConfig, Settings
@@ -399,6 +399,9 @@ class ChatAdapter:
                 gate = needs_user_in(exc)
                 if gate:
                     return self._needs_user(response, gate)
+                if isinstance(exc, LiveChromeUnavailable):  # the driver itself is not usable: retrying cannot help
+                    response.note(ProviderStatus.FAILED, error=f"LiveChromeUnavailable: {exc}"[:600])
+                    return self._finish(response)
                 logging.getLogger("omnibrain.adapters").warning("%s attempt %d raised", self.provider, attempt + 1, exc_info=True)
                 response.note(ProviderStatus.FAILED, error=f"{type(exc).__name__}: {exc}"[:400])
                 await emit("provider", f"{self.provider}: attempt {attempt + 1} failed ({type(exc).__name__})", self.provider, round_no)
