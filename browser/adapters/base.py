@@ -411,8 +411,9 @@ class ChatAdapter:
             if response.status == ProviderStatus.RATE_LIMITED:
                 # Never retry straight into a rate limit; the runner backs this site off.
                 return self._finish(response)
-            if (response.error or "").startswith(("readiness=login_wall", "readiness=blocked", "no-response-element: AI Mode", "submit_failed", "needs_focus")):
-                # submit_failed: the send was already retried; a fresh attempt would type the prompt a second time.
+            if (response.error or "").startswith(("readiness=login_wall", "readiness=blocked", "no-response-element: AI Mode", "submit_failed", "needs_focus", "only the pre-existing message")):
+                # submit_failed / only-the-old-message: the prompt was already sent (or the send already retried); a fresh
+                # attempt would type the prompt into the chat a second time.
                 # A login wall, captcha or age gate does not go away by asking again; report it and move on.
                 return self._finish(response)
             if attempt + 1 >= attempts:
@@ -448,6 +449,11 @@ class ChatAdapter:
                 "blocked": ProviderStatus.FAILED,
                 "rate_limited": ProviderStatus.RATE_LIMITED,
             }
+            if state == "unknown" and not (ready.get("bodyHead") or "").strip() and self._focus_withheld():
+                # seen live (meta.ai, 2026-10-08): a hidden tab never renders its UI; we do not raise it unasked
+                response.note(ProviderStatus.FAILED, error=f"needs_focus: the page does not render in a background tab ({self._focus_hint()})")
+                await emit("provider", f"{self.provider}: needs focus", self.provider, round_no)
+                return False
             response.note(
                 mapping.get(state, ProviderStatus.BROKEN),
                 error=f"readiness={state}" + (f" ({ready['gate']})" if state == "blocked" and ready.get("gate") else ""),
@@ -789,25 +795,32 @@ class ChatAdapter:
         """
         self._prompt_sent = True
         self.submit_log: list[str] = []
-        for attempt in range(2):
-            clicked = await self._call(page, "clickSend", self._sel_dict)
-            if isinstance(clicked, str):
+        # Each route is tried once and verified before the next: the send button by script, then the second try --
+        # the same button as a pointer-event sequence, a real Enter on the focused composer, and a DOM Enter (a
+        # BACKGROUND tab gets no real input from Chrome, so the DOM-level routes are what work there).
+        for route in ("click", "pointer", "enter", "dom-enter"):
+            if route == "enter":
+                await self._press_enter(page)
+                ok = True
+                self.submit_log.append("enter")
+            else:
+                fn = {"click": "clickSend", "pointer": "pointerSend", "dom-enter": "enterOnComposer"}[route]
                 try:
-                    clicked = json.loads(clicked)
-                except json.JSONDecodeError:
-                    clicked = {}
-            if clicked and clicked.get("ok"):
-                via = clicked.get("via") or {}
-                self.submit_log.append(f"click:{via.get('aria') or via.get('text') or via.get('tag')}({clicked.get('why')})")
-                if not prompt or not self.submit_verify:
-                    return True
-                # A scripted click is not a trusted event: some sites (chat.deepseek.com in a real Chrome) ignore it.
-                if await self._sent(page, prompt):
-                    return True
-            elif clicked is not None:
-                self.submit_log.append("click:none")
-            await self._press_enter(page)
-            self.submit_log.append("enter")
+                    result = await self._call(page, fn, self._sel_dict)
+                except DOMUnavailable:
+                    raise
+                except Exception:  # noqa: BLE001 -- the page may have moved on (sent); the check below decides
+                    result = {"ok": True}
+                if isinstance(result, str):
+                    try:
+                        result = json.loads(result)
+                    except json.JSONDecodeError:
+                        result = {}
+                ok = bool(result and result.get("ok"))
+                via = (result or {}).get("via") or {}
+                self.submit_log.append(f"{route}:{via.get('aria') or via.get('text') or via.get('tag') or ''}" if ok else f"{route}:none")
+            if not ok:
+                continue
             if not prompt or not self.submit_verify:
                 return True
             if await self._sent(page, prompt):

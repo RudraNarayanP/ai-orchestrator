@@ -622,6 +622,41 @@ DOM_LIBRARY_JS = r"""
       return sendCandidates(cfg).slice(0, 6).map(c => ({...describe(c.el, 'button'), el: undefined, score: c.score, why: c.why}));
     },
 
+    pointerSend(cfg) {
+      // A full pointer/mouse event sequence on the send button. In a BACKGROUND tab Chrome drops real input, so this
+      // DOM-level route is what works for sites that act on pointerdown/mouseup (seen live: chat.deepseek.com).
+      const c = sendCandidates(cfg)[0];
+      if (!c) return {ok: false};
+      const el = c.el, b = rectOf(el) || {x: 0, y: 0, width: 0, height: 0};
+      const x = b.x + b.width / 2, y = b.y + b.height / 2;
+      const base = {bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0, view: window};
+      const ptr = {...base, pointerId: 1, pointerType: 'mouse', isPrimary: true};
+      try {
+        el.dispatchEvent(new PointerEvent('pointerdown', {...ptr, buttons: 1}));
+        el.dispatchEvent(new MouseEvent('mousedown', {...base, buttons: 1}));
+        el.dispatchEvent(new PointerEvent('pointerup', ptr));
+        el.dispatchEvent(new MouseEvent('mouseup', base));
+        el.dispatchEvent(new MouseEvent('click', base));
+      } catch (e) { return {ok: false, error: String(e)}; }
+      return {ok: true, via: {...describe(el, 'button'), el: undefined}, why: c.why};
+    },
+
+    enterOnComposer(cfg) {
+      // DOM-dispatched Enter on the composer itself (caret at the end). Works in a background tab for sites whose
+      // key handler does not check isTrusted (seen live: chat.deepseek.com).
+      const c = candidates(cfg.input || {}, cfg.input || {}, {kind: 'input'})[0];
+      if (!c) return {ok: false};
+      this.focusComposer(cfg);
+      const o = {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true};
+      let taken = false;
+      try {
+        taken = !c.el.dispatchEvent(new KeyboardEvent('keydown', o));
+        c.el.dispatchEvent(new KeyboardEvent('keypress', o));
+        c.el.dispatchEvent(new KeyboardEvent('keyup', o));
+      } catch (e) { return {ok: false, error: String(e)}; }
+      return {ok: true, defaultPrevented: taken};
+    },
+
     isBusy(cfg) {
       return busy(cfg);
     },

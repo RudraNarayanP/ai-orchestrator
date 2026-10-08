@@ -563,3 +563,16 @@ async def test_signed_in_pi_answer_is_the_new_turn_not_the_greeting(browser_sett
         assert await page.evaluate("() => window.clicked") == ["send"]
     finally:
         await engine.stop(keep_windows=False)
+
+
+async def test_a_send_button_that_only_reacts_to_pointerdown_is_still_sent_once(browser_settings, fixture_server):
+    engine, adapter = _fixture_adapter(browser_settings, fixture_server, "send_on_pointerdown.html")
+    adapter.submit_wait_s = 1.5
+    try:
+        response = await adapter.ask("jobptr", "When was the Eiffel Tower completed and how tall is it?", 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        assert adapter.submit_log[:2] == ["click:", "pointer:"] or adapter.submit_log[1].startswith("pointer"), adapter.submit_log
+        page = await engine.open_research_page("chatgpt", adapter.cfg.url)
+        assert len(await page.evaluate("() => window.userTurns")) == 1
+    finally:
+        await engine.stop(keep_windows=False)

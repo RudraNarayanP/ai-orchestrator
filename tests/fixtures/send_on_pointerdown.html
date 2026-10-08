@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chat (sends on pointerdown only)</title>
+<!-- Some React UIs act on pointerdown, not click, and the composer ignores Enter. A background tab gets no real
+     input, so the pointer-event route must be tried (seen live: chat.deepseek.com in a background tab). -->
+<style>body{font-family:system-ui} .c{position:fixed;bottom:12px;left:12px;right:12px;display:flex;gap:8px} textarea{flex:1;height:48px}</style>
+</head>
+<body>
+<main><div id="t"></div></main>
+<div class="c">
+  <textarea id="prompt-textarea" aria-label="Chat input" placeholder="Message the assistant"></textarea>
+  <div role="button" id="send" style="width:34px;height:34px;background:#46f;border-radius:17px"></div>
+</div>
+<script>
+window.userTurns = [];
+const t = document.getElementById('t'), input = document.getElementById('prompt-textarea');
+function go() {
+  const text = input.value.trim(); if (!text) return; input.value = ''; window.userTurns.push(text);
+  const u = document.createElement('div'); u.className = 'user-message'; u.textContent = text; t.appendChild(u);
+  setTimeout(() => { const a = document.createElement('div'); a.setAttribute('data-message-author-role', 'assistant');
+    a.innerHTML = '<p>The Eiffel Tower was completed on March 31, 1889 and is about 330 metres tall.</p>'; t.appendChild(a); }, 700);
+}
+document.getElementById('send').addEventListener('pointerdown', go);
+input.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
+</script>
+</body>
+</html>
