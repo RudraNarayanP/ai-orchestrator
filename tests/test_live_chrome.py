@@ -1063,3 +1063,23 @@ async def test_an_explicit_profile_id_is_passed_through_without_a_lookup(fake, t
     await eng.open_research_page("chatgpt", "https://chatgpt.com/")
     assert ["browsers"] not in fake.verbs()
     assert all(c["flags"].get("--browser") == "me@example.com" for c in fake.calls())
+
+
+
+async def test_doctor_reports_the_live_driver_and_the_missing_edge_extension(fake, tmp_path):
+    import run
+
+    fake.update(browsers=_BOTH[:1])
+    eng = _edge_engine(fake, tmp_path)
+    lines = await run.live_driver_report(eng.settings, engine=eng)
+    text = "\n".join(lines)
+    assert "live driver" in text and "background tabs, never raised" in text
+    assert "extension connected" in text
+    assert "NOT READY" in text and CHROME_USE_STORE_URL in text
+    assert not [v for v in fake.verbs() if v[:1] == ["tab"]], "doctor never opens a tab"
+    fake.update(browsers=_BOTH)
+    eng = _edge_engine(fake, tmp_path)
+    text = "\n".join(await run.live_driver_report(eng.settings, engine=eng))
+    assert "Microsoft Edge -> chrome-use profile edge-profile" in text
+    note = run.provider_login_note(type("C", (), {"requires_login": True})(), live_browser="Microsoft Edge")
+    assert "sign in to it once in Microsoft Edge" in note and "run.py login" not in note

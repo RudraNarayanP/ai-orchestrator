@@ -8,8 +8,9 @@
     python run.py promote-selectors NAME turn the newest probe into verified=probe selectors
     python run.py close                  shut any OmniBrain browser windows left open
 
-Nothing here opens your everyday Chrome. Every window OmniBrain uses is a
-dedicated one with its own profile under browser/profiles/.
+By default nothing here opens your everyday Chrome: every window is a dedicated one with its own profile under
+browser/profiles/. With ``browser.driver: chrome_use`` OmniBrain instead opens new background tabs in the browser
+you chose (``browser.chrome_use_browser: edge`` keeps Chrome free) -- provider sites only.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ for _stream in (sys.stdout, sys.stderr):
 BANNER = r"""
   OmniBrain
   multiple AI research agents, driven through their real websites
-  one dedicated Chrome window per provider -- never your own browser
+  dedicated browser windows, or (browser.driver: chrome_use) background tabs in the browser you choose
 """
 
 
@@ -64,9 +65,14 @@ def cmd_doctor(_: argparse.Namespace) -> int:
     from backend.settings import PROFILES_DIR
 
     print(BANNER)
-    print(f"profiles dir : {PROFILES_DIR}")
-    existing = sorted(p.name for p in PROFILES_DIR.glob("omnibrain_*")) if PROFILES_DIR.exists() else []
-    print(f"profiles     : {', '.join(existing) or 'none yet -- sign in with: python run.py login <provider>'}")
+    live = settings.browser.driver == "chrome_use"
+    if live:
+        for line in asyncio.run(live_driver_report(settings)):
+            print(line)
+    else:
+        print(f"profiles dir : {PROFILES_DIR}")
+        existing = sorted(p.name for p in PROFILES_DIR.glob("omnibrain_*")) if PROFILES_DIR.exists() else []
+        print(f"profiles     : {', '.join(existing) or 'none yet -- sign in with: python run.py login <provider>'}")
     print()
     print("verifier")
     endpoint = Endpoint.from_config(settings.verifier)
@@ -107,18 +113,54 @@ def cmd_doctor(_: argparse.Namespace) -> int:
 
         # Providers that answer logged out say nothing here. A Preferences file in the profile proves nothing
         # about a login (probing creates one), so the note is about what the site demands, not what we saw.
-        print(f"  - {cfg.label:<18} {cfg.url}" + provider_login_note(cfg))
+        print(f"  - {cfg.label:<18} {cfg.url}" + provider_login_note(cfg, live_browser=_live_label(settings) if live else None))
     print()
     print("note: automation is not hidden from these sites -- navigator.webdriver stays true.")
     print("If a site objects, OmniBrain reports the provider as blocked instead of working around it.")
     return 0
 
 
-def provider_login_note(cfg) -> str:
+def provider_login_note(cfg, live_browser: str | None = None) -> str:
     """Doctor's per-provider suffix: only providers that wall off anonymous use get one."""
     if not cfg.requires_login:
         return ""
+    if live_browser:
+        return f"   (answers only after you sign in to it once in {live_browser}; reported as logged out until then)"
     return "   (answers only after you sign in: run.py login <provider>; skipped as blocked until then)"
+
+
+def _live_label(settings) -> str:
+    from backend.browser.live_chrome import BROWSER_PRODUCTS
+
+    want = (settings.browser.chrome_use_browser or "").strip().lower()
+    return BROWSER_PRODUCTS[want][1] if want in BROWSER_PRODUCTS else "your Chrome"
+
+
+async def live_driver_report(settings, engine=None) -> list[str]:
+    """Doctor's section for ``browser.driver: chrome_use``: chrome-use, the extension, and which browser it drives."""
+    from backend.browser.live_chrome import LiveChromeEngine, LiveChromeError, extension_problem
+
+    b = settings.browser
+    lines = [
+        "live driver  : chrome_use (your own signed-in browser, new tabs only, provider sites only)",
+        f"browser      : {b.chrome_use_browser or 'extension default profile'}"
+        f" | {'background tabs, never raised' if b.chrome_use_background else 'foreground: OmniBrain tab shown'}"
+        + (f" | may raise: {', '.join(b.chrome_use_front_providers)}" if b.chrome_use_front_providers else ""),
+    ]
+    eng = engine or LiveChromeEngine(settings)
+    try:
+        status = await eng.runner.run("status")
+    except LiveChromeError as exc:
+        lines.append(f"chrome-use   : NOT READY -- {exc}")
+        return lines
+    problem = extension_problem(status)
+    lines.append(f"chrome-use   : {status.get('cliVersion', '?')}, extension " + (f"PROBLEM -- {problem}" if problem else "connected"))
+    try:
+        await eng._resolve_browser()
+        lines.append(f"target       : {_live_label(settings)} -> chrome-use profile {eng.runner.browser or '(default)'}")
+    except LiveChromeError as exc:
+        lines.append(f"target       : NOT READY -- {exc}")
+    return lines
 
 
 def setup_file_logging(args: argparse.Namespace, settings) -> Path:
