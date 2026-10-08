@@ -149,6 +149,7 @@ def test_chat_validation_and_failures_over_http(server, adapters):
     assert bad.status_code == 502 and "needs sign-in" in bad.json()["detail"]
     msgs = server.get(f"/api/threads/{tid}").json()["messages"]
     assert [m["content"] for m in msgs] == ["Please do not lose this message"], "the user's message is saved even when the provider fails"
+    assert "needs sign-in" in msgs[0]["context"]["unanswered"], "and it is marked as not answered, with the reason"
 
 
 def test_personal_memory_used_is_reported_in_the_turn_context(tmp_path, monkeypatch, adapters):

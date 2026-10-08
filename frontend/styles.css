@@ -221,3 +221,4 @@ button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid 
 .th-mem { margin: 4px 0 0 18px; padding: 0; }
 .rotation { align-self: center; color: var(--warn); font-size: 12.5px; border: 1px dashed #5c4c24; border-radius: 8px; padding: 4px 10px; text-align: center; }
 .chip.seg-open { color: var(--ok); border-color: #245c48; }
+.th-unanswered { margin-top: 4px; font-size: 0.85em; color: #b45309; }

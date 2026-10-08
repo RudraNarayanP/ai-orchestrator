@@ -62,6 +62,8 @@ class TurnPlan:
     recalled: list[int] = field(default_factory=list)  # seqs of earlier messages injected
     segment_label: str = ""
     memory_lines: list[str] = field(default_factory=list)  # personal memory offered to the new chat (context, never evidence)
+    user_seq: int = 0  # the stored user message of this turn
+    tokens_before: int = 0  # the chat's token count before this turn (restored if the provider never got it)
 
 
 @dataclass
@@ -132,7 +134,9 @@ class ThreadService:
         before = self.store.active_segment(tid)
         incoming = approx_tokens(text)
         seg, rotated, reason = self._segment_for(tid, provider, incoming)
-        fresh = seg.segment_id != (before.segment_id if before else None)  # a newly opened chat has no memory of the conversation
+        # a newly opened chat has no memory of the conversation; nor has a chat that never received anything (an earlier send failed)
+        fresh = seg.segment_id != (before.segment_id if before else None) or seg.tokens == 0
+        tokens_before = seg.tokens
         recent = self.store.messages(tid, last=self.recent_messages) if (fresh and prior) else []
         recall = is_recall_request(text) and prior > 0
         found: list[Found] = []
@@ -158,11 +162,12 @@ class ThreadService:
         meta = {"chat": label, "provider": provider, "rotated": rotated, "reason": reason or ("start" if fresh and not prior else ""),
                 "packet_tokens": packet.tokens if packet else 0, "packet_sections": packet.sections if packet else {},
                 "recalled": len(found) if (packet or recall) else 0, "memory_used": mem_lines}
-        self.store.add_messages(tid, [dict(role="user", content=text, provider=provider, segment_id=seg.segment_id, ts=ts, meta=meta)])
+        stored = self.store.add_messages(tid, [dict(role="user", content=text, provider=provider, segment_id=seg.segment_id, ts=ts, meta=meta)])
         return TurnPlan(
             thread_id=tid, segment_id=seg.segment_id, provider=provider, provider_key=seg.provider_key, prompt=prompt,
             continue_thread=not (fresh) and seg.tokens > 0, rotated=rotated, reason=reason or ("start" if fresh and not prior else ""),
             packet=packet, recalled=[f.message.seq for f in found] if (packet or recall) else [], segment_label=label, memory_lines=mem_lines,
+            user_seq=stored[0].seq, tokens_before=tokens_before,
         )
 
     def record_reply(self, tid: str, text: str, provider: str, *, segment_id: str | None = None, ts: float | None = None) -> Message:
@@ -223,15 +228,37 @@ class ThreadService:
         return self.store.search(tid, query, k=k or self.recall_k, window=time_window(query, now))
 
     # ------------------------------------------------------------------ driving a real provider
+    def _mark_unanswered(self, plan: TurnPlan, exc: BaseException) -> None:
+        try:
+            self.store.update_meta(plan.thread_id, plan.user_seq, unanswered=_short_error(exc))
+            self.store.set_segment_tokens(plan.segment_id, plan.tokens_before)
+        except Exception:  # noqa: BLE001 -- never hide the provider's error behind a bookkeeping one
+            pass
+
     async def chat(self, tid: str, text: str, provider: str, ask: "Ask") -> ChatTurn:
         plan = await asyncio.to_thread(self.plan_turn, tid, text, provider)
-        reply = await ask(provider, plan.provider_key, plan.prompt, plan.continue_thread)
+        try:
+            reply = await ask(provider, plan.provider_key, plan.prompt, plan.continue_thread)
+        except BaseException as exc:
+            # The message stays in the thread (raw messages are never lost) but is marked as not answered, and the chat's
+            # token count goes back to what the provider actually saw, so the next turn re-sends the thread instead of
+            # "continuing" a chat that never got this message.
+            await asyncio.to_thread(self._mark_unanswered, plan, exc)
+            raise
+        if not (reply or "").strip():
+            await asyncio.to_thread(self._mark_unanswered, plan, RuntimeError(f"{provider} gave an empty reply"))
         if reply and reply.strip():
             await asyncio.to_thread(self.record_reply, tid, reply, provider, segment_id=plan.segment_id)
         return ChatTurn(plan, reply or "")
 
 
 Ask = Callable[[str, str, str, bool], Awaitable[str]]
+
+
+def _short_error(exc: BaseException) -> str:
+    if isinstance(exc, asyncio.CancelledError):
+        return "cancelled"
+    return (str(exc) or type(exc).__name__)[:300]
 
 
 def adapter_ask(adapters: dict[str, Any]) -> Ask:

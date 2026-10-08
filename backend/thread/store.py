@@ -286,6 +286,22 @@ class ThreadStore:
             return [self._msg(r) for r in reversed(rows)]
         return [self._msg(r) for r in self.db.execute(q + " order by seq", args)]
 
+    def update_meta(self, tid: str, seq: int, **changes: Any) -> None:
+        """Merge ``changes`` into one stored message's context (e.g. mark a turn the provider never answered)."""
+        with self._lock:
+            r = self.db.execute("select meta from messages where thread_id=? and seq=?", (tid, seq)).fetchone()
+            if r is None:
+                return
+            meta = json.loads(r[0]) if r[0] else {}
+            meta.update(changes)
+            self.db.execute("update messages set meta=? where thread_id=? and seq=?", (json.dumps(meta), tid, seq))
+            self.db.commit()
+
+    def set_segment_tokens(self, sid: str, n: int) -> None:
+        with self._lock:
+            self.db.execute("update segments set tokens=? where segment_id=?", (max(0, int(n)), sid))
+            self.db.commit()
+
     def add_segment_tokens(self, sid: str, n: int) -> None:
         with self._lock:
             self.db.execute("update segments set tokens=max(0,tokens+?) where segment_id=?", (n, sid))

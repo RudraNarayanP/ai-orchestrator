@@ -461,6 +461,7 @@ function paintThread(view, segs) {
     const who = m.role === "user" ? "you" : (m.provider || "assistant");
     row.append(el("div", "th-who", who + " \u00b7 " + fmtTime(m.ts)));
     row.append(el("div", "th-text", m.content));
+    if (m.role === "user" && ctx && ctx.unanswered) row.append(el("div", "th-unanswered", "Not answered (" + (ctx.provider || "provider") + "): " + ctx.unanswered + " \u2014 send again to retry; the next message gives the chat this thread."));
     if (m.role === "user" && ctx) {
       const bits = [`chat: ${ctx.chat}`];
       if (ctx.packet_tokens) bits.push(`thread context given: ${ctx.packet_tokens} tokens`);
@@ -491,7 +492,7 @@ async function sendThread() {
     $("#thText").value = "";
     thStatus(out.rotated ? `Opened a new chat (${out.chat}).` : "");
   } catch (e) {
-    thStatus("That didn't go through: " + e.message + " Your message is saved in the thread.", true);
+    thStatus("That didn't go through: " + e.message + " Your message is saved in the thread and marked as not answered.", true);
   } finally {
     thread.busy = false;
     $("#thSend").disabled = false;

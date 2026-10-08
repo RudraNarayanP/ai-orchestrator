@@ -191,6 +191,69 @@ def test_user_message_is_stored_before_a_provider_failure():
     assert [m.content for m in svc.store.messages(tid)] == ["Do not lose this message"]
 
 
+def test_a_failed_turn_is_marked_unanswered_and_the_retry_gives_the_chat_the_thread():
+    """Regression (e2e 2026-10-08): a failed send left a bare user message, and the chat counted it as delivered."""
+    import asyncio
+
+    svc = make()
+    tid = svc.create_thread()
+
+    async def boom(provider, key, prompt, cont):
+        raise RuntimeError("chatgpt: failed -- the live browser is not ready")
+
+    with pytest.raises(RuntimeError):
+        asyncio.run(svc.chat(tid, "My codeword is PLUM-77.", "chatgpt", boom))
+    first = svc.store.messages(tid)[0]
+    assert first.content == "My codeword is PLUM-77." and "live browser is not ready" in first.meta["unanswered"]
+    assert first.public()["context"]["unanswered"] == first.meta["unanswered"]
+    assert svc.store.active_segment(tid).tokens == 0, "the provider never saw the message"
+    seen = []
+
+    async def ask(provider, key, prompt, cont):
+        seen.append((prompt, cont))
+        return "noted"
+
+    turn = asyncio.run(svc.chat(tid, "What is my codeword?", "chatgpt", ask))
+    prompt, cont = seen[0]
+    assert cont is False and "PLUM-77" in prompt and prompt.rstrip().endswith("What is my codeword?")
+    assert turn.reply == "noted" and "unanswered" not in svc.store.messages(tid)[1].meta
+    assert [m["role"] for m in svc.view(tid)] == ["user", "user", "assistant"]
+
+
+def test_a_failed_turn_mid_chat_puts_the_token_count_back():
+    import asyncio
+
+    svc = make()
+    tid = svc.create_thread()
+
+    async def ok(provider, key, prompt, cont):
+        return "fine"
+
+    async def boom(provider, key, prompt, cont):
+        raise RuntimeError("submit_failed")
+
+    asyncio.run(svc.chat(tid, "hello there", "chatgpt", ok))
+    before = svc.store.active_segment(tid).tokens
+    with pytest.raises(RuntimeError):
+        asyncio.run(svc.chat(tid, "a long message that never reached the provider " * 5, "chatgpt", boom))
+    assert svc.store.active_segment(tid).tokens == before
+    plan = svc.plan_turn(tid, "again", "chatgpt")
+    assert plan.continue_thread is True, "the chat still has the earlier, delivered turn"
+
+
+def test_an_empty_reply_is_marked_unanswered():
+    import asyncio
+
+    svc = make()
+    tid = svc.create_thread()
+
+    async def empty(provider, key, prompt, cont):
+        return "  "
+
+    turn = asyncio.run(svc.chat(tid, "hi", "chatgpt", empty))
+    assert turn.reply.strip() == "" and "empty reply" in svc.store.messages(tid)[0].meta["unanswered"]
+
+
 def test_chat_driver_records_the_reply_and_works_with_any_provider():
     import asyncio
 
