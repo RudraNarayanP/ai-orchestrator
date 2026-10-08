@@ -91,7 +91,7 @@ any of this.
 Chrome you are already signed into, set `browser.driver: chrome_use`. By default everything runs in **background tabs**: your
 Chrome window is never raised or focused, providers are driven in parallel (one tab and one chrome-use session each), and a
 provider that cannot work without focus is reported as `needs_focus` rather than stealing it (`browser.chrome_use_background: false`
-shows OmniBrain's tab in front instead; `chrome_use_front_providers` lists providers that may still be raised). It drives **new tabs**
+shows OmniBrain's tab in front instead; `chrome_use_front_providers` lists providers that may still be raised). `browser.chrome_use_browser: edge` drives Microsoft Edge instead and leaves Chrome alone (add the same chrome-use extension to Edge from the Chrome Web Store once; OmniBrain never falls back to Chrome). It drives **new tabs**
 in that Chrome through the third-party [`chrome-use`](https://github.com/leeguooooo/chrome-use)
 CLI and its Chrome extension (native messaging, no debug port, no copied cookies or profile).
 Hard limits enforced in OmniBrain's own code (`backend/browser/live_chrome.py`, tested against

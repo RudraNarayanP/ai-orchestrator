@@ -123,6 +123,9 @@ def main() -> None:
     def redirect(url: str) -> str:
         return state.get("redirects", {}).get(url, url)
 
+    if verb == "browsers":
+        reply({"browsers": state.get("browsers") or [
+            {"default": True, "email": "me@example.com", "id": "chrome-profile", "wsUrl": "ws://127.0.0.1:50001/chrome"}]})
     if verb == "status":
         ext = {"hostInstalled": True, "hostHealthy": True, "relayUp": True, "liveVersion": "0.5.29"}
         ext.update(state.get("extension", {}))

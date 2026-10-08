@@ -23,6 +23,7 @@
 #   driver: chrome_use
 #   chrome_use_path: C:/Users/<you>/AppData/Local/Programs/chrome-use/chrome-use.exe   # only if not on PATH
 #   chrome_use_browser: you@gmail.com    # only if several Chrome profiles run the extension
+#   chrome_use_browser: edge             # edge | chrome | <profile id or e-mail>; edge keeps your Chrome free (extension must be added in Edge)
 #   chrome_use_background: true          # true (default): drive tabs unseen, never raise/focus Chrome; false: show OmniBrain's tab in front
 #   chrome_use_front_providers: []       # only with chrome_use_background: true - providers still raised before typing
 #   chrome_use_front_on_failure: false   # only with chrome_use_background: true - raise just a failing provider's tab, once (off: report needs_focus)

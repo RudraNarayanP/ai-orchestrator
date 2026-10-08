@@ -281,10 +281,51 @@ def _check_argv(args: Sequence[str]) -> None:
         need(len(rest) == 2 and all(_NUM.match(r) for r in rest), "only takes viewport coordinates <x> <y>")
     elif verb == "screenshot":
         need(len([r for r in rest if r != "--full"]) <= 1, "takes at most a path")
-    elif verb == "status":
+    elif verb in ("status", "browsers"):  # browsers: read-only list of the profiles the extension is connected in
         need(not rest, "takes no arguments")
     else:
         raise LiveChromeRefused(f"refused: chrome-use {verb!r} is not in OmniBrain's allowed command set")
+
+
+# ``browser.chrome_use_browser: edge`` / ``chrome``: drive the profile whose extension runs in THAT browser product.
+CHROME_USE_STORE_URL = "https://chromewebstore.google.com/detail/knfcmbamhjmaonkfnjhldjedeobeafmk"
+BROWSER_PRODUCTS = {"edge": ("msedge.exe", "Microsoft Edge"), "chrome": ("chrome.exe", "Google Chrome")}
+
+
+def product_from_ancestry(names: Sequence[str]) -> str | None:
+    """Which browser started a chrome-use relay, from its process ancestry (relay -> cmd.exe -> msedge.exe/chrome.exe)."""
+    for name in names:
+        low = (name or "").lower()
+        for product, (exe, _label) in BROWSER_PRODUCTS.items():
+            if low == exe:
+                return product
+    return None
+
+
+def relay_ancestry(ws_url: str) -> list[str]:
+    """Process names from the relay listening on ``ws_url``'s port up through its parents. Read-only, windowless.
+
+    Chrome launches the chrome-use native host for the extension, so the browser product is an ancestor of the
+    process that owns the relay port. Windows only (that is where the browser choice matters); [] elsewhere."""
+    m = re.match(r"^wss?://127\.0\.0\.1:(\d{2,5})/", ws_url or "")
+    if not m or os.name != "nt":
+        return []
+    script = (
+        f"$c = Get-NetTCPConnection -LocalPort {int(m.group(1))} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1;"
+        "$p = $c.OwningProcess; $n = @();"
+        "for ($i = 0; $i -lt 6 -and $p; $i++) { $w = Get-CimInstance Win32_Process -Filter \"ProcessId=$p\";"
+        " if (-not $w) { break }; $n += $w.Name; $p = $w.ParentProcessId };"
+        "$n -join ','"
+    )
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [n for n in (out or "").strip().split(",") if n]
 
 
 def resolve_chrome_use(configured: str | None = None) -> str:
@@ -811,12 +852,15 @@ class LiveChromeEngine:
     def __init__(self, settings: Settings, *, runner: ChromeUseRunner | None = None) -> None:
         self.settings = settings
         cfg = settings.browser
+        pinned = cfg.chrome_use_browser if (cfg.chrome_use_browser or "").strip().lower() not in BROWSER_PRODUCTS else None
         self.runner = runner or ChromeUseRunner(
             [resolve_chrome_use(cfg.chrome_use_path)],
             session=cfg.chrome_use_session,
-            browser=cfg.chrome_use_browser,
+            browser=pinned,  # "edge"/"chrome" are resolved to a profile id before the first tab
             timeout_s=cfg.chrome_use_timeout_s,
         )
+        if pinned and not self.runner.browser:
+            self.runner.browser = pinned
         self._pages: dict[str, LivePage] = {}
         # Tabs run in PARALLEL: each provider tab has its own chrome-use session (``<session>-<key>``) and its own lock.
         # No engine-wide command lock and no shared "current tab". ``_focus_lock`` is None so adapters don't serialise
@@ -827,6 +871,9 @@ class LiveChromeEngine:
         self._verified = False
         self._escalated: set[str] = set()
         self.log: list[str] = []
+        self._product_of = relay_ancestry  # injectable for tests
+        self._browser_lock = asyncio.Lock()
+        self._browser_resolved = False
 
     def _note(self, message: str) -> None:
         line = f"{time.strftime('%H:%M:%S')} {message}"
@@ -849,6 +896,34 @@ class LiveChromeEngine:
             f"live Chrome driver: chrome-use answered `status`"
             + (f" -- but {problem}; the first tab will fail until that is fixed" if problem else "")
         )
+
+    async def _resolve_browser(self) -> None:
+        """``chrome_use_browser: edge`` (or ``chrome``): pin every session to the profile the extension is connected in
+        inside THAT browser. Never falls back to the other browser (the user may want Chrome left alone)."""
+        want = (self.settings.browser.chrome_use_browser or "").strip().lower()
+        if self._browser_resolved or want not in BROWSER_PRODUCTS:
+            return
+        async with self._browser_lock:
+            if self._browser_resolved:
+                return
+            data = await self.runner.run("browsers")
+            found = []
+            for entry in (data.get("browsers") or []):
+                names = await asyncio.to_thread(self._product_of, str(entry.get("wsUrl") or ""))
+                if product_from_ancestry(names) == want:
+                    found.append(entry)
+            label = BROWSER_PRODUCTS[want][1]
+            if not found:
+                raise LiveChromeUnavailable(
+                    f"browser.chrome_use_browser is '{want}' but the chrome-use extension is not connected in {label}. "
+                    f"Open {label}, add the extension once from the Chrome Web Store ({CHROME_USE_STORE_URL}; Edge asks to "
+                    f"'Allow extensions from other stores' first), keep {label} running, and try again. "
+                    "OmniBrain does not fall back to another browser."
+                )
+            pick = next((e for e in found if e.get("default")), found[0])
+            self.runner.browser = str(pick.get("id") or pick.get("email"))
+            self._note(f"live driver: using {label} (chrome-use profile {pick.get('email') or pick.get('id')})")
+            self._browser_resolved = True
 
     async def _verify_live_chrome(self, page: "LivePage") -> None:
         """After the first tab: refuse to go on unless chrome-use is attached through the extension.
@@ -895,6 +970,7 @@ class LiveChromeEngine:
             cached = self._pages.get(tab_key)
             if cached is not None and not cached.is_closed():
                 return cached
+            await self._resolve_browser()  # before the first tab: which browser (Edge/Chrome) the sessions are pinned to
             runner = self._runner_for(tab_key)
             data = await runner.run("tab", "new", url)
             tab_id = str(data.get("tabId") or "")

@@ -1002,3 +1002,64 @@ async def test_a_new_tab_without_a_js_context_yet_is_waited_for(fake, engine):
     fake.update(fail_times={"get": {"n": 1, "error": "relay not connected"}})
     with pytest.raises(LiveChromeError, match="relay"):  # any other failure is still an error
         await engine.open_research_page("gemini", "https://gemini.google.com/app")
+
+
+
+# ------------------------------------------------------------------ Edge instead of Chrome
+
+from backend.browser.live_chrome import CHROME_USE_STORE_URL, _check_argv, product_from_ancestry  # noqa: E402
+
+_ANCESTRY = {
+    "ws://127.0.0.1:50001/chrome": ["chrome-use.exe", "cmd.exe", "chrome.exe"],
+    "ws://127.0.0.1:50002/edge": ["chrome-use.exe", "cmd.exe", "msedge.exe", "explorer.exe"],
+}
+_BOTH = [
+    {"default": True, "email": "me@example.com", "id": "chrome-profile", "wsUrl": "ws://127.0.0.1:50001/chrome"},
+    {"default": False, "email": "", "id": "edge-profile", "wsUrl": "ws://127.0.0.1:50002/edge"},
+]
+
+
+def _edge_engine(fake, tmp_path, browser="edge") -> LiveChromeEngine:
+    eng = LiveChromeEngine(live_settings(str(tmp_path / "e"), chrome_use_browser=browser), runner=fake.runner)
+    eng._product_of = lambda ws: _ANCESTRY.get(ws, [])
+    return eng
+
+
+def test_the_browser_product_comes_from_the_relay_process_ancestry():
+    assert product_from_ancestry(["chrome-use.exe", "cmd.exe", "msedge.exe"]) == "edge"
+    assert product_from_ancestry(["chrome-use.exe", "cmd.exe", "chrome.exe"]) == "chrome"
+    assert product_from_ancestry(["chrome-use.exe", "cmd.exe"]) is None
+    _check_argv(["browsers"])
+    with pytest.raises(LiveChromeRefused):
+        _check_argv(["browsers", "--remember"])
+
+
+async def test_edge_pins_every_provider_session_to_the_edge_profile(fake, tmp_path):
+    fake.update(browsers=_BOTH)
+    eng = _edge_engine(fake, tmp_path)
+    a = await eng.open_research_page("chatgpt", "https://chatgpt.com/")
+    b = await eng.open_research_page("gemini", "https://gemini.google.com/app")
+    await a.evaluate("() => 1")
+    await b.evaluate("() => 1")
+    tab_calls = [c for c in fake.calls() if c["argv"][0] in ("tab", "eval", "get")]
+    assert tab_calls and all(c["flags"].get("--browser") == "edge-profile" for c in tab_calls), tab_calls
+    # the same allowlist and gate rules apply in Edge
+    with pytest.raises(LiveChromeRefused):
+        await eng.open_research_page("mail", "https://mail.google.com/")
+    assert sum(1 for v in fake.verbs() if v == ["browsers"]) == 1, "resolved once"
+
+
+async def test_edge_requested_but_not_connected_never_falls_back_to_chrome(fake, tmp_path):
+    fake.update(browsers=_BOTH[:1])
+    eng = _edge_engine(fake, tmp_path)
+    with pytest.raises(LiveChromeUnavailable) as err:
+        await eng.open_research_page("chatgpt", "https://chatgpt.com/")
+    assert CHROME_USE_STORE_URL in str(err.value) and "Microsoft Edge" in str(err.value)
+    assert not [v for v in fake.verbs() if v[:2] == ["tab", "new"]], "no tab may be opened in Chrome instead"
+
+
+async def test_an_explicit_profile_id_is_passed_through_without_a_lookup(fake, tmp_path):
+    eng = _edge_engine(fake, tmp_path, browser="me@example.com")
+    await eng.open_research_page("chatgpt", "https://chatgpt.com/")
+    assert ["browsers"] not in fake.verbs()
+    assert all(c["flags"].get("--browser") == "me@example.com" for c in fake.calls())

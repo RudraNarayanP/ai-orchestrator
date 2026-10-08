@@ -84,7 +84,9 @@ class BrowserConfig(BaseModel):
     """chrome-use session name: OmniBrain's tabs live in their own colored tab group."""
 
     chrome_use_browser: str | None = None
-    """Pin a Chrome profile (id or Google-account e-mail) when several profiles run the extension."""
+    """Which browser/profile the live driver uses: ``edge`` or ``chrome`` (the profile whose chrome-use extension runs
+    in that browser; never falls back to the other one), or an explicit chrome-use profile id / e-mail. Unset: the
+    extension's default profile."""
 
     chrome_use_timeout_s: float = 60.0
 
