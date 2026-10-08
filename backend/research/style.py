@@ -518,10 +518,25 @@ _CASUAL = re.compile(r"\b(bro|bruh|dude|mate)\b", re.I)
 _LEAD_YESNO = re.compile(r"^\s*(?:yes|yeah|yep|no|nope|nah)\b[\s,.\u2014\u2013:-]*", re.I)
 
 
+_YESNO_START = re.compile(
+    r"^\s*(?:so,?\s+)?(is|are|was|were|am|do|does|did|can|could|should|would|will|shall|may|might|must|has|have|had|"
+    r"isn'?t|aren'?t|wasn'?t|weren'?t|don'?t|doesn'?t|didn'?t|can'?t|won'?t|is it true)\b", re.I)
+
+
 def is_claim_check(question: str) -> bool:
-    """A yes/no question or a statement the user wants checked ("is X true", "X works like Y, right?") -- not "what is X"."""
+    """A yes/no question or a statement the user wants checked ("is X true", "X works like Y, right?") -- not "what is X".
+
+    Live (uk-dpa-age, 2026-10-08): "Under the Data Protection Act 2018, what is the minimum age ...?" opens with a phrase,
+    not the wh-word, and was answered "Yeah, you're right." A question whose LAST clause is a wh-question is a "what is X"
+    question too, unless the sentence itself opens as a yes/no question ("Is X taller than Y, which is in Paris?").
+    """
     q = (question or "").strip()
-    return bool(q) and not _WH_START.match(q)
+    if not q or _WH_START.match(q):
+        return False
+    last = re.split(r"[,;:\u2014\u2013]", q)[-1]
+    if _WH_START.match(last) and not _YESNO_START.match(q):
+        return False
+    return True
 
 
 _DENIAL_RE = re.compile(

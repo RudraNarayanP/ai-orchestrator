@@ -162,3 +162,16 @@ def test_appended_fact_starts_with_a_capital():
     out = render_truth("FALSE", question=TEN, answer="the claim that humans use only 10% of their brains is a myth.")
     assert out.startswith("Nah, that doesn't work like that. The claim")
     assert render_truth("TRUE", question=CHECK, answer="it is 13 under section 9.").endswith("It is 13 under section 9.")
+
+
+def test_a_wh_question_after_a_leading_phrase_is_not_a_claim_check():
+    """Live (uk-dpa-age, 2026-10-08): the answer opened "Yeah, you're right." for a "what is" question."""
+    q = "Under the Data Protection Act 2018, what is the minimum age at which a child can consent to information society services in the UK?"
+    assert not is_claim_check(q)
+    out = render_truth("TRUE", question=q, answer="13 years old, under section 9 of the Data Protection Act 2018.")
+    assert not out.startswith("Yeah") and "13" in out
+    assert not is_claim_check("In 1889, how tall was the Eiffel Tower?")
+    assert not is_claim_check("According to the ICO; who can give consent online?")
+    assert is_claim_check("Is the Eiffel Tower taller than the Statue of Liberty, which is in New York?")
+    assert is_claim_check("Under the DPA 2018 the age is 13, right?")
+    assert is_claim_check("Is it true that, under the DPA, the age is 13?")
