@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chat with mode toggles</title>
+<!-- Mode toggles beside the composer (shapes seen on DeepSeek/ChatGPT/Gemini): aria-pressed, data-state, a plan-gated
+     Deep Research, and a sidebar "Search chats" that is NOT the web-search mode. -->
+<style>body{font-family:system-ui} nav{position:fixed;top:0;left:0;width:180px} .c{position:fixed;bottom:12px;left:220px;right:12px} textarea{width:90%;height:48px} .bar{display:flex;gap:6px;margin-top:6px}</style>
+</head>
+<body>
+<nav><button id="side-search" aria-label="Search chats">Search chats</button></nav>
+<main style="margin-left:220px"><div id="t"></div></main>
+<div class="c">
+  <form onsubmit="return false">
+    <textarea id="prompt-textarea" aria-label="Chat input" placeholder="Message the assistant"></textarea>
+    <div class="bar">
+      <button type="button" id="think" aria-pressed="false">DeepThink</button>
+      <button type="button" id="search" data-state="off">Search</button>
+      <button type="button" id="deep" aria-pressed="false">Deep research (unlock with Pro)</button>
+      <button type="button" id="send" aria-label="Send message">Send</button>
+    </div>
+  </form>
+</div>
+<script>
+window.userTurns = []; window.clicked = []; window.ignoreClicks = false;
+const t = document.getElementById('t'), input = document.getElementById('prompt-textarea');
+for (const id of ['think', 'search', 'deep', 'side-search']) {
+  document.getElementById(id).addEventListener('click', (e) => {
+    window.clicked.push(id);
+    if (window.ignoreClicks) return;
+    const b = e.currentTarget;
+    if (id === 'think') b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+    if (id === 'search') b.setAttribute('data-state', b.getAttribute('data-state') === 'on' ? 'off' : 'on');
+  });
+}
+document.getElementById('send').addEventListener('click', () => {
+  const text = input.value.trim(); if (!text) return; input.value = ''; window.userTurns.push(text); window.clicked.push('send');
+  const u = document.createElement('div'); u.className = 'user-message'; u.textContent = text; t.appendChild(u);
+  setTimeout(() => { const a = document.createElement('div'); a.setAttribute('data-message-author-role', 'assistant');
+    a.innerHTML = '<p>The Eiffel Tower was completed on March 31, 1889 and is about 330 metres tall.</p>'; t.appendChild(a); }, 600);
+});
+</script>
+</body>
+</html>

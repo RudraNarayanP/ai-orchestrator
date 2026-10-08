@@ -597,3 +597,42 @@ def test_progress_only_lines_are_recognised_and_real_answers_are_not():
         assert PROGRESS_ONLY_RE.match(line), line
     for line in ("13 years old.", "Searching the web shows the age is 13.", "Thinking about it, the answer is 13."):
         assert not PROGRESS_ONLY_RE.match(line), line
+
+
+async def test_mode_toggles_are_found_switched_and_verified_and_gated_ones_are_never_clicked(browser_settings, fixture_server):
+    engine, adapter = _fixture_adapter(browser_settings, fixture_server, "mode_toggles.html")
+    try:
+        page = await engine.open_research_page("chatgpt", adapter.cfg.url)
+        found = {m["mode"]: m for m in await adapter.modes(page)}
+        assert set(found) == {"thinking", "search", "deep_research"}, found
+        assert found["thinking"]["state"] == "off" and found["search"]["state"] == "off" and found["deep_research"]["gated"]
+        assert (await adapter.set_mode(page, "thinking"))["status"] == "on"
+        assert (await adapter.set_mode(page, "search"))["status"] == "on"
+        assert (await adapter.set_mode(page, "thinking"))["status"] == "already", "a toggle that is already on is left alone"
+        assert (await adapter.set_mode(page, "deep_research"))["status"] == "plan_gated"
+        await page.evaluate("() => { window.ignoreClicks = true; }")
+        assert (await adapter.set_mode(page, "thinking", on=False))["status"] == "unverified", "a click that did nothing is not reported as done"
+        clicked = await page.evaluate("() => window.clicked")
+        assert "deep" not in clicked and "side-search" not in clicked, clicked
+    finally:
+        await engine.stop(keep_windows=False)
+
+
+async def test_configured_modes_are_switched_on_before_the_question_is_sent(browser_settings, fixture_server):
+    engine, adapter = _fixture_adapter(browser_settings, fixture_server, "mode_toggles.html")
+    adapter.settings.research.provider_modes = {"chatgpt": ["thinking", "search", "deep_research"]}
+    events = []
+
+    async def emit(kind, message, *a, **k):
+        events.append(message)
+
+    try:
+        response = await adapter.ask("jobmodes", "When was the Eiffel Tower completed and how tall is it?", 1, emit=emit)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        page = await engine.open_research_page("chatgpt", adapter.cfg.url)
+        clicked = await page.evaluate("() => window.clicked")
+        assert clicked[:2] == ["think", "search"] and clicked[-1] == "send" and "deep" not in clicked, clicked
+        assert [m["status"] for m in adapter.mode_log] == ["on", "on", "plan_gated"]
+        assert any("mode deep_research -> plan_gated" in e for e in events), events
+    finally:
+        await engine.stop(keep_windows=False)

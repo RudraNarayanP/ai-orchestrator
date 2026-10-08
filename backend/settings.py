@@ -201,6 +201,9 @@ class ResearchConfig(BaseModel):
     claim_batch_size: int = 12
     response_stability_poll_ms: int = 700
     response_stable_rounds: int = 3
+    provider_modes: dict[str, list[Literal["thinking", "search", "deep_research"]]] = Field(default_factory=dict)
+    """Per provider, the toggles beside its composer to switch ON before a question (e.g. deepseek: [thinking, search]).
+    Each is verified after the click; a missing, plan-gated or unreadable toggle is reported and skipped, never forced."""
 
 
 class SearchConfig(BaseModel):

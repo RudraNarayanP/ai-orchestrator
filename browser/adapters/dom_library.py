@@ -11,7 +11,7 @@ from __future__ import annotations
 # Installed with page.evaluate(DOM_LIBRARY_JS) before any interaction.
 DOM_LIBRARY_JS = r"""
 (() => {
-  if (window.__omnibrain && window.__omnibrain.version === 3) return 'already';
+  if (window.__omnibrain && window.__omnibrain.version === 4) return 'already';
   const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
   const lower = (s) => (s || '').toLowerCase();
 
@@ -378,8 +378,72 @@ DOM_LIBRARY_JS = r"""
     return !!dlg && TERMS_GATE_RE.test(norm(dlg.innerText || ''));
   }
 
+  // ---- provider mode toggles (Thinking / Search / Deep Research) --------------------------------------------------
+  // Read-only discovery of the toggles that sit beside the composer, with their on/off state when the page exposes one.
+  // Only top-level controls near the composer count (a sidebar "Search chats" is not the web-search mode). A control
+  // whose label talks about upgrading/plans, or that is disabled, is reported as plan-gated and is never clicked.
+  const MODE_PATTERNS = [
+    ['deep_research', /deep ?research/i],
+    ['thinking', /(^|[^a-z])(think|thinking|deep ?think|reason|reasoning|think deeper|think longer)([^a-z]|$)/i],
+    ['search', /(^|[^a-z])(search|web search|search the web|browse)([^a-z]|$)/i],
+  ];
+  const MODE_GATE_RE = /(upgrade|premium|subscribe|unlock|get plus|get pro|pro plan|limit reached|try .* free)/i;
+  const MODE_SKIP_RE = /(search chats|search history|search conversations|new chat|history|sidebar)/i;
+  function modeState(el) {
+    const pressed = el.getAttribute('aria-pressed') || el.getAttribute('aria-checked') || el.getAttribute('aria-selected');
+    if (pressed === 'true' || pressed === 'mixed') return 'on';
+    if (pressed === 'false') return 'off';
+    const ds = lower(el.getAttribute('data-state') || '');
+    if (/^(on|checked|active|selected|open)$/.test(ds)) return 'on';
+    if (/^(off|unchecked|inactive|closed)$/.test(ds)) return 'off';
+    const cls = lower((el.className || '').toString());
+    if (/(^|[\s_-])(active|selected|checked|is-on|toggled)([\s_-]|$)/.test(cls)) return 'on';
+    return 'unknown';
+  }
+  function modeControls(cfg) {
+    const comp = (candidates(cfg.input || {}, cfg.input || {}, {kind: 'input'})[0] || {}).el || null;
+    const cr = comp ? rectOf(comp) : null;
+    const form = comp ? comp.closest('form') : null;
+    const out = [];
+    const seen = new Set();
+    const els = queryAll('button, [role="button"], [role="switch"], [role="checkbox"], [role="menuitemcheckbox"]');
+    els.forEach((el, index) => {
+      if (seen.has(el) || !visible(el)) return;
+      seen.add(el);
+      const label = norm([el.getAttribute('aria-label'), el.getAttribute('title'), textOf(el)].filter(Boolean).join(' ')).slice(0, 90);
+      if (!label || label.length > 60 || MODE_SKIP_RE.test(label)) return;
+      const hit = MODE_PATTERNS.find(([, re]) => re.test(label));
+      if (!hit) return;
+      const r = rectOf(el);
+      let near = !!(form && form.contains(el));
+      if (!near && cr && r) near = Math.abs((r.top + r.bottom) / 2 - (cr.top + cr.bottom) / 2) < 220 && r.left < cr.right + 260 && r.right > cr.left - 260;
+      if (!near) return;
+      const disabled = !!el.disabled || el.getAttribute('aria-disabled') === 'true';
+      out.push({mode: hit[0], label, state: modeState(el), disabled, gated: MODE_GATE_RE.test(label) || HARD_NO_RE.test(label), index});
+    });
+    return out;
+  }
+  function modeElement(cfg, mode) {
+    const found = modeControls(cfg).filter(c => c.mode === mode);
+    if (!found.length) return [null, null];
+    const els = queryAll('button, [role="button"], [role="switch"], [role="checkbox"], [role="menuitemcheckbox"]');
+    return [found[0], els[found[0].index] || null];
+  }
+
   const api = {
-    version: 3,
+    version: 4,
+    modeControls(cfg) { return modeControls(cfg); },
+    setMode(cfg, mode, want) {
+      const [info, el] = modeElement(cfg, mode);
+      if (!info || !el) return {ok: false, reason: 'unavailable'};
+      if (info.gated) return {ok: false, reason: 'plan_gated', label: info.label};
+      if (info.disabled) return {ok: false, reason: 'disabled', label: info.label};
+      const target = want ? 'on' : 'off';
+      if (info.state === target) return {ok: true, already: true, label: info.label, state: info.state};
+      if (info.state === 'unknown') return {ok: false, reason: 'state_unreadable', label: info.label};
+      el.click();
+      return {ok: true, clicked: true, label: info.label, before: info.state};
+    },
     util: {norm, visible, toMarkdown},
 
     ready(cfg) {

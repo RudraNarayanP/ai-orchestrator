@@ -230,6 +230,47 @@ class ChatAdapter:
             except Exception as exc2:  # noqa: BLE001
                 raise DOMUnavailable(f"{fn}: {exc2}") from exc
 
+    # ----------------------------------------------------------- mode toggles (Thinking / Search / Deep Research)
+    async def modes(self, page) -> list[dict[str, Any]]:
+        """The mode toggles beside this provider's composer, read-only: [{mode, label, state on|off|unknown, gated}]."""
+        found = await self._call(page, "modeControls", self._sel_dict)
+        return found if isinstance(found, list) else []
+
+    async def set_mode(self, page, mode: str, on: bool = True) -> dict[str, Any]:
+        """Switch one mode and VERIFY it took. Never clicks a plan-gated/disabled control or one whose state cannot be
+        read (an unreadable toggle could be switched the wrong way). Result ``status``: on/off (verified), already,
+        unavailable, plan_gated, disabled, state_unreadable, or unverified (clicked but the state did not change)."""
+        res = await self._call(page, "setMode", self._sel_dict, mode, on)
+        res = res if isinstance(res, dict) else {"ok": False, "reason": "no answer from the page"}
+        want = "on" if on else "off"
+        if res.get("already"):
+            return {**res, "mode": mode, "status": "already"}
+        if not res.get("clicked"):
+            return {**res, "mode": mode, "status": res.get("reason") or "unavailable"}
+        after = "gone"
+        for _ in range(6):
+            await self._sleep(0.4)
+            now = [c for c in await self.modes(page) if c.get("mode") == mode]
+            after = now[0].get("state") if now else "gone"
+            if after == want:
+                break
+        return {**res, "mode": mode, "after": after, "status": want if after == want else "unverified"}
+
+    async def _apply_modes(self, page, emit: EventHook, round_no: int) -> list[dict[str, Any]]:
+        """``research.provider_modes`` (e.g. ``{deepseek: [thinking, search]}``): switch them on before typing, in order,
+        each one verified; anything unavailable or plan-gated is reported plainly and the question still goes ahead."""
+        wanted = list((self.settings.research.provider_modes or {}).get(self.provider) or [])
+        done: list[dict[str, Any]] = []
+        for mode in wanted:
+            try:
+                res = await self.set_mode(page, mode, True)
+            except Exception as exc:  # noqa: BLE001
+                res = {"mode": mode, "status": "error", "reason": str(exc)[:120]}
+            done.append(res)
+            await self._safe_emit(emit, "provider", f"{self.provider}: mode {mode} -> {res['status']}" + (f" ({res.get('label')})" if res.get("label") else ""), self.provider, round_no)
+        self.mode_log = done
+        return done
+
     def _threshold(self, name: str, hidden: bool) -> int:
         base = int(getattr(self.sel, name, 3000) or 3000)
         return base * 2 if hidden else base
@@ -486,6 +527,8 @@ class ChatAdapter:
                     await page.bring_to_front()
                 except Exception:  # noqa: BLE001
                     pass
+            if (self.settings.research.provider_modes or {}).get(self.provider):
+                await self._apply_modes(page, emit, round_no)
             baseline = await self._call(page, "baseline", self._sel_dict) or {"count": 0, "lastText": ""}
             await emit("provider", f"{self.provider}: composing prompt", self.provider, round_no)
             typed = await self._type_with_fallback(page, prompt)
