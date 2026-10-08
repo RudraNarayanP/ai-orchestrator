@@ -943,3 +943,14 @@ def test_chrome_use_calls_never_open_a_window_and_the_code_never_opens_explorer(
                 if bad.search(line) and "re.compile" not in line:
                     offenders.append(f"{f.relative_to(root)}:{n}: {line.strip()[:90]}")
     assert not offenders, offenders
+
+
+async def test_a_new_tab_without_a_js_context_yet_is_waited_for(fake, engine):
+    """Live (pi.ai 2026-10-08): `get url` right after `tab new` failed with "Cannot find default execution context"."""
+    err = 'CDP error (Runtime.evaluate): {"code":-32000,"message":"Cannot find default execution context"}'
+    fake.update(fail_times={"get": {"n": 2, "error": err}})
+    page = await engine.open_research_page("pi", "https://pi.ai/talk")
+    assert page.url == "https://pi.ai/talk"
+    fake.update(fail_times={"get": {"n": 1, "error": "relay not connected"}})
+    with pytest.raises(LiveChromeError, match="relay"):  # any other failure is still an error
+        await engine.open_research_page("gemini", "https://gemini.google.com/app")

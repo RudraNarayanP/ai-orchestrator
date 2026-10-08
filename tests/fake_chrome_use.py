@@ -103,6 +103,11 @@ def main() -> None:
         sys.stdout.write("this is not json\n")
         sys.exit(0)
     verb = args[0] if args else ""
+    flaky = state.get("fail_times") or {}
+    if flaky.get(verb, {}).get("n", 0) > 0:
+        flaky[verb]["n"] -= 1
+        save(state)
+        reply(ok=False, error=flaky[verb]["error"])
     if verb in state.get("fail", {}):
         reply(ok=False, error=state["fail"][verb])
 

@@ -907,7 +907,13 @@ class LiveChromeEngine:
                 # a brand-new tab reports about:blank until its first navigation commits (seen on real Chrome)
                 deadline = time.monotonic() + NEW_TAB_SETTLE_S
                 while True:
-                    now = str((await runner.run("get", "url")).get("url") or "")
+                    try:
+                        now = str((await runner.run("get", "url")).get("url") or "")
+                    except LiveChromeError as exc:
+                        # seen live (pi.ai, 2026-10-08): mid-navigation there is no JS context to read the URL from yet
+                        if "execution context" not in str(exc).lower() or time.monotonic() >= deadline:
+                            raise
+                        now = ""
                     if now and not now.startswith("about:blank"):
                         break
                     if time.monotonic() >= deadline:
