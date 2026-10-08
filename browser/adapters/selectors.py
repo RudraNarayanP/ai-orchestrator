@@ -349,7 +349,8 @@ SELECTORS: dict[str, SelectorSet] = {
             aria=["Message input", "Message Pi"],
             verified="guess",
         ),
-        send=FieldSet(css=['button[type="submit"]'], aria=["Send"], verified="guess"),
+        # live 2026-10-08: the send control is labelled "Submit text"; "Help & feedback" sits elsewhere on the page
+        send=FieldSet(css=['button[aria-label="Submit text"]', 'button[type="submit"]'], aria=["Submit text", "Send"], verified="guess"),
         stop=FieldSet(aria=["Stop"], verified="guess"),
         response_root=["[role='log']", "main"],
         assistant_message=['[data-testid*="message"]', ".markdown"],

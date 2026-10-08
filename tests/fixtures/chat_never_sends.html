@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chat (never sends fixture)</title>
+<!-- A composer that takes text but neither its send button nor Enter does anything: the adapter must say
+     submit_failed after one retry instead of waiting for an answer that can never come. -->
+<style>body{font-family:system-ui} .c{position:fixed;bottom:12px;left:12px;right:12px;display:flex;gap:8px} textarea{flex:1;height:48px}</style>
+</head>
+<body>
+<main><div id="t"></div></main>
+<div class="c">
+  <textarea id="prompt-textarea" aria-label="Chat input" placeholder="Message the assistant"></textarea>
+  <button aria-label="Send message" id="send"></button>
+</div>
+<script>
+window.sends = 0; window.enters = 0;
+document.getElementById('send').addEventListener('click', () => { window.sends++; });
+document.getElementById('prompt-textarea').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); window.enters++; } });
+</script>
+</body>
+</html>

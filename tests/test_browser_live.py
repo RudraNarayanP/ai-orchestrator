@@ -470,3 +470,70 @@ async def test_ai_mode_that_never_answers_gives_up_early_and_is_not_retried(brow
         assert not any("retrying" in e for e in events), events
     finally:
         await engine.stop(keep_windows=False)
+
+
+def _fixture_adapter(browser_settings, fixture_server, page_name: str):
+    url = fixture_server.rsplit("/", 1)[0] + "/" + page_name
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"chatgpt": {"enabled": True, "label": "ChatGPT", "url": url, "max_retries": 1}},
+    })
+    engine = BrowserEngine(settings)
+    adapter = build_adapter("chatgpt", engine, settings, settings.providers["chatgpt"])
+    adapter.sel.stable_ms = 700
+    adapter.sel.tiny_fragment_ms = 1500
+    adapter.sel.never_started_ms = 12000
+    adapter.sel.force_capture_ms = 25000
+    adapter.sel.hard_timeout_ms = 45000
+    return engine, adapter
+
+
+LONG_PROMPT = (
+    "You are one of several research assistants.\n\nQuestion: In which year was the Eiffel Tower completed?\n\n"
+    "Rules:\n- Give the answer first in one short sentence.\n- Then name one source.\n- If unsure, say so."
+)
+
+
+async def test_send_never_clicks_help_upgrade_attach_or_mode_toggles(browser_settings, fixture_server):
+    """Live (pi.ai 2026-10-08): clickSend took the first button on the page and clicked "Help & feedback"."""
+    engine, adapter = _fixture_adapter(browser_settings, fixture_server, "send_button_decoys.html")
+    try:
+        page = await engine.open_research_page("chatgpt", adapter.cfg.url)
+        await adapter._install(page)
+        found = await adapter._call(page, "locateSendStrict", adapter._sel_dict)
+        assert found and found[0]["aria"] == "Submit text", found
+        assert not [f for f in found if f["aria"] in ("Help & feedback", "Attach file") or f["text"] in ("Upgrade", "Think")], found
+        response = await adapter.ask("jobdecoy", "When was the Eiffel Tower completed and how tall is it?", 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        clicked = await page.evaluate("() => window.clicked")
+        assert clicked == ["send"], clicked
+    finally:
+        await engine.stop(keep_windows=False)
+
+
+async def test_a_long_multi_line_prompt_is_sent_once_and_whole(browser_settings, fixture_server):
+    """Line breaks in the prompt must not act as Enter: one user turn holding every line, then the answer."""
+    engine, adapter = _fixture_adapter(browser_settings, fixture_server, "send_button_decoys.html")
+    try:
+        response = await adapter.ask("joblong", LONG_PROMPT, 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        page = await engine.open_research_page("chatgpt", adapter.cfg.url)
+        turns = await page.evaluate("() => window.userTurns")
+        assert len(turns) == 1, turns
+        assert "Eiffel Tower" in turns[0] and "If unsure, say so." in turns[0], turns
+    finally:
+        await engine.stop(keep_windows=False)
+
+
+async def test_a_prompt_the_site_never_takes_is_reported_as_submit_failed(browser_settings, fixture_server):
+    engine, adapter = _fixture_adapter(browser_settings, fixture_server, "chat_never_sends.html")
+    adapter.submit_wait_s = 1.0
+    try:
+        response = await adapter.ask("jobdead", "When was the Eiffel Tower completed?", 1)
+        assert response.status.value == "failed", response.status
+        assert (response.error or "").startswith("submit_failed"), response.error
+        page = await engine.open_research_page("chatgpt", adapter.cfg.url)
+        counts = await page.evaluate("() => [window.sends, window.enters]")
+        assert counts == [2, 2], f"one try plus one retry, no more (and no second typing of the prompt): {counts}"
+    finally:
+        await engine.stop(keep_windows=False)

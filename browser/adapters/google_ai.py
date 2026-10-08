@@ -18,6 +18,7 @@ from browser.adapters.base import ChatAdapter, DOMUnavailable
 
 class GoogleAIAdapter(ChatAdapter):
     name = "google_ai"
+    submit_verify = False  # the AI Mode page keeps the query in its box after sending
 
     async def _attempt(self, *, page_setup: bool, response: ProviderResponse, prompt: str, round_no: int, emit: Any) -> bool:
         page = await self._page(fresh=page_setup)

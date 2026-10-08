@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chat (send-button decoys fixture)</title>
+<!-- Mirrors pi.ai (2026-10-08): the send control is a text-less icon button labelled "Submit text"; the page also has
+     "Help & feedback", an "Upgrade" button, an attach button and a "Think" mode toggle. Only the send may be clicked.
+     The composer sends on Enter, so a multi-line prompt must be inserted without typed newlines. -->
+<style>body{font-family:system-ui;background:#111;color:#eee} header{position:fixed;top:8px;right:8px;display:flex;gap:6px}
+.c{position:fixed;bottom:12px;left:12px;right:12px;display:flex;gap:8px} textarea{flex:1;height:64px} button{min-width:30px;height:30px}</style>
+</head>
+<body>
+<header>
+  <button aria-label="Help &amp; feedback" id="help"></button>
+  <button id="upgrade">Upgrade</button>
+</header>
+<main><div id="t"></div></main>
+<div class="c">
+  <button aria-label="Attach file" id="attach"></button>
+  <button aria-pressed="false" id="think">Think</button>
+  <textarea id="prompt-textarea" aria-label="Talk with the assistant" placeholder="Talk with the assistant"></textarea>
+  <button aria-label="Submit text" id="send"></button>
+</div>
+<script>
+window.clicked = []; window.userTurns = [];
+const t = document.getElementById('t');
+const input = document.getElementById('prompt-textarea');
+function go() {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  window.userTurns.push(text);
+  const u = document.createElement('div'); u.className = 'user-message'; u.textContent = text; t.appendChild(u);
+  setTimeout(() => { const a = document.createElement('div'); a.setAttribute('data-message-author-role', 'assistant');
+    a.innerHTML = '<p>The Eiffel Tower was completed on March 31, 1889 and is about 330 metres tall.</p>'; t.appendChild(a); }, 700);
+}
+['help', 'upgrade', 'attach', 'think'].forEach(id => document.getElementById(id).addEventListener('click', () => window.clicked.push(id)));
+document.getElementById('send').addEventListener('click', () => { window.clicked.push('send'); go(); });
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } });
+</script>
+</body>
+</html>

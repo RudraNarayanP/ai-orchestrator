@@ -22,6 +22,7 @@ ENGINE_TEMPLATES = {
 
 
 class SearchAdapter(ChatAdapter):
+    submit_verify = False  # the results page keeps the query in the search box: the composer never empties
     name = "search"
     is_chat = False
 

@@ -400,7 +400,8 @@ class ChatAdapter:
             if response.status == ProviderStatus.RATE_LIMITED:
                 # Never retry straight into a rate limit; the runner backs this site off.
                 return self._finish(response)
-            if (response.error or "").startswith(("readiness=login_wall", "readiness=blocked", "no-response-element: AI Mode")):
+            if (response.error or "").startswith(("readiness=login_wall", "readiness=blocked", "no-response-element: AI Mode", "submit_failed")):
+                # submit_failed: the send was already retried; a fresh attempt would type the prompt a second time.
                 # A login wall, captcha or age gate does not go away by asking again; report it and move on.
                 return self._finish(response)
             if attempt + 1 >= attempts:
@@ -474,7 +475,14 @@ class ChatAdapter:
                     return False
 
             await emit("provider", f"{self.provider}: prompt sent — waiting for answer", self.provider, round_no)
-            await self._submit(page, prompt)
+            if not await self._submit(page, prompt):
+                response.note(
+                    ProviderStatus.FAILED,
+                    error="submit_failed: the prompt stayed in the composer after the send button and Enter (tried twice)",
+                    detail=" ".join(getattr(self, "submit_log", []))[:300],
+                )
+                await emit("provider", f"{self.provider}: submit_failed", self.provider, round_no)
+                return False
             if lock is not None:
                 await asyncio.sleep(1.5)  # let the site take the message before the next tab comes forward
         finally:
@@ -685,22 +693,28 @@ class ChatAdapter:
         if not ok:
             # Last resort: real keystrokes. Slow but indistinguishable to the page.
             try:
-                await page.keyboard.type(prompt, delay=6)
+                # typed newlines are Enter key presses, which send a half-written prompt: type one paragraph instead
+                await page.keyboard.type(re.sub(r"\s*\n\s*", " ", prompt), delay=6)
                 ok = await self._verify_composer(page, prompt)
             except Exception:  # noqa: BLE001
                 ok = False
         return bool(ok)
 
+    @staticmethod
+    def _needle(prompt: str) -> str:
+        """The first words of the prompt, whitespace-normalised: editors turn line breaks into <br>/<p> or spaces."""
+        return re.sub(r"\s+", " ", prompt or "").strip()[:24].strip()
+
     async def _verify_composer(self, page, prompt: str) -> bool:
-        probe = prompt[:24].strip()
+        probe = self._needle(prompt)
         if not probe:
             return False
         try:
             found = await page.evaluate(
-                "(needle) => { const n = (needle||'').toLowerCase();"
+                "(needle) => { const n = (needle||'').toLowerCase().replace(/\\s+/g,' ').trim();"
                 "const els = [...document.querySelectorAll('textarea,[contenteditable=true],[role=textbox],input[type=text]')];"
                 "for (const el of els) { const v = (el.value || el.innerText || el.textContent || '').toLowerCase().replace(/\\s+/g,' ');"
-                "if (v.includes(n.trim())) return true; } return false; }",
+                "if (v.includes(n)) return true; } return false; }",
                 probe,
             )
         except Exception:  # noqa: BLE001
@@ -712,36 +726,77 @@ class ChatAdapter:
         try:
             length = await page.evaluate(
                 "() => { let m = 0; for (const el of document.querySelectorAll('textarea,[contenteditable=true],[role=textbox]')) {"
-                "const v = (el.value || el.innerText || '').length; if (v > m) m = v; } return m; }"
+                "const v = (el.value || el.innerText || '').trim().length; if (v > m) m = v; } return m; }"
             )
         except Exception:  # noqa: BLE001
             length = 0
         return bool(length and length >= min(40, int(len(prompt) * 0.4)))
 
-    async def _submit(self, page, prompt: str = "") -> None:
-        self._prompt_sent = True
-        clicked = await self._call(page, "clickSend", self._sel_dict)
-        if isinstance(clicked, str):
+    submit_verify: bool = True  # chat UIs empty the composer when they take a message; a search box does not
+    submit_wait_s: float = 4.0
+
+    async def _sent(self, page, prompt: str) -> bool:
+        """The site took the message: the composer no longer holds the prompt, or a stop/streaming signal is up."""
+        deadline = time.time() + self.submit_wait_s
+        while True:
             try:
-                clicked = json.loads(clicked)
-            except json.JSONDecodeError:
-                clicked = {}
-        if clicked and clicked.get("ok"):
-            # A scripted click is not a trusted event: some sites (seen live: chat.deepseek.com in a real Chrome)
-            # ignore it and leave the prompt sitting in the composer. If it is still there, press Enter like a person.
-            if not prompt:
-                return
-            try:
-                await page.wait_for_timeout(1500)
-                unsent = await self._verify_composer(page, prompt)
-            except Exception:  # noqa: BLE001
-                return
-            if not unsent:
-                return
+                if not await self._verify_composer(page, prompt):
+                    return True
+                busy = await self._call(page, "isBusy", self._sel_dict)
+                if busy:
+                    return True
+            except DOMUnavailable:
+                raise
+            except Exception:  # noqa: BLE001 -- a navigation mid-check means the page moved on: it was sent
+                return True
+            if time.time() >= deadline:
+                return False
+            await page.wait_for_timeout(500)
+
+    async def _press_enter(self, page) -> None:
+        """A real Enter key on the focused composer (caret at the end), never a synthetic DOM event first."""
+        try:
+            await self._call(page, "focusComposer", self._sel_dict)
+        except Exception:  # noqa: BLE001
+            pass
         try:
             await page.keyboard.press("Enter")
         except Exception:  # noqa: BLE001
             await self._call(page, "pressEnter", None)
+
+    async def _submit(self, page, prompt: str = "") -> bool:
+        """Send the composed prompt and confirm the site took it.
+
+        1. click the real send button (located by name/structure, never help/upgrade/toggles);
+        2. if the prompt is still in the composer, a real Enter on the focused composer;
+        3. verify (composer emptied, or a stop/streaming signal), retry once, else report ``submit_failed``.
+        """
+        self._prompt_sent = True
+        self.submit_log: list[str] = []
+        for attempt in range(2):
+            clicked = await self._call(page, "clickSend", self._sel_dict)
+            if isinstance(clicked, str):
+                try:
+                    clicked = json.loads(clicked)
+                except json.JSONDecodeError:
+                    clicked = {}
+            if clicked and clicked.get("ok"):
+                via = clicked.get("via") or {}
+                self.submit_log.append(f"click:{via.get('aria') or via.get('text') or via.get('tag')}({clicked.get('why')})")
+                if not prompt or not self.submit_verify:
+                    return True
+                # A scripted click is not a trusted event: some sites (chat.deepseek.com in a real Chrome) ignore it.
+                if await self._sent(page, prompt):
+                    return True
+            elif clicked is not None:
+                self.submit_log.append("click:none")
+            await self._press_enter(page)
+            self.submit_log.append("enter")
+            if not prompt or not self.submit_verify:
+                return True
+            if await self._sent(page, prompt):
+                return True
+        return False
 
     # ------------------------------------------------------------- completion
 

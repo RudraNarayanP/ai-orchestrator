@@ -219,6 +219,60 @@ DOM_LIBRARY_JS = r"""
     return out;
   }
 
+  // ---- the send button -------------------------------------------------------
+  // A send control is: the site's configured one, a button named send/submit, or the text-less icon button that
+  // sits beside the composer (rightmost wins). Never help/feedback/settings/upgrade/attach/voice/share buttons and
+  // never a mode toggle. Seen live on pi.ai (2026-10-08): "first button on the page" clicked "Help & feedback".
+  const SEND_RE = /(^|[^a-z])(send|submit|envoyer|enviar|senden|invia)([^a-z]|$)|发送|提交|送信/i;
+  const NOT_SEND_RE = /(help|feedback|setting|upgrade|premium|pricing|plan\b|subscri|share|attach|upload|file|image|photo|camera|voice|dictat|micro|speech|record|audio|think|reason|research|search|tool|mode\b|model|menu|more\b|option|new chat|sign|log ?in|regenerate|retry|copy|like|edit|stop|cancel|close|dismiss|sidebar|history|account|profile|expand|collapse|scroll|emoji|plus|add\b|canvas|image|create)/i;
+  const HARD_NO_RE = /(help|feedback|setting|upgrade|premium|pricing|subscri|share|attach|upload|voice|dictat|micro|sign ?in|sign ?up|log ?in|account|profile|stop generating|^stop)/i;
+  function isToggle(el) {
+    const role = lower(el.getAttribute('role') || '');
+    if (/^(switch|checkbox|menuitem|menuitemcheckbox|menuitemradio|tab|radio|option|combobox)$/.test(role)) return true;
+    if (el.hasAttribute('aria-pressed') || el.hasAttribute('aria-checked') || el.hasAttribute('aria-expanded')) return true;
+    const pop = lower(el.getAttribute('aria-haspopup') || '');
+    return !!pop && pop !== 'false';
+  }
+  function sendCandidates(cfg) {
+    const send = cfg.send || {};
+    const comp = (candidates(cfg.input || {}, cfg.input || {}, {kind: 'input'})[0] || {}).el || null;
+    const cr = comp ? rectOf(comp) : null;
+    const form = comp ? comp.closest('form') : null;
+    let els = [];
+    (send.css || []).forEach(sel => { els = els.concat(queryAll(sel)); });
+    els = els.concat(queryAll('button, [role="button"], input[type="submit"]'));
+    const seen = new Set();
+    const out = [];
+    for (const el of els) {
+      if (!el || seen.has(el) || !visible(el)) continue;
+      seen.add(el);
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+      if (comp && (el === comp || el.contains(comp))) continue;
+      const label = norm([el.getAttribute('aria-label'), el.getAttribute('title'), el.getAttribute('data-testid'), textOf(el)].filter(Boolean).join(' '));
+      const named = SEND_RE.test(label);
+      // an exact configured selector (e.g. a search engine's "Search" button) still never wins as help/upgrade/etc.
+      let pinned = false;
+      (send.css || []).forEach(sel => { try { if (el.matches(sel)) pinned = true; } catch (e) {} });
+      (send.testids || []).forEach(t => { if (lower(el.getAttribute('data-testid') || '').includes(lower(t))) pinned = true; });
+      if (isToggle(el) || HARD_NO_RE.test(label)) continue;
+      if (!named && !pinned && NOT_SEND_RE.test(label)) continue;
+      const cfgScore = matchesConfig(el, send);
+      const r = rectOf(el);
+      let near = false;
+      if (form && form.contains(el)) near = true;
+      else if (cr && r) {
+        near = r.top < cr.bottom + 90 && r.bottom > cr.top - 90 && r.left > cr.left + cr.width * 0.4 && r.left < cr.right + 140;
+      }
+      const textless = !textOf(el) || textOf(el).length <= 2;
+      if (!(cfgScore >= 25 || named || (near && textless))) continue;
+      let score = cfgScore + (named ? 60 : 0) + (near ? 30 : 0);
+      if (near && textless && r) score += 10 + Math.round((r.right / Math.max(1, innerWidth)) * 10);
+      out.push({el, score, why: [cfgScore >= 25 ? 'config' : '', named ? 'named' : '', near ? 'near-composer' : ''].filter(Boolean).join('+')});
+    }
+    out.sort((a, b) => b.score - a.score);
+    return out;
+  }
+
   function firstMessageRoots(cfg) {
     // Scoping matters: [role=log] is the transcript, while <aside> holds the
     // sidebar conversation list, which would be captured as "the answer".
@@ -553,16 +607,40 @@ DOM_LIBRARY_JS = r"""
     },
 
     clickSend(cfg) {
-      const list = candidates(cfg.send || {}, cfg.send || {}, {kind: 'button'});
+      const list = sendCandidates(cfg);
       for (const c of list) {
-        if (c.el.disabled) continue;
         try {
           c.el.scrollIntoView({block: 'nearest'});
           c.el.click();
-          return {ok: true, via: describe(c.el, 'button'), score: c.score};
+          return {ok: true, via: {...describe(c.el, 'button'), el: undefined}, score: c.score, why: c.why};
         } catch (e) {}
       }
-      return {ok: false, tried: list.slice(0, 4).map(c => c.desc)};
+      return {ok: false, tried: list.slice(0, 4).map(c => ({...describe(c.el, 'button'), el: undefined}))};
+    },
+
+    locateSendStrict(cfg) {
+      return sendCandidates(cfg).slice(0, 6).map(c => ({...describe(c.el, 'button'), el: undefined, score: c.score, why: c.why}));
+    },
+
+    isBusy(cfg) {
+      return busy(cfg);
+    },
+
+    focusComposer(cfg) {
+      // Focus the composer and put the caret at the END, so a real Enter key submits instead of splitting the text.
+      const c = candidates(cfg.input || {}, cfg.input || {}, {kind: 'input'})[0];
+      if (!c) return false;
+      const el = c.el;
+      try { el.focus(); } catch (e) { return false; }
+      try {
+        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+          const n = (el.value || '').length; el.setSelectionRange(n, n);
+        } else {
+          const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+          const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        }
+      } catch (e) {}
+      return document.activeElement === el || el.contains(document.activeElement);
     },
 
     harvestResults(cfg, limit) {
