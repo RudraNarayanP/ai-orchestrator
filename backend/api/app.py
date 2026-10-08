@@ -694,6 +694,18 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
             ),
             "automation_visible": True,
         }
+        if settings.browser.driver == "chrome_use":
+            from backend.browser.live_chrome import driver_report
+
+            checks["browser"] = {
+                "driver": "chrome_use",
+                "browser": settings.browser.chrome_use_browser or "extension default profile",
+                "background": settings.browser.chrome_use_background,
+                "front_providers": list(settings.browser.chrome_use_front_providers),
+                "isolation": "new tabs in your own signed-in browser, provider sites only; never cookies/profile copies",
+                "report": await driver_report(settings),
+                "automation_visible": True,
+            }
         checks["storage"] = {"db": settings.storage.db_path}
         return checks
 

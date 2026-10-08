@@ -130,37 +130,15 @@ def provider_login_note(cfg, live_browser: str | None = None) -> str:
 
 
 def _live_label(settings) -> str:
-    from backend.browser.live_chrome import BROWSER_PRODUCTS
+    from backend.browser.live_chrome import browser_label
 
-    want = (settings.browser.chrome_use_browser or "").strip().lower()
-    return BROWSER_PRODUCTS[want][1] if want in BROWSER_PRODUCTS else "your Chrome"
+    return browser_label(settings)
 
 
 async def live_driver_report(settings, engine=None) -> list[str]:
-    """Doctor's section for ``browser.driver: chrome_use``: chrome-use, the extension, and which browser it drives."""
-    from backend.browser.live_chrome import LiveChromeEngine, LiveChromeError, extension_problem
+    from backend.browser.live_chrome import driver_report
 
-    b = settings.browser
-    lines = [
-        "live driver  : chrome_use (your own signed-in browser, new tabs only, provider sites only)",
-        f"browser      : {b.chrome_use_browser or 'extension default profile'}"
-        f" | {'background tabs, never raised' if b.chrome_use_background else 'foreground: OmniBrain tab shown'}"
-        + (f" | may raise: {', '.join(b.chrome_use_front_providers)}" if b.chrome_use_front_providers else ""),
-    ]
-    eng = engine or LiveChromeEngine(settings)
-    try:
-        status = await eng.runner.run("status")
-    except LiveChromeError as exc:
-        lines.append(f"chrome-use   : NOT READY -- {exc}")
-        return lines
-    problem = extension_problem(status)
-    lines.append(f"chrome-use   : {status.get('cliVersion', '?')}, extension " + (f"PROBLEM -- {problem}" if problem else "connected"))
-    try:
-        await eng._resolve_browser()
-        lines.append(f"target       : {_live_label(settings)} -> chrome-use profile {eng.runner.browser or '(default)'}")
-    except LiveChromeError as exc:
-        lines.append(f"target       : NOT READY -- {exc}")
-    return lines
+    return await driver_report(settings, engine)
 
 
 def setup_file_logging(args: argparse.Namespace, settings) -> Path:

@@ -1083,3 +1083,33 @@ class LiveChromeEngine:
         dom["url_seen"] = page.url
         dom["title"] = await page.title()
         return dom
+
+
+def browser_label(settings) -> str:
+    want = (settings.browser.chrome_use_browser or "").strip().lower()
+    return BROWSER_PRODUCTS[want][1] if want in BROWSER_PRODUCTS else "your Chrome"
+
+
+async def driver_report(settings, engine=None) -> list[str]:
+    """Doctor's section for ``browser.driver: chrome_use``: chrome-use, the extension, and which browser it drives."""
+    b = settings.browser
+    lines = [
+        "live driver  : chrome_use (your own signed-in browser, new tabs only, provider sites only)",
+        f"browser      : {b.chrome_use_browser or 'extension default profile'}"
+        f" | {'background tabs, never raised' if b.chrome_use_background else 'foreground: OmniBrain tab shown'}"
+        + (f" | may raise: {', '.join(b.chrome_use_front_providers)}" if b.chrome_use_front_providers else ""),
+    ]
+    eng = engine or LiveChromeEngine(settings)
+    try:
+        status = await eng.runner.run("status")
+    except LiveChromeError as exc:
+        lines.append(f"chrome-use   : NOT READY -- {exc}")
+        return lines
+    problem = extension_problem(status)
+    lines.append(f"chrome-use   : {status.get('cliVersion', '?')}, extension " + (f"PROBLEM -- {problem}" if problem else "connected"))
+    try:
+        await eng._resolve_browser()
+        lines.append(f"target       : {browser_label(settings)} -> chrome-use profile {eng.runner.browser or '(default)'}")
+    except LiveChromeError as exc:
+        lines.append(f"target       : NOT READY -- {exc}")
+    return lines
