@@ -8,6 +8,8 @@ that a login / captcha / age page is reported as the user's, never touched.
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 import shutil
 import sys
@@ -616,24 +618,86 @@ async def test_unparseable_output_and_timeouts_are_errors(fake):
         await quick.run("status")
 
 
-async def test_a_failed_tab_select_is_reported_and_retried_next_time(fake, engine):
+async def test_a_vanished_tab_is_an_error_for_that_tab_only(fake, engine):
     page = await engine.open_research_page("chatgpt", "https://chatgpt.com/")
     other = await engine.open_research_page("gemini", "https://gemini.google.com/app")
     await page.evaluate("() => 1")
     tabs = fake.read()["tabs"]
-    tabs.pop("t3")
+    tabs.pop(other.tab_id)
     fake.update(tabs=tabs)
-    with pytest.raises(LiveChromeError, match="Could not resolve"):
+    with pytest.raises(LiveChromeError):
         await other.evaluate("() => 1")
-    assert engine._selected is None
-    await page.evaluate("() => 2")  # the other tab still works
+    await page.evaluate("() => 2")  # the other tab, in its own session, still works
+
+
+# ------------------------------------------------------------------ parallel tabs
+
+
+async def test_each_provider_tab_has_its_own_chrome_use_session(fake, engine):
+    a = await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    b = await engine.open_research_page("gemini", "https://gemini.google.com/app")
+    assert a.tab_id != b.tab_id
+    assert a.runner.session == "omnibrain-chatgpt" and b.runner.session == "omnibrain-gemini"
+    fake.clear_calls()
+    await a.evaluate("() => 1")
+    await b.evaluate("() => 1")
+    await a.evaluate("() => 1")
+    sessions = [c["flags"]["--session"] for c in fake.calls()]
+    assert sessions and set(sessions) == {"omnibrain-chatgpt", "omnibrain-gemini"}
+    # no shared "current tab": alternating between tabs never needs a tab switch
+    assert not [v for v in fake.verbs() if v[:2] == ["tab", "select"]]
+    assert engine._focus_lock is None, "adapters must not serialise typing across live tabs"
+    assert not hasattr(engine, "_cmd_lock") and not hasattr(engine, "_selected")
+
+
+async def test_tabs_are_opened_concurrently_into_distinct_sessions(fake, engine):
+    pages = await asyncio.gather(
+        engine.open_research_page("chatgpt", "https://chatgpt.com/"),
+        engine.open_research_page("gemini", "https://gemini.google.com/app"),
+        engine.open_research_page("deepseek", "https://chat.deepseek.com/"),
+    )
+    assert len({p.tab_id for p in pages}) == 3
+    assert len({p.runner.session for p in pages}) == 3
+    tabs = fake.read()["tabs"]
+    assert {tabs[p.tab_id]["url"] for p in pages} == {"https://chatgpt.com/", "https://gemini.google.com/app", "https://chat.deepseek.com/"}
+    # the same key opened twice at once yields ONE tab
+    again = await asyncio.gather(*(engine.open_research_page("chatgpt", "https://chatgpt.com/") for _ in range(3)))
+    assert all(p is pages[0] for p in again)
+
+
+async def test_commands_for_different_tabs_overlap_but_one_tab_stays_serial(fake, engine, monkeypatch):
+    a = await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    b = await engine.open_research_page("gemini", "https://gemini.google.com/app")
+    state = {"now": 0, "peak": 0}
+
+    def slow(runner):
+        real = runner.run
+
+        async def run(*args, **kw):
+            state["now"] += 1
+            state["peak"] = max(state["peak"], state["now"])
+            try:
+                await asyncio.sleep(0.15)
+                return await real(*args, **kw)
+            finally:
+                state["now"] -= 1
+
+        monkeypatch.setattr(runner, "run", run)
+
+    slow(a.runner)
+    slow(b.runner)
+    await asyncio.gather(a.evaluate("() => 1"), b.evaluate("() => 2"))
+    assert state["peak"] >= 2, "a command for one provider must not wait for another provider's"
+    state["peak"] = 0
+    await asyncio.gather(a.evaluate("() => 1"), a.evaluate("() => 2"))
+    assert state["peak"] == 1, "one tab's commands stay serial (one session = one active tab)"
 
 
 async def test_tab_new_without_an_id_is_an_error(fake, engine, monkeypatch):
-    async def bad(*a, **k):
+    async def bad(self, *a, **k):
         return {"url": "x"}
 
-    monkeypatch.setattr(engine.runner, "run", bad)
+    monkeypatch.setattr(ChromeUseRunner, "run", bad)  # every session's runner
     with pytest.raises(LiveChromeError, match="no usable tab id"):
         await engine.open_research_page("chatgpt", "https://chatgpt.com/")
 

@@ -321,6 +321,13 @@ class ChromeUseRunner:
         self.timeout_s = timeout_s
         self.extra_env = dict(env or {})
         self.calls = 0
+        self._parent: "ChromeUseRunner | None" = None
+
+    def for_session(self, session: str) -> "ChromeUseRunner":
+        """Same binary/options, another chrome-use session (its own daemon, tab group and active tab)."""
+        twin = ChromeUseRunner(self.argv_prefix, session=session, browser=self.browser, timeout_s=self.timeout_s, env=self.extra_env)
+        twin._parent = self
+        return twin
 
     def build_argv(self, args: Sequence[str]) -> list[str]:
         argv = [*self.argv_prefix, "--session", self.session]
@@ -376,6 +383,8 @@ class ChromeUseRunner:
         _check_argv(args)  # policy first: nothing below runs for a refused command
         argv = self.build_argv(args)
         self.calls += 1
+        if self._parent is not None:
+            self._parent.calls += 1  # the engine's runner counts every call made for it
         try:
             done = await asyncio.to_thread(self._run_sync, argv, stdin, timeout or self.timeout_s)
         except FileNotFoundError as exc:
@@ -601,9 +610,16 @@ class _Locator:
 class LivePage:
     """The Playwright ``Page`` subset the adapters use, over one chrome-use tab."""
 
-    def __init__(self, engine: "LiveChromeEngine", tab_id: str, url: str, key: str, provider: str = "") -> None:
+    def __init__(
+        self, engine: "LiveChromeEngine", tab_id: str, url: str, key: str, provider: str = "", runner: "ChromeUseRunner | None" = None
+    ) -> None:
         self._engine, self.tab_id, self.key = engine, tab_id, key
         self.provider = provider or key
+        # One chrome-use session per tab: its own daemon and active tab, so tabs run in parallel without a shared
+        # "current tab". The lock only serialises this tab's own commands.
+        self.runner = runner or engine.runner
+        self._lock = asyncio.Lock()
+        self._selected = True  # a session's new tab is its active tab
         self._url = url
         self._closed = False
         self.keyboard = _Keyboard(self)
@@ -629,15 +645,15 @@ class LivePage:
     ) -> dict[str, Any]:
         if self._closed:
             raise LiveChromeError("tab was closed")
-        async with self._engine._cmd_lock:
+        async with self._lock:
             await self._guard(input_action=input_action, allow_modal=allow_modal)
-            return await self._engine.runner.run(*args, stdin=stdin, timeout=timeout)
+            return await self.runner.run(*args, stdin=stdin, timeout=timeout)
 
     async def _guard(self, *, input_action: bool, allow_modal: bool = False) -> None:
         """Select this tab, re-read its URL, refuse unless it is a provider page."""
         eng = self._engine
-        await eng._select(self)
-        data = await eng.runner.run("get", "url")
+        await self._select()
+        data = await self.runner.run("get", "url")
         url = str(data.get("url") or "")
         if not url:
             raise LiveChromeError("could not read the tab's URL; refusing to act blind")
@@ -650,11 +666,11 @@ class LivePage:
 
     async def check_gate(self) -> None:
         """Raise NeedsUser if a captcha / age gate / consent dialog is up (adapters call this before typing)."""
-        async with self._engine._cmd_lock:
+        async with self._lock:
             await self._guard(input_action=True)
 
     async def _refuse_if_challenge(self, allow_modal: bool = False) -> None:
-        raw = await self._engine.runner.run("eval", "--stdin", stdin=wrap_for_cli(_CHALLENGE_JS))
+        raw = await self.runner.run("eval", "--stdin", stdin=wrap_for_cli(_CHALLENGE_JS))
         info = _unwrap(raw)
         if not isinstance(info, dict):
             return
@@ -693,10 +709,10 @@ class LivePage:
     # ---- navigation / waiting
     async def goto(self, url: str, wait_until: str | None = None, timeout: float | None = None) -> None:
         assert_allowed_url(url, where="goto")
-        async with self._engine._cmd_lock:
+        async with self._lock:
             await self._guard(input_action=False)
-            await self._engine.runner.run("open", url, timeout=(timeout / 1000 + 15) if timeout else None)
-            now = str((await self._engine.runner.run("get", "url")).get("url") or "")
+            await self.runner.run("open", url, timeout=(timeout / 1000 + 15) if timeout else None)
+            now = str((await self.runner.run("get", "url")).get("url") or "")
             self._url = now or self._url
             assert_allowed_url(now, where="after navigation")
 
@@ -714,10 +730,10 @@ class LivePage:
     async def wait_for_timeout(self, ms: float) -> None:
         await asyncio.sleep(max(0.0, ms) / 1000)
         try:  # keep ``page.url`` honest for the loops that poll it
-            async with self._engine._cmd_lock:
+            async with self._lock:
                 if not self._closed:
-                    await self._engine._select(self)
-                    self._url = str((await self._engine.runner.run("get", "url")).get("url") or self._url)
+                    await self._select()
+                    self._url = str((await self.runner.run("get", "url")).get("url") or self._url)
         except Exception:  # noqa: BLE001 -- a wait never fails on bookkeeping
             pass
 
@@ -728,9 +744,20 @@ class LivePage:
             return
         if not (force or self._engine.front_allowed(self.provider)):
             return
-        async with self._engine._cmd_lock:
+        async with self._lock:
             await self._guard(input_action=False)
-            await self._engine._select(self, activate=True)
+            await self._select(activate=True)
+
+    async def _select(self, *, activate: bool = False) -> None:
+        """Make this tab its session's active tab (normally already true); ``activate`` also shows it."""
+        if self._selected and not activate:
+            return
+        try:
+            await self.runner.run(*(["tab", "select", self.tab_id] + (["--activate"] if activate else [])))
+        except LiveChromeError:
+            self._selected = False
+            raise
+        self._selected = True
 
     # ---- pixels
     async def screenshot(self, path: str | None = None, type: str = "png", scale: str | None = None, full_page: bool = False, **_: Any) -> bytes:
@@ -749,12 +776,12 @@ class LivePage:
     async def close(self, run_before_unload: bool = False) -> None:
         if self._closed:
             return
-        async with self._engine._cmd_lock:
+        async with self._lock:
             try:
-                await self._engine.runner.run("tab", "close", self.tab_id)
+                await self.runner.run("tab", "close", self.tab_id)
             finally:
                 self._closed = True
-                self._engine._selected = None
+                self._selected = False
 
 
 def _unwrap(data: dict[str, Any]) -> Any:
@@ -791,10 +818,12 @@ class LiveChromeEngine:
             timeout_s=cfg.chrome_use_timeout_s,
         )
         self._pages: dict[str, LivePage] = {}
-        self._cmd_lock = asyncio.Lock()  # one chrome-use command at a time: it has ONE active tab
-        self._focus_lock = asyncio.Lock()
-        self._open_lock = asyncio.Lock()
-        self._selected: str | None = None
+        # Tabs run in PARALLEL: each provider tab has its own chrome-use session (``<session>-<key>``) and its own lock.
+        # No engine-wide command lock and no shared "current tab". ``_focus_lock`` is None so adapters don't serialise
+        # typing across providers (keystrokes are dispatched to each tab directly, they do not need window focus).
+        self._focus_lock = None
+        self._open_locks: dict[str, asyncio.Lock] = {}
+        self._verify_lock = asyncio.Lock()
         self._verified = False
         self._escalated: set[str] = set()
         self.log: list[str] = []
@@ -826,18 +855,18 @@ class LiveChromeEngine:
 
         (If it were not, chrome-use could be driving a browser it launched itself -- not your Chrome.)
         """
-        if self._verified:
-            return
-        problem = extension_problem(await self.runner.run("status"))
-        if problem:  # caller holds the command lock, so close through the runner directly
-            try:
-                await self.runner.run("tab", "close", page.tab_id)
-            finally:
-                page._closed = True
-                self._selected = None
-                self._pages.pop(page.key, None)
-            raise LiveChromeUnavailable(f"refusing to continue: {problem}")
-        self._verified = True
+        async with self._verify_lock:
+            if self._verified:
+                return
+            problem = extension_problem(await self.runner.run("status"))
+            if problem:  # caller holds the page lock, so close through the runner directly
+                try:
+                    await page.runner.run("tab", "close", page.tab_id)
+                finally:
+                    page._closed = True
+                    self._pages.pop(page.key, None)
+                raise LiveChromeUnavailable(f"refusing to continue: {problem}")
+            self._verified = True
 
     async def stop(self, keep_windows: bool | None = None) -> None:
         keep = self.settings.browser.keep_windows_open if keep_windows is None else keep_windows
@@ -850,19 +879,10 @@ class LiveChromeEngine:
         else:
             self._note("left OmniBrain's tabs open in your Chrome")
         self._pages.clear()
-        self._selected = None
 
-    async def _select(self, page: LivePage, *, activate: bool = False) -> None:
-        """Make ``page`` chrome-use's active tab. Caller holds ``_cmd_lock``."""
-        if self._selected == page.tab_id and not activate:
-            return
-        args = ["tab", "select", page.tab_id] + (["--activate"] if activate else [])
-        try:
-            await self.runner.run(*args)
-        except LiveChromeError:
-            self._selected = None
-            raise
-        self._selected = page.tab_id
+    def _runner_for(self, key: str) -> ChromeUseRunner:
+        slug = re.sub(r"[^a-z0-9]+", "-", key.lower()).strip("-") or "tab"
+        return self.runner.for_session(f"{self.runner.session}-{slug}")
 
     # ---- tabs
     async def open_research_page(self, provider: str, url: str, key: str | None = None) -> LivePage:
@@ -871,23 +891,23 @@ class LiveChromeEngine:
         cached = self._pages.get(tab_key)
         if cached is not None and not cached.is_closed():
             return cached
-        async with self._open_lock:
+        async with self._open_locks.setdefault(tab_key, asyncio.Lock()):
             cached = self._pages.get(tab_key)
             if cached is not None and not cached.is_closed():
                 return cached
-            async with self._cmd_lock:
-                data = await self.runner.run("tab", "new", url)
-                tab_id = str(data.get("tabId") or "")
-                if not _TAB_ID.match(tab_id):
-                    raise LiveChromeError(f"chrome-use tab new returned no usable tab id: {data!r}"[:300])
-                self._selected = tab_id
-                page = LivePage(self, tab_id, str(data.get("url") or url), tab_key, provider)
-                self._pages[tab_key] = page
+            runner = self._runner_for(tab_key)
+            data = await runner.run("tab", "new", url)
+            tab_id = str(data.get("tabId") or "")
+            if not _TAB_ID.match(tab_id):
+                raise LiveChromeError(f"chrome-use tab new returned no usable tab id: {data!r}"[:300])
+            page = LivePage(self, tab_id, str(data.get("url") or url), tab_key, provider, runner=runner)
+            self._pages[tab_key] = page
+            async with page._lock:
                 self._note(f"opened a new tab {tab_id} for {provider} in your Chrome")
                 # a brand-new tab reports about:blank until its first navigation commits (seen on real Chrome)
                 deadline = time.monotonic() + NEW_TAB_SETTLE_S
                 while True:
-                    now = str((await self.runner.run("get", "url")).get("url") or "")
+                    now = str((await runner.run("get", "url")).get("url") or "")
                     if now and not now.startswith("about:blank"):
                         break
                     if time.monotonic() >= deadline:
@@ -897,27 +917,25 @@ class LiveChromeEngine:
                 page._url = now
                 await self._verify_live_chrome(page)
                 if not self.settings.browser.chrome_use_background:
-                    await self._select(page, activate=True)  # watch it work: show OmniBrain's own new tab
+                    await page._select(activate=True)  # watch it work: show OmniBrain's own new tab
             try:
                 assert_allowed_url(now, where=f"{provider} tab after load")
             except LiveChromeNeedsUser:
                 raise  # login / captcha: leave the tab for the user to finish
             except LiveChromeRefused:
-                async with self._cmd_lock:  # it is OUR tab (we just opened it): don't leave it behind
+                async with page._lock:  # it is OUR tab (we just opened it): don't leave it behind
                     await self._discard_new_tab(page)
                 raise
             return page
 
     async def _discard_new_tab(self, page: "LivePage") -> None:
-        """Close a tab OmniBrain itself just opened (caller holds ``_cmd_lock``)."""
+        """Close a tab OmniBrain itself just opened (caller holds the page lock)."""
         self._pages.pop(page.key, None)
         page._closed = True
         try:
-            await self.runner.run("tab", "close", page.tab_id)
+            await page.runner.run("tab", "close", page.tab_id)
         except LiveChromeError as exc:
             self._note(f"could not close our new tab {page.tab_id}: {exc}")
-        if self._selected == page.tab_id:
-            self._selected = None
 
     def front_allowed(self, provider: str) -> bool:
         cfg = self.settings.browser
@@ -933,7 +951,7 @@ class LiveChromeEngine:
         return True
 
     async def focus_tab(self, page: LivePage) -> None:
-        async with self._focus_lock:
+        if True:  # no engine-wide lock: tabs are independent
             try:
                 await page.bring_to_front()
             except Exception as exc:  # noqa: BLE001

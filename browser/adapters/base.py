@@ -451,7 +451,8 @@ class ChatAdapter:
         if lock is not None:
             await lock.acquire()
         try:
-            if lock is not None:
+            if lock is not None or getattr(self.engine, "live", False):
+                # live Chrome: no shared lock (tabs are driven in parallel); just show this tab if foreground mode
                 try:
                     await page.bring_to_front()
                 except Exception:  # noqa: BLE001

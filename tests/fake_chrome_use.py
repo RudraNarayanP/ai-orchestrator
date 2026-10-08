@@ -75,14 +75,30 @@ def main() -> None:
         i += 1
     stdin = "" if sys.stdin is None or sys.stdin.isatty() else sys.stdin.buffer.read().decode("utf-8")
     env = {k: v for k, v in os.environ.items() if k.startswith("AGENT_BROWSER_") or k == "CI"}
+    pre = load()
+    if pre.get("sleep"):  # a slow command: sleep outside the state lock so other sessions are not held up
+        time.sleep(float(pre["sleep"]))
+    # parallel tabs run several fake processes at once: serialise state access like the real daemon would
+    import atexit
+    lock = DIR / "state.lock"
+    for _ in range(4000):
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > 5:  # left behind by a killed process
+                    lock.unlink(missing_ok=True)
+            except OSError:
+                pass
+            time.sleep(0.005)
+    atexit.register(lambda: lock.unlink(missing_ok=True))
     with CALLS.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps({"argv": args, "flags": flags, "stdin": stdin, "env": env}) + "\n")
-
     state = load()
     if state.get("daemon") and verb_is_first_call():
         spawn_daemon(float(state["daemon"]))
-    if state.get("sleep"):
-        time.sleep(float(state["sleep"]))
     if state.get("garbage"):
         sys.stdout.write("this is not json\n")
         sys.exit(0)
@@ -91,7 +107,13 @@ def main() -> None:
         reply(ok=False, error=state["fail"][verb])
 
     tabs = state["tabs"]
-    active = state.get("active")
+    sess = str(flags.get("--session") or "default")
+    actives = state.setdefault("actives", {})
+    active = actives.get(sess, state.get("active"))
+
+    def set_active(tid):
+        actives[sess] = tid
+        state["active"] = tid
 
     def redirect(url: str) -> str:
         return state.get("redirects", {}).get(url, url)
@@ -106,19 +128,19 @@ def main() -> None:
             state["next"] = state.get("next", 1) + 1
             tid = f"t{state['next']}"
             tabs[tid] = {"url": redirect(args[2]), "title": "New tab", "blank": state.get("blank_gets", 0)}
-            state["active"] = tid
+            set_active(tid)
             save(state)
             reply({"tabId": tid, "targetId": f"T{tid}", "label": None, "url": tabs[tid]["url"], "total": len(tabs)})
         if sub == "select":
             if args[2] not in tabs:
                 reply(ok=False, error=f"Could not resolve target tab `{args[2]}`")
-            state["active"] = args[2]
+            set_active(args[2])
             save(state)
             reply({"tabId": args[2]})
         if sub == "close":
             tabs.pop(args[2], None)
-            if state.get("active") == args[2]:
-                state["active"] = None
+            if active == args[2]:
+                set_active(None)
             save(state)
             reply({"closed": args[2]})
         if sub == "list":
