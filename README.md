@@ -123,6 +123,18 @@ Two consequences worth stating plainly:
 
 ---
 
+### Stopping the server, mode toggles
+
+`python run.py stop` stops a running (also a windowless) server cleanly: running jobs are cancelled and OmniBrain's
+own provider tabs are closed (each tab is its own chrome-use session, and that session is stopped; your own tabs are
+never touched). Killing the process instead leaves the tabs open.
+
+`research.provider_modes` switches a provider's Thinking / Search / Deep Research toggles on before each question
+(e.g. `deepseek: [thinking, search]`). Each click is verified by reading the toggle back; a toggle that is missing,
+plan-gated, disabled or whose state cannot be read is reported in the job's events and skipped. Modes that live in a
+menu (Gemini's mode picker and tools menu) are reported, not driven. `python scripts/live_modes_probe.py chatgpt,deepseek`
+lists what each signed-in provider offers (read-only).
+
 ## What is verified, and what is not
 
 Honest status, because "it should work" is not a status:

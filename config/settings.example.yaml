@@ -120,6 +120,12 @@ research:
   min_independent_sources: 2
   claim_batch_size: 12
   response_stability_poll_ms: 700
+  # Mode toggles beside a provider's composer to switch ON before each question, in order, each verified after the
+  # click. Unavailable / plan-gated / unreadable toggles are reported and skipped (never forced). Seen 2026-10-08:
+  # chatgpt [thinking] ("Think"), deepseek [thinking, search] ("DeepThink", "Search"). Gemini keeps modes in menus.
+  provider_modes: {}
+  #   deepseek: [thinking, search]
+  #   chatgpt: [thinking]
   response_stable_rounds: 3
 
 search:
