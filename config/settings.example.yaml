@@ -23,9 +23,9 @@
 #   driver: chrome_use
 #   chrome_use_path: C:/Users/<you>/AppData/Local/Programs/chrome-use/chrome-use.exe   # only if not on PATH
 #   chrome_use_browser: you@gmail.com    # only if several Chrome profiles run the extension
-#   chrome_use_background: false         # false (default): OmniBrain's tab is shown in front so you can watch; true: drive tabs unseen
+#   chrome_use_background: true          # true (default): drive tabs unseen, never raise/focus Chrome; false: show OmniBrain's tab in front
 #   chrome_use_front_providers: []       # only with chrome_use_background: true - providers still raised before typing
-#   chrome_use_front_on_failure: true    # only with chrome_use_background: true - raise just a failing provider's tab, once
+#   chrome_use_front_on_failure: false   # only with chrome_use_background: true - raise just a failing provider's tab, once (off: report needs_focus)
 browser:
   driver: playwright         # playwright (default, dedicated profile) | chrome_use (opt-in, live Chrome)
   channel: chrome            # installed Chrome; set to "msedge" to use Edge

@@ -264,6 +264,17 @@ class ChatAdapter:
             pass
         return first
 
+    def _focus_withheld(self) -> bool:
+        """Live Chrome in background mode with this provider not allowed to the front: a failure here may just be the
+        missing focus, which we never take (report ``needs_focus`` instead)."""
+        eng = self.engine
+        return bool(getattr(eng, "live", False) and getattr(eng.settings.browser, "chrome_use_background", False)
+                    and not eng.front_allowed(self.provider))
+
+    def _focus_hint(self) -> str:
+        return (f"OmniBrain never brings Chrome to the front unasked; to allow it for this provider add "
+                f"'{self.provider}' to browser.chrome_use_front_providers")
+
     def _dismiss_cfg(self, page) -> dict[str, Any]:
         """On the person's own Chrome (live driver) banners may be closed but never accepted / agreed to."""
         if hasattr(page, "check_gate"):
@@ -400,7 +411,7 @@ class ChatAdapter:
             if response.status == ProviderStatus.RATE_LIMITED:
                 # Never retry straight into a rate limit; the runner backs this site off.
                 return self._finish(response)
-            if (response.error or "").startswith(("readiness=login_wall", "readiness=blocked", "no-response-element: AI Mode", "submit_failed")):
+            if (response.error or "").startswith(("readiness=login_wall", "readiness=blocked", "no-response-element: AI Mode", "submit_failed", "needs_focus")):
                 # submit_failed: the send was already retried; a fresh attempt would type the prompt a second time.
                 # A login wall, captcha or age gate does not go away by asking again; report it and move on.
                 return self._finish(response)
@@ -464,6 +475,9 @@ class ChatAdapter:
             if not typed and await self._escalate_focus(page):
                 typed = await self._type_with_fallback(page, prompt)  # live Chrome: retry once with this tab in front
             if not typed:
+                if self._focus_withheld():
+                    response.note(ProviderStatus.FAILED, error=f"needs_focus: could not place text in the composer of a background tab ({self._focus_hint()})")
+                    return False
                 response.note(ProviderStatus.BROKEN, error="could not place text in the composer")
                 return False
             if getattr(self, "_navigated_for_prompt", False):
@@ -476,9 +490,11 @@ class ChatAdapter:
 
             await emit("provider", f"{self.provider}: prompt sent — waiting for answer", self.provider, round_no)
             if not await self._submit(page, prompt):
+                withheld = self._focus_withheld()
                 response.note(
                     ProviderStatus.FAILED,
-                    error="submit_failed: the prompt stayed in the composer after the send button and Enter (tried twice)",
+                    error=(f"needs_focus: submit_failed in a background tab ({self._focus_hint()})" if withheld else
+                           "submit_failed: the prompt stayed in the composer after the send button and Enter (tried twice)"),
                     detail=" ".join(getattr(self, "submit_log", []))[:300],
                 )
                 await emit("provider", f"{self.provider}: submit_failed", self.provider, round_no)

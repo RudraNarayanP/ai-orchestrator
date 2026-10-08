@@ -507,10 +507,58 @@ def _activations(fake) -> list[list[str]]:
 
 
 def _bg(fake, tmp_path, **browser) -> LiveChromeEngine:
+    browser.setdefault("chrome_use_front_on_failure", True)
     return LiveChromeEngine(live_settings(str(tmp_path / "a"), chrome_use_background=True, **browser), runner=fake.runner)
 
 
-async def test_default_is_foreground_the_new_omnibrain_tab_is_shown_and_only_that_tab(fake, engine):
+async def test_default_is_background_nothing_is_ever_raised(fake, engine):
+    """User (2026-10-08): ALL work in the background, nothing popping to the foreground."""
+    assert engine.settings.browser.chrome_use_background is True
+    assert engine.settings.browser.chrome_use_front_on_failure is False
+    page = await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    other = await engine.open_research_page("gemini", "https://gemini.google.com/app")
+    await page.evaluate("() => 1")
+    await engine.focus_tab(other)
+    await page.bring_to_front()
+    assert engine.escalate_focus("chatgpt") is False, "a failure never escalates to the front by default"
+    await page.bring_to_front()
+    assert _activations(fake) == []
+
+
+async def test_a_background_failure_is_reported_as_needs_focus_not_fixed_by_stealing_it(fake, engine, monkeypatch):
+    from browser.adapters import build_adapter
+    from backend.models import ProviderResponse, ProviderStatus
+
+    adapter = build_adapter("chatgpt", engine, engine.settings, engine.settings.providers["chatgpt"])
+    assert adapter._focus_withheld() is True
+    page = await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+
+    async def ready(*a, **k):
+        return {"ok": True, "state": "ready"}
+
+    async def no(*a, **k):
+        return False
+
+    async def fake_call(p, fn, *args):
+        return {"count": 0, "lastText": ""} if fn == "baseline" else None
+
+    monkeypatch.setattr(adapter, "prepare", ready)
+    monkeypatch.setattr(adapter, "_type_with_fallback", lambda p, t: no())
+    monkeypatch.setattr(adapter, "_call", fake_call)
+    fake.clear_calls()
+    response = ProviderResponse(id="r", job_id="j", round=1, provider="chatgpt", prompt="q", status=ProviderStatus.LAUNCHING)
+
+    async def emit(*a, **k):
+        return None
+
+    assert await adapter._attempt(page_setup=False, response=response, prompt="q", round_no=1, emit=emit) is False
+    assert (response.error or "").startswith("needs_focus"), response.error
+    assert "chrome_use_front_providers" in response.error
+    assert _activations(fake) == []
+
+
+async def test_foreground_mode_shows_the_new_omnibrain_tab_and_only_that_tab(fake, tmp_path):
+    engine = LiveChromeEngine(live_settings(str(tmp_path / "f"), chrome_use_background=False), runner=fake.runner)
     page = await engine.open_research_page("chatgpt", "https://chatgpt.com/")
     assert ["tab", "select", "t2", "--activate"] in fake.verbs()
     other = await engine.open_research_page("gemini", "https://gemini.google.com/app")
