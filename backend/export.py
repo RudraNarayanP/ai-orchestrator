@@ -102,9 +102,11 @@ def job_markdown(snap: dict[str, Any]) -> str:
         lines.append("")
 
     evidence = snap.get("evidence") or []
-    if evidence:
-        lines += [f"## Evidence we opened ({len(evidence)})", ""]
-        for e in evidence:
+    opened = [e for e in evidence if e.get("origin") != "provider_quote"]
+    quoted = [e for e in evidence if e.get("origin") == "provider_quote"]
+    if opened:
+        lines += [f"## Evidence we opened ({len(opened)})", ""]
+        for e in opened:
             bits = [inline(e.get("check_status"), 30)]
             if e.get("tier") and e.get("tier") != "unknown":
                 bits.append(inline(e["tier"], 30))
@@ -116,6 +118,16 @@ def job_markdown(snap: dict[str, Any]) -> str:
             if e.get("verbatim_excerpt"):
                 row += f' \u2014 found on page: "{inline(e["verbatim_excerpt"], 200)}"'
             lines.append(row)
+        lines.append("")
+
+    if quoted:
+        # Its own heading: we never opened these pages, so the audit trail must not say we did.
+        lines += [f"## Quoted by a provider, not opened by us ({len(quoted)})", ""]
+        for e in quoted:
+            lines.append(
+                f"- {_link(e.get('title') or e.get('domain'), e.get('url'))} ({inline(e.get('check_status'), 30)})"
+                + (f' \u2014 provider displayed: "{inline(e["verbatim_excerpt"], 200)}"' if e.get("verbatim_excerpt") else "")
+            )
         lines.append("")
 
     conflicts = snap.get("disagreements") or []

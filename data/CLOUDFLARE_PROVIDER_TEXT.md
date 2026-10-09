@@ -53,17 +53,27 @@ quotes it.
 What is missing: a provider's quoted passage is currently used *only* to attribute a link to a
 claim (`claim_for_link`), never as evidence content. The quote dies in `Citation.snippet`.
 
-## Proposed scoped change (not implemented)
+## Implemented 2026-10-09 (`31ac700`)
 
-Add an evidence row per provider-quoted passage: `origin="provider_quote"`,
-`check_status=NOT_CHECKED`, `verbatim_excerpt` = the quoted text, `claim_id` attributed only
-when the quote itself contains the claim's figures and event cue (the same clause logic in
-`backend/evidence/events.py`), and a note `quoted by <provider>; page not opened by us`.
+An evidence row per provider-quoted passage: `origin="provider_quote"`,
+`check_status=NOT_CHECKED`, `verbatim_excerpt` = the quoted text exactly, the real source url /
+title / tier, `cited_by=[provider]`, and a note naming who displayed it and in which
+conversation (`quoted by deepseek in https://chat.deepseek.com/...`). It is filed under a claim
+only when the displayed passage states that claim's own date and event about the same subject:
+the live quote says "the record-breaking structure", never "Eiffel Tower", so it is recorded
+unattached rather than borrowed.
 
-Why `NOT_CHECKED`: confirmed-counting (`pool.py:311`, `runner.py:1002`, `verifier.py:181`) and
-`provenance()`'s ladder both ignore it, so thresholds are untouched; the curator finally sees
-"DeepSeek quotes the BIE page as saying X" as a labelled object instead of only inside a
-transcript, and history shows which facts rest solely on a provider's word.
+Guaranteed by `tests/test_provider_quotes.py`: never `CONFIRMED`, never `CLAIM_SUPPORTED`, never
+counted toward sufficiency or confidence (every counting rule requires `CONFIRMED`), never a
+cited source in the answer (`attach_sources` requires `CONFIRMED`), and it cannot overwrite the
+row for a page we tried to open -- `_merge_evidence` keeps quote rows in their own space, so a
+`blocked` source stays `blocked`. The curator receives it labelled "provider-quoted, not opened
+by us".
+
+Why `NOT_CHECKED`: confirmed-counting (`pool.py`, `runner.py:1002`, `verifier.py:181`) and the
+`provenance()` ladder all ignore it, so no threshold moved; the curator finally sees "DeepSeek
+quotes the BIE page as saying X" as a labelled object instead of only inside a transcript, and
+history shows which facts rest solely on a provider's word.
 
 Risk to keep in view: a provider can misquote or invent a quote, so this is second-hand
 documentation ("the provider says the source says"), never verification. If it ever becomes a

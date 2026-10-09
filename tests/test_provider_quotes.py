@@ -91,6 +91,32 @@ def test_a_quote_that_does_not_state_the_claim_is_left_unattached():
     assert rows[0].check_status == SourceCheckStatus.NOT_CHECKED
 
 
+def test_the_export_never_calls_a_provider_quote_a_page_we_opened(tmp_path):
+    from backend.export import job_markdown
+    from backend.models import Evidence
+    from tests.test_history_export import finished_job
+
+    job = finished_job()
+    job.evidence.append(
+        Evidence(
+            job_id=job.id, claim_id=job.claims[0].id, url=SOURCE, title="Expo 1889 Paris",
+            domain="bie.example.org", check_status=SourceCheckStatus.NOT_CHECKED,
+            origin="provider_quote", verbatim_excerpt=QUOTE,
+            check_notes="provider-quoted, not opened by us; quoted by deepseek",
+        )
+    )
+    settings = base_settings(storage={"db_path": str(tmp_path / "q.db")})
+    store = Store(settings)
+    store.save_job(job)
+    md = job_markdown(store.job_snapshot(job.id))
+
+    opened, quoted = md.split("## Evidence we opened", 1)[1].split("## Quoted by a provider", 1)
+    assert SOURCE not in opened, "the quote row must not sit under the pages we opened"
+    assert "found on page" not in quoted, "we never saw that page"
+    assert "Quoted by a provider, not opened by us (1)" in md
+    assert QUOTE[:50] in quoted
+
+
 def test_no_quote_text_no_row():
     rows = provider_quote_rows("j", [response("chatgpt", f"{SOURCE} — OPENED (official site; read the page)")], [claim()], 1)
     assert rows == [], "a self-declared 'I opened it' with no quoted content is not a quote"

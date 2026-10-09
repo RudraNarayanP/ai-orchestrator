@@ -352,6 +352,19 @@ in the ledger, and the curator decides. Known limit, in the safe direction: a pa
 swaps the subject noun ("Work on the foundations began in January 1887" for "Construction of
 the tower began in January 1887") is left unverified rather than guessed.
 
+**Age only undermines what can change.** A page published in 2018 is perfectly good evidence
+that the Data Protection Act received Royal Assent on 23 May 2018 -- that fact cannot go stale.
+A price, an officeholder, a rule in force and anything undated still get the outdated
+treatment, and a year in the question is no longer mistaken for a request for current data
+(`claim_ages`, `backend/evidence/events.py`).
+
+**A provider's quote is recorded, never believed.** Some providers show the source's own words
+(DeepSeek does; logged-out ChatGPT gives bare chips). That passage is stored verbatim as
+`origin="provider_quote"` with the source, the provider and the conversation it came from -- and
+always `NOT_CHECKED`, so it can never confirm a claim, raise confidence or become a cited
+source. Citing a URL, quoting a source and OmniBrain reading the page remain three different
+facts (`MENTIONED -> OPENED -> INSPECTED -> CITED -> CLAIM_SUPPORTED`).
+
 Domain tiers run primary official > original research > government > journalism >
 technical > community > social > unsourced-AI-claim. Provider agreement is recorded
 and **explicitly not counted**: a verdict's own reasoning text says so, because the
