@@ -1352,6 +1352,12 @@ class ResearchRunner:
 
     def _complete(self, job: Job, report: VerifierReport | None, responses: list[ProviderResponse], *, rounds: int, stop: str) -> Job:
         job.status = JobStatus.SYNTHESIZING
+        if report is not None and report.reviewer_status == "INCOMPLETE":
+            # A pass that was cut off mid-reply must not erase what an earlier completed
+            # pass established: carry those verdicts forward, and invent nothing to fill gaps.
+            prior = {v.claim_id: v for r in job.reports[:-1] if r.reviewer_status == "COMPLETED" for v in r.verdicts}
+            have = {v.claim_id for v in report.verdicts}
+            report.verdicts.extend(v for cid, v in prior.items() if cid not in have)
         if report is not None:
             # The ledger and the answer are the same judgement read twice: decide it once.
             claim_ops.apply_verdicts(job.claims, report.verdicts)

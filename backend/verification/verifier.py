@@ -150,6 +150,58 @@ class Verifier:
             report.raw_output = reply.text[:4000]
             report.verifier_model = self.endpoint.model
             return report
+
+        # A review counts as finished only when every claim shown to the curator came back
+        # with a verdict. Live (eiffel run, round 3): the reply was cut off at "reasoning":,
+        # the rescue kept the prose, all 18 verdicts were lost, and the job was stored as
+        # reviewer_status=COMPLETED with verdicts=[] -- which let a later rule rewrite the
+        # answer to "none of the pages I opened confirms an answer" over 5 confirmed rows.
+        shown = self.focus(claims, evidence)[0]
+        cut_off = bool(reply.truncated or reply.repaired)
+        missing = [c for c in shown if c.id not in {v.claim_id for v in report.verdicts}]
+        # An empty verdict list is not a finished review either, however well-formed the JSON
+        # was: it asserts nothing about the claims it was shown.
+        judged_nothing = bool(shown) and not report.verdicts
+        if missing and (cut_off or judged_nothing):
+            missing = await self._recover_missing(
+                report, missing, question=question, claims=claims, evidence=evidence, responses=responses,
+                disagreements=disagreements, round_no=round_no, corrections=corrections,
+            )
+            judged_nothing = bool(shown) and not report.verdicts
+        # Incomplete only when the gap survives the bounded recovery: a pass that ran out of
+        # tokens and then judged every remaining claim in smaller batches *is* completed, and
+        # the audit trail says that is what happened.
+        incomplete = (cut_off or judged_nothing) and bool(missing or judged_nothing)
+        if cut_off and not incomplete:
+            report.unresolved.append(
+                f"the first pass ran out of tokens; the {len(shown) - len(missing)} claim(s) it never reached were re-asked in smaller batches and judged"
+            )
+        if missing and not incomplete:
+            report.unresolved.append(
+                f"{len(missing)} of {len(shown)} claims shown to the curator came back unjudged; unjudged is not disproved"
+            )
+        if incomplete:
+            what = "cut off mid-reply" if cut_off else "returned no verdicts at all"
+            recovered = self.deterministic(
+                job_id=job_id, question=question, round_no=round_no, claims=claims,
+                evidence=evidence, responses=responses, disagreements=disagreements,
+                reason=(
+                    f"curator review {what}: {len(report.verdicts)} of {len(shown)} claims judged"
+                    + (f", {len(missing)} left unjudged" if missing else "")
+                ),
+                status="INCOMPLETE",
+            )
+            judged = {v.claim_id for v in report.verdicts}
+            # What the curator decided stands; what it never reached is decided by the
+            # evidence ledger with the same claim-level rules, never by inventing a verdict.
+            recovered.verdicts = report.verdicts + [v for v in recovered.verdicts if v.claim_id not in judged]
+            recovered.raw_output = reply.text[:4000]
+            recovered.verifier_model = f"{self.endpoint.provider}:{self.endpoint.model} (review incomplete)"
+            recovered.caveats = list(recovered.caveats) + [
+                f"the curator's pass was {what}; what it judged stands, the rest is decided by the evidence ledger"
+            ]
+            return recovered
+
         # Deterministic cross-check: a model that calls a claim "supported" with
         # zero confirmed sources in our own records gets overruled, not trusted.
         self._reconcile(report, claims, evidence, question, disagreements)
@@ -218,6 +270,44 @@ class Verifier:
                 VERIFIER_SCHEMA,
             ]
         )
+
+    RECOVERY_BATCH = 6
+    RECOVERY_CALLS = 2
+
+    async def _recover_missing(
+        self,
+        report: VerifierReport,
+        missing: list[Claim],
+        *,
+        question: str,
+        claims: list[Claim],
+        evidence: list[Evidence],
+        responses: list[ProviderResponse],
+        disagreements: list[Disagreement],
+        round_no: int,
+        corrections: list[Any] | None,
+    ) -> list[Claim]:
+        """Ask again about only the claims a cut-off reply never judged -- two calls, then stop.
+
+        Nothing is invented on the way out: whatever is still unjudged is returned so the
+        caller can record the gap instead of papering over it.
+        """
+        batches = [missing[i : i + self.RECOVERY_BATCH] for i in range(0, len(missing), self.RECOVERY_BATCH)]
+        unjudged: list[Claim] = []
+        for batch in batches[: self.RECOVERY_CALLS]:
+            payload = self._material(question, batch, evidence, responses, disagreements, round_no, corrections)
+            parsed, reply = await self.client.complete_json(
+                [{"role": "system", "content": self._system()}, {"role": "user", "content": payload}],
+                temperature=self.endpoint.temperature,
+            )
+            part = self._from_model(parsed, job_id=report.job_id, round_no=round_no, claims=batch, evidence=evidence) if parsed else None
+            if part is None or reply.truncated or reply.repaired:
+                unjudged.extend(batch)
+                continue
+            report.verdicts.extend(part.verdicts)
+            judged = {v.claim_id for v in part.verdicts}
+            unjudged.extend([c for c in batch if c.id not in judged])
+        return unjudged
 
     def _material(self, question, claims, evidence, responses, disagreements, round_no: int = 1, corrections: list[Any] | None = None) -> str:
         claims, evidence = self.focus(claims, evidence)
@@ -836,9 +926,18 @@ class Verifier:
         self.attach_sources(report, evidence)
         overall = report.confidence
         supported = [v for v in report.verdicts if v.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED}]
+        # What we actually have in hand decides the wording. Saying "none of the pages we
+        # opened confirms anything" while the ledger holds confirmed rows is a false statement
+        # about our own evidence (live eiffel run: 5 confirmed rows, an empty verdict list
+        # after a cut-off reply, and exactly this sentence in the answer).
+        usable = [e for e in evidence if e.check_status == SourceCheckStatus.CONFIRMED and e.polarity != "refute"]
         if not supported and overall in {Confidence.HIGH, Confidence.MODERATE}:
             report.confidence = Confidence.LOW
-            report.confidence_note = (report.confidence_note or "") + " No claim survived the evidence ledger."
+            report.confidence_note = (report.confidence_note or "") + (
+                " No judged claim was backed by a page we opened."
+                if not usable
+                else f" The pages we opened confirm {len(usable)} point(s), but none of the claims the curator judged."
+            )
             report.unresolved.append("verifier answer overruled to low confidence by the ledger")
         standing = [v for v in report.verdicts if v.verdict in {ClaimStatus.REFUTED, ClaimStatus.CONTESTED}]
         future = future_year(question)
@@ -852,11 +951,14 @@ class Verifier:
             nothing_found = draft.lower().startswith(("i don't know", "i do not know", "i couldn't", "i could not", "i cannot", "i can't", "unable to"))
             if draft and not nothing_found:
                 shown = draft if len(draft) <= 260 else draft[:257].rsplit(" ", 1)[0] + "..."
-                report.caveats = [f"Not confirmed by any page we opened: {shown}"] + list(report.caveats)
+                lead = "Not confirmed by any page we opened" if not usable else "Not confirmed by the pages we opened"
+                report.caveats = [f"{lead}: {shown}"] + list(report.caveats)
             report.answer = (
                 f"I don't know. That's about {future}, which hasn't happened yet, so nothing published can say."
                 if future
                 else "I couldn't verify that reliably. None of the pages I opened confirms an answer, so I won't guess."
+                if not usable
+                else "I couldn't verify that reliably. The pages I opened confirm other points, but not an answer to this."
             )
             report.why = ""
             report.sources = []

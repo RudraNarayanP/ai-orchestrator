@@ -39,6 +39,9 @@ class LLMReply:
     """True when no other model can help (bad key, forbidden, server unreachable)."""
     truncated: bool = False
     """The model stopped because it hit the token limit, so its text is cut off."""
+    repaired: bool = False
+    """The reply only parsed because a broken tail was rescued. Prose can survive a
+    cut-off verdict list, so this is never treated as a finished review."""
 
 
 class LLMUnavailable(RuntimeError):
@@ -199,13 +202,19 @@ class LLMClient:
         if not reply.ok:
             return None, reply
         parsed = extract_json(reply.text)
-        if parsed is None and reply.truncated:
-            # Live: a verdict list for ~25 claims ran past max_tokens, the JSON was cut off, and the run
-            # fell back to the model-free path. Ask once more with room to finish.
-            bigger = min(8192, max(self.endpoint.max_tokens * 2, 4096))
-            again = await self.complete(messages, temperature=temperature, max_tokens=bigger)
-            if again.ok:
-                return extract_json(again.text), again
+        reply.repaired = parsed is not None and not json_parses(reply.text)
+        if parsed is not None and not reply.truncated and not reply.repaired:
+            return parsed, reply
+        if parsed is None and not reply.truncated:
+            # nothing was cut off, so a longer answer limit cannot make this parse
+            return None, reply
+        bigger = min(8192, max(self.endpoint.max_tokens * 2, 4096))
+        again = await self.complete(messages, temperature=temperature, max_tokens=bigger)
+        if again.ok:
+            again_parsed = extract_json(again.text)
+            again.repaired = again_parsed is not None and not json_parses(again.text)
+            if again_parsed is not None and (parsed is None or not (again.truncated or again.repaired)):
+                return again_parsed, again
         return parsed, reply
 
     async def list_models(self) -> list[str]:
@@ -288,6 +297,24 @@ async def _sleep(seconds: float) -> None:
     import asyncio
 
     await asyncio.sleep(seconds)
+
+
+def json_parses(text: str) -> bool:
+    """Did the reply parse as it stands, with nothing rescued from a broken tail?"""
+    if not text:
+        return False
+    body = re.sub(r"<think>.*?</think>", " ", text, flags=re.S | re.I).strip()
+    candidates = [body, *re.findall(r"```(?:json)?\s*(.+?)```", text, re.S | re.I)]
+    obj, arr = _balanced(body, "{", "}"), _balanced(body, "[", "]")
+    candidates += [c for c in (obj, arr) if c]
+    for cand in candidates:
+        for attempt in (cand.strip(), _tidy(cand.strip())):
+            try:
+                if isinstance(json.loads(attempt), (dict, list)):
+                    return True
+            except json.JSONDecodeError:
+                continue
+    return False
 
 
 def extract_json(text: str) -> dict[str, Any] | None:
