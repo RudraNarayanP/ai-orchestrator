@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, Awaitable, Callable, Iterable
+from urllib.parse import urlparse
 
 from backend.evidence.sources import TIER_WEIGHT, gather_from_links, subject_names, tier_for
 from backend.models import Claim, Evidence, ProviderResponse, ResearchMode, SourceCheckStatus
@@ -19,6 +20,84 @@ from backend.research.claims import signature
 from backend.settings import Settings
 
 PRIORITY_KINDS = {"statistic", "date", "legal", "scientific", "product", "ranking"}
+
+# Paired delimiters only: an apostrophe inside a quoted sentence is part of the sentence.
+_QUOTE_RE = re.compile(r"“([^”\n]{40,700})”|\"([^\"]{40,700})\"|‘([^’\n]{40,700})’")
+
+
+def provider_quote_rows(job_id: str, responses: list[ProviderResponse], claims: list[Claim], round_no: int) -> list[Evidence]:
+    """Rows for passages a provider *displays* as quotes from a source we could not read.
+
+    A provider citing a URL and a provider showing the source's own words are different
+    acts, and both are weaker than us opening the page: the row is always NOT_CHECKED, so
+    it can never establish a claim or raise confidence. It exists because "DeepSeek quotes
+    the official site as saying X" is evidence about the record, and the curator and the
+    audit trail should see it instead of losing it in a transcript.
+    """
+    from backend.evidence.sources import FetchedPage, check_support
+
+    rows: list[Evidence] = []
+    for response in responses:
+        for citation in response.citations:
+            if not citation.url:
+                continue
+            text = citation.snippet or citation.title or ""
+            matches = [next(g for g in groups if g) for groups in _QUOTE_RE.findall(text)]
+            if not matches:
+                continue
+            quote = max(matches, key=len).strip()
+            if len(quote) < 40:
+                continue
+            # Judge the claim against the whole passage the provider displayed (quote plus
+            # its own framing), so a quote that names the subject only in the lead-in is
+            # still understood -- while what we store as the passage stays the quote.
+            shown = f"{text} {citation.title or ''}"
+            claim = claim_for_link({"title": citation.title, "snippet": shown, "href": citation.url}, claims)
+            check = None
+            if claim is not None:
+                check = check_support(
+                    claim.claim,
+                    FetchedPage(url=citation.url, text=shown, title=citation.title or "", ok=True, status=200),
+                )
+            attached = check is not None and check["status"] == SourceCheckStatus.CONFIRMED
+            verdict = (
+                f"the displayed passage states this claim ({check['coverage']})"
+                if attached
+                else f"does not state this claim: {check['status'].value}"
+                if check is not None
+                else "no claim matched this wording"
+            )
+            ref = response.conversation_url or response.id or "no conversation reference"
+            rows.append(
+                Evidence(
+                    job_id=job_id,
+                    round=round_no,
+                    claim_id=claim.id if attached else None,
+                    url=citation.url,
+                    title=(citation.title or "")[:220] or None,
+                    domain=(urlparse(citation.url).netloc or "").lower() or None,
+                    snippet=quote[:400],
+                    tier=tier_for(citation.url),
+                    polarity="support",
+                    check_status=SourceCheckStatus.NOT_CHECKED,
+                    check_notes=(
+                        f"provider-quoted, not opened by us; quoted by {response.provider} in {ref[:120]}; {verdict}"
+                    )[:400],
+                    origin="provider_quote",
+                    verbatim_excerpt=quote[:1000],
+                    ai_opened=citation.ai_opened,
+                    cited_by=[response.provider],
+                    omnibrain_opened=False,
+                )
+            )
+            rows[-1].provenance = citation_ops.provenance(
+                cited_by=rows[-1].cited_by,
+                ai_opened=citation.ai_opened,
+                omnibrain_opened=False,
+                claim_attached=attached,
+                supported=False,
+            )
+    return rows
 
 
 def claim_for_link(link: dict[str, Any], claims: list[Claim]) -> Claim | None:
@@ -311,10 +390,14 @@ async def build_pool(
             supported=ev.check_status == SourceCheckStatus.CONFIRMED and ev.polarity != "refute",
         )
 
+    quotes = provider_quote_rows(job_id, responses, claims, round_no)
+    evidence.extend(quotes)
+
     trace = {
         "links_collected": len(raw_links),
         "links_from_search": len(searched),
-        "pages_fetched": len(evidence),
+        "pages_fetched": len(evidence) - len(quotes),
+        "provider_quotes": len(quotes),
         "confirmed": sum(1 for e in evidence if e.check_status.value == "confirmed"),
         "mismatched": sum(1 for e in evidence if e.check_status.value in {"mismatch", "hallucinated", "broken_url"}),
         "distinct_domains": len({e.domain for e in evidence if e.domain}),

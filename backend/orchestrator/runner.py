@@ -1452,6 +1452,11 @@ def _has_figure(text: str) -> bool:
 
 
 def _merge_evidence(old: list[Evidence], new: list[Evidence]) -> list[Evidence]:
+    # Provider-quoted passages live in their own space: they describe what a provider
+    # showed, so they must never overwrite the row for a page we tried to open (a
+    # `blocked` source turned `not_checked` would hide the block).
+    quotes = [e for e in new if e.origin == "provider_quote"]
+    new = [e for e in new if e.origin != "provider_quote"]
     # One row per (page, claim): a single page can legitimately settle several claims.
     by_url = {(e.url, e.claim_id): e for e in old if e.url}
     for ev in new:
@@ -1475,6 +1480,13 @@ def _merge_evidence(old: list[Evidence], new: list[Evidence]) -> list[Evidence]:
         old.append(ev)
         if ev.url:
             by_url[key] = ev
+    seen = {(e.url, e.claim_id, e.verbatim_excerpt) for e in old if e.origin == "provider_quote"}
+    for quote in quotes:
+        key = (quote.url, quote.claim_id, quote.verbatim_excerpt)
+        if key in seen:
+            continue
+        old.append(quote)
+        seen.add(key)
     return old
 
 
