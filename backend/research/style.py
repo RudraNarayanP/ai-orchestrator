@@ -514,6 +514,13 @@ TRUTH_CONFLICT = "Hmm, I'm not sure \u2014 the sources disagree."
 TRUTH_UNVERIFIED = "Couldn't verify that one."
 
 _WH_START = re.compile(r"^\s*(?:so,?\s+)?(what|which|who|whom|whose|when|where|why|how|tell me|explain|list|give me|show me|name)\b", re.I)
+# "In which year was the Eiffel Tower completed?" is a what-question even though it opens
+# with a preposition: the live run answered it "Yeah, the idea is right, but the number part
+# is a bit off" -- a claim correction aimed at someone who asserted nothing.
+_WH_PREP = re.compile(
+    r"^\s*(?:so,?\s+)?(?:in|on|at|by|for|during|since|from|under|within|with|about|as|of|to|around|across|according to)\s+",
+    re.I,
+)
 _CASUAL = re.compile(r"\b(bro|bruh|dude|mate)\b", re.I)
 _LEAD_YESNO = re.compile(r"^\s*(?:yes|yeah|yep|no|nope|nah)\b[\s,.\u2014\u2013:-]*", re.I)
 
@@ -521,6 +528,11 @@ _LEAD_YESNO = re.compile(r"^\s*(?:yes|yeah|yep|no|nope|nah)\b[\s,.\u2014\u2013:-
 _YESNO_START = re.compile(
     r"^\s*(?:so,?\s+)?(is|are|was|were|am|do|does|did|can|could|should|would|will|shall|may|might|must|has|have|had|"
     r"isn'?t|aren'?t|wasn'?t|weren'?t|don'?t|doesn'?t|didn'?t|can'?t|won'?t|is it true)\b", re.I)
+
+
+def _wh_head(text: str) -> bool:
+    """Does this clause ask for content, once any opening preposition is stepped over?"""
+    return bool(_WH_START.match(_WH_PREP.sub("", text or "", count=1)))
 
 
 def is_claim_check(question: str) -> bool:
@@ -531,10 +543,10 @@ def is_claim_check(question: str) -> bool:
     question too, unless the sentence itself opens as a yes/no question ("Is X taller than Y, which is in Paris?").
     """
     q = (question or "").strip()
-    if not q or _WH_START.match(q):
+    if not q or _wh_head(q):
         return False
     last = re.split(r"[,;:\u2014\u2013]", q)[-1]
-    if _WH_START.match(last) and not _YESNO_START.match(q):
+    if _wh_head(last) and not _YESNO_START.match(q):
         return False
     return True
 

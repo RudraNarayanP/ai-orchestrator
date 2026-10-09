@@ -175,3 +175,26 @@ def test_a_wh_question_after_a_leading_phrase_is_not_a_claim_check():
     assert is_claim_check("Is the Eiffel Tower taller than the Statue of Liberty, which is in New York?")
     assert is_claim_check("Under the DPA 2018 the age is 13, right?")
     assert is_claim_check("Is it true that, under the DPA, the age is 13?")
+
+
+def test_a_wh_question_opening_with_a_preposition_is_not_a_claim_check():
+    """Live (eiffel-year, 2026-10-09): "In which year was the Eiffel Tower completed?" got
+    "Yeah, the idea is right, but the number part is a bit off" -- a claim correction aimed
+    at a question that asserted nothing."""
+    q = "In which year was the Eiffel Tower completed?"
+    assert not is_claim_check(q)
+    out = render_truth("PARTLY", question=q, answer="The Eiffel Tower was completed in 1889.", aspect="figure")
+    assert not out.startswith("Yeah"), out
+    assert "1889" in out, out
+    for wh in (
+        "On what date did the Act receive Royal Assent?",
+        "By how much did the fee rise?",
+        "Under which section is the deadline set?",
+        "For how long does the exemption last?",
+    ):
+        assert not is_claim_check(wh), wh
+    # a check that merely happens to open with a preposition is still a check
+    assert is_claim_check("In 2024, did Parliament lower the age?")
+    assert render_truth(
+        "PARTLY", question="The tower was finished in 1887, right?", answer="It was completed in 1889.", aspect="date"
+    ).startswith("Yeah, the idea is right")
