@@ -358,11 +358,11 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
     that lacks the figure is a mismatch, which is exactly the failure mode models
     produce when they paraphrase a headline into a statistic.
 
-    What this layer cannot decide is the *role* of a figure: a page saying "began in
-    January 1887 and was completed on 31 March 1889" contains everything the claim
-    "completed in 1887" asks for, so it reads as present here. That is what the
-    curator's verdict is for, and a refutation backed by an opened page is reported as
-    false, never as support (see truth_state).
+    The *role* of a figure is decided by events.bind_event_dates: a page saying "began in
+    January 1887 and was finished on 31 March 1889" contains everything the claim
+    "completed in 1887" asks for, so the date has to sit in the same clause as the claim's
+    own event cue and about the same subject. Where the page simply never says, the claim
+    is left NOT_CHECKED -- unverified here, not promoted -- and the curator decides.
     """
     text_lower = (page.text or "").lower()
     if not text_lower:
@@ -416,8 +416,24 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
     else:
         status = SourceCheckStatus.IRRELEVANT
 
-    excerpt = None
-    if hit:
+    # Only a would-be confirmation needs an event role: this can demote a match, never
+    # create one. "began in 1887 and was finished in 1889" must not confirm
+    # "completed in 1887" (live: that is how the Eiffel Tower's start year was read as its
+    # completion date), and a date the page never binds to an event stays unverified here.
+    role_excerpt = None
+    role: dict[str, Any] | None = None
+    if status == SourceCheckStatus.CONFIRMED and page.ok:
+        from backend.evidence.events import bind_event_dates
+
+        role = bind_event_dates(claim, page.text or "")
+        if role and role["verdict"] != "bound":
+            missing.append(role["why"])
+            status = SourceCheckStatus.MISMATCH if role["verdict"] == "excluded" else SourceCheckStatus.NOT_CHECKED
+        elif role:
+            role_excerpt = role.get("segment")
+
+    excerpt = role_excerpt[:600].strip() if role_excerpt else None
+    if excerpt is None and hit:
         anchor = hit[0]
         idx = text_lower.find(anchor)
         # A claim with a figure is evidenced by the sentence that HAS the figure, not by wherever the first common
@@ -444,6 +460,7 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
         "excerpt": excerpt,
         "missing": missing,
         "tokens_checked": len(tokens),
+        "role": role,
     }
 
 
@@ -583,6 +600,9 @@ def _notes(check: dict[str, Any], page: FetchedPage) -> str:
     if check.get("missing"):
         bits.append("claim figures absent from page: " + ", ".join(map(str, check["missing"][:4])))
     bits.append(f"token coverage {check.get('coverage')}")
+    role = check.get("role")
+    if role:
+        bits.append(f"date {role.get('date')} bound to {role.get('kind')}: {role.get('why') or 'same clause as the event cue'}"[:160])
     if page.error:
         bits.append(f"fetch error: {page.error}")
     if page.notes:

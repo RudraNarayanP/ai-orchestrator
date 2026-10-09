@@ -56,10 +56,16 @@ def test_a_paraphrase_of_the_body_still_confirms():
     assert out["status"] == SourceCheckStatus.CONFIRMED, out
 
 
-def test_a_month_and_year_claim_confirms_from_the_body():
+def test_a_paraphrase_that_changes_the_subject_is_left_unverified():
+    """Documented limit, in the safe direction: the page says "Work on the foundations
+    began in January 1887" and the claim says "Construction of the Eiffel Tower began in
+    January 1887". The cue and the date match, the subject noun does not, so this layer
+    leaves it NOT_CHECKED for the curator instead of guessing they are the same event."""
     out = outcome("Construction of the Eiffel Tower began in January 1887.", page())
-    assert out["status"] == SourceCheckStatus.CONFIRMED, out
-    assert not any("-" in m and len(m) == 7 for m in out["missing"]), out
+    assert out["status"] == SourceCheckStatus.NOT_CHECKED, out
+    assert out["role"] and out["role"]["verdict"] == "unknown", out["role"]
+    # the page's own words do bind the completion claim
+    assert outcome("The Eiffel Tower was completed on 31 March 1889.", page())["status"] == SourceCheckStatus.CONFIRMED
 
 
 # ------------------------------------------------------------ negative: not evidence
@@ -72,14 +78,14 @@ def test_a_page_that_never_gives_the_year_is_not_support():
     assert "1889" in out["missing"], out
 
 
-def test_a_wrong_year_inside_a_dense_sentence_is_a_known_page_level_limit():
-    """Pinned so the boundary stays visible: the page says "began in January 1887 and the
-    construction ... was completed on 31 March 1889", and every word and both years the
-    claim asks for are on it, so page matching alone cannot assign the year its role.
-    The curator's verdict is what settles it -- see the test below.
-    """
+def test_a_start_year_cannot_evidence_a_completion_claim():
+    """The dense sentence: both years, both verbs, one clause each. Matching the claim
+    against the page as a whole used to accept this; the date now has to belong to the
+    event the claim names."""
     out = outcome("The Eiffel Tower was completed in 1887.", page())
-    assert out["status"] == SourceCheckStatus.CONFIRMED, out
+    assert out["status"] != SourceCheckStatus.CONFIRMED, out
+    assert out["status"] == SourceCheckStatus.MISMATCH, out
+    assert any("1887" in str(m) for m in out["missing"]), out
 
 
 async def test_a_refuted_premise_is_answered_with_the_correction_not_a_refusal(net, fake_openai):

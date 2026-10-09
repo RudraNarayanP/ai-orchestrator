@@ -40,37 +40,52 @@ DATE_RE = re.compile(
 )
 
 
+def date_key(chunk: str) -> str | None:
+    """The canonical key for one written date, or None if it has no calendar day in it."""
+    month = re.search(rf"\b(?:{_MONTH})\b", chunk, re.I)
+    digits = re.findall(r"\d+", chunk)
+    if month:
+        mm = _MONTH_NUM[month.group(0)[:3].lower()]
+        year = next((d for d in digits if len(d) == 4), None)
+        day = next((d for d in digits if len(d) <= 2), None)
+        if year and day:
+            return f"{year}-{mm:02d}-{int(day):02d}"
+        if year:
+            return f"{year}-{mm:02d}"
+        if day:
+            return f"MD-{mm:02d}-{int(day):02d}"
+        return None
+    parts = [d for d in re.split(r"[/-]", chunk) if d.isdigit()]
+    if len(parts) == 3:
+        first, second, third = parts
+        if len(first) == 4:  # 1889-03-31
+            return f"{first}-{int(second):02d}-{int(third):02d}"
+        year = third if len(third) == 4 else f"20{int(third):04d}"  # 31/3/1889 or 3-4-89
+        return f"{year}-{int(second):02d}-{int(first):02d}"
+    return None
+
+
+def date_spans(text: str) -> list[tuple[int, int, str]]:
+    """Where each written date sits in the text, with its canonical key.
+
+    Event-role binding needs the position: "began in 1887 and was finished in 1889"
+    only means anything clause by clause.
+    """
+    out: list[tuple[int, int, str]] = []
+    for match in DATE_RE.finditer(text or ""):
+        key = date_key(match.group(0))
+        if key:
+            out.append((match.start(), match.end(), key))
+    return out
+
+
 def date_keys(text: str) -> list[str]:
     """Canonical calendar dates in a claim: 'YYYY-MM-DD', 'YYYY-MM' or 'MD-mm-dd'.
 
     Two AIs describing the same day in different orders or with different punctuation
     must produce the same key, or their agreement is reported as a conflict.
     """
-    keys: list[str] = []
-    for match in DATE_RE.finditer(text or ""):
-        chunk = match.group(0)
-        month = re.search(rf"\b(?:{_MONTH})\b", chunk, re.I)
-        digits = re.findall(r"\d+", chunk)
-        if month:
-            mm = _MONTH_NUM[month.group(0)[:3].lower()]
-            year = next((d for d in digits if len(d) == 4), None)
-            day = next((d for d in digits if len(d) <= 2), None)
-            if year and day:
-                keys.append(f"{year}-{mm:02d}-{int(day):02d}")
-            elif year:
-                keys.append(f"{year}-{mm:02d}")
-            elif day:
-                keys.append(f"MD-{mm:02d}-{int(day):02d}")
-            continue
-        parts = [d for d in re.split(r"[/-]", chunk) if d.isdigit()]
-        if len(parts) == 3:
-            first, second, third = parts
-            if len(first) == 4:  # 1889-03-31
-                keys.append(f"{first}-{int(second):02d}-{int(third):02d}")
-            else:  # 31/3/1889 or 3-4-89: day, then month, then (possibly short) year
-                year = third if len(third) == 4 else f"20{int(third):04d}"
-                keys.append(f"{year}-{int(second):02d}-{int(first):02d}")
-    return sorted(set(keys))
+    return sorted({key for _, _, key in date_spans(text)})
 
 
 def dates_conflict(left: list[str], right: list[str]) -> bool:
