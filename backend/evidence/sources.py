@@ -724,6 +724,8 @@ async def gather_from_links(
             ev.title = str(link["title"])[:220]
         if link.get("snippet") and not ev.snippet:
             ev.snippet = str(link["snippet"])[:400]
+        if link.get("via_wrapper"):
+            ev.check_notes = (ev.check_notes or "") + f"; read the target behind {link['via_wrapper']}, the provider's own link"
         fresh = freshness(ev.published)
         if ev.check_status == SourceCheckStatus.UNREACHABLE and not _looks_like_host(ev.domain or ""):
             ev.check_status = SourceCheckStatus.HALLUCINATED

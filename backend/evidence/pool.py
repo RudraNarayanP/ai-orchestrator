@@ -21,6 +21,30 @@ from backend.settings import Settings
 
 PRIORITY_KINDS = {"statistic", "date", "legal", "scientific", "product", "ranking"}
 
+# Hosts a provider wraps its own outbound links in. Only these are unwrapped, one hop,
+# and only when the target is a plain http(s) URL that is not the wrapper itself: this is
+# reading the link the provider put on screen, not following redirects to anywhere.
+_PROVIDER_WRAPPERS = {"l.meta.ai"}
+
+
+def unwrap_redirect(href: str) -> tuple[str, str | None]:
+    """The real source behind a provider's link wrapper, or (href, None)."""
+    try:
+        parsed = urlparse(href or "")
+    except ValueError:
+        return href, None
+    host = (parsed.netloc or "").lower()
+    if host not in _PROVIDER_WRAPPERS:
+        return href, None
+    from urllib.parse import parse_qs
+
+    target = (parse_qs(parsed.query).get("u") or [""])[0].strip()
+    if not target.startswith(("http://", "https://")):
+        return href, None
+    if (urlparse(target).netloc or "").lower() == host:
+        return href, None
+    return target, host
+
 # Paired delimiters only: an apostrophe inside a quoted sentence is part of the sentence.
 _QUOTE_RE = re.compile(r"“([^”\n]{40,700})”|\"([^\"]{40,700})\"|‘([^’\n]{40,700})’")
 
@@ -262,10 +286,13 @@ async def build_pool(
         if response.status.value not in {"completed", "timeout"}:
             continue
         for citation in response.citations:
-            claim = claim_for_link({"title": citation.title, "snippet": citation.snippet, "href": citation.url}, claims)
+            target, via = unwrap_redirect(citation.url)
+            claim = claim_for_link({"title": citation.title, "snippet": citation.snippet, "href": target}, claims)
             raw_links.append(
                 {
-                    "href": citation.url,
+                    "href": target,
+                    "cited_urls": [citation.url, target],
+                    "via_wrapper": via,
                     "title": citation.title,
                     "snippet": citation.snippet,
                     "claim_id": claim.id if claim else None,
@@ -379,8 +406,10 @@ async def build_pool(
         if link.get("cited_by") and ev.check_notes:
             ev.check_notes += f"; offered by {link['cited_by']}"
         if link.get("origin", "provider") == "provider":
-            ev.ai_opened = citation_ops.aggregate_opened(responses, ev.url or "")
-            ev.cited_by = sorted({r.provider for r in responses if any(c.url == ev.url for c in r.citations)})
+            urls = [u for u in (link.get("cited_urls") or []) if u] or [ev.url]
+            flags = [citation_ops.aggregate_opened(responses, u or "") for u in urls]
+            ev.ai_opened = True if True in flags else (False if flags and all(f is False for f in flags) else None)
+            ev.cited_by = sorted({r.provider for r in responses for u in urls if any(c.url == u for c in r.citations)})
         ev.omnibrain_opened = ev.check_status not in {SourceCheckStatus.NOT_CHECKED, SourceCheckStatus.BROKEN_URL}
         ev.provenance = citation_ops.provenance(
             cited_by=ev.cited_by,
