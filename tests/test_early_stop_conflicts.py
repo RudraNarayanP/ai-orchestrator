@@ -31,6 +31,55 @@ def test_the_live_false_conflicts_are_not_conflicts():
     assert found == [], [(f["kind"], f["detail"], f["left"].claim[:40], f["right"].claim[:40]) for f in found]
 
 
+# The live eiffel-year run (2026-10-09, QUICK): three AIs gave the same dates in the other
+# order and different punctuation. "31," and "31" compared as two figures, and the capitalised
+# month never matched the date pattern, so one undisputed question produced six "material
+# figure conflicts", an extra swarm round and a "sources still conflict" stop note.
+SAME_FACT_OTHER_WRITING = [
+    ("The Eiffel Tower was completed on March 31, 1889.", "The Eiffel Tower structure was completed on 31 March 1889."),
+    ("Construction began on January 26, 1887.", "Construction began on 26 January 1887."),
+    ("The Eiffel Tower opened to the public on May 15, 1889.", "The Eiffel Tower opened to the public on 15 May 1889."),
+    ("Its metal structure was completed on March 31, 1889.", "The Eiffel Tower was completed on 31 March 1889."),
+    ("The tower was completed on 31/3/1889.", "The tower was completed on 31 March 1889."),
+    ("The tower was completed in March 1889.", "The tower was completed on 31 March 1889."),
+    ("It cost 1,234 million francs.", "It cost 1234 million francs."),
+]
+
+
+def two_claims(left: str, right: str) -> list[Claim]:
+    """One claim from each of two providers -- a real cross-AI split, not one AI rewording itself."""
+    return [
+        Claim(id="l", job_id="j", claim=left, kind="fact", provider_sources=["chatgpt"]),
+        Claim(id="r", job_id="j", claim=right, kind="fact", provider_sources=["gemini"]),
+    ]
+
+
+def test_the_same_date_written_the_other_way_is_not_a_conflict():
+    for left, right in SAME_FACT_OTHER_WRITING:
+        found = find_contradictions(two_claims(left, right))
+        assert found == [], f"{left!r} vs {right!r} -> {[(f['kind'], f['detail']) for f in found]}"
+
+
+def test_a_genuinely_different_date_is_still_a_conflict():
+    for left, right, kind in [
+        ("The tower was completed on March 31, 1889.", "The tower was completed on April 2, 1889.", "date"),
+        ("Acme released the Bolt router in March 2024.", "Acme released the Bolt router in April 2024.", "date"),
+        ("Acme released the Bolt router in March 2024.", "Acme released the Bolt router in March 2025.", "date"),
+        ("The tower is 300 metres tall.", "The tower is 324 metres tall.", "figure"),
+    ]:
+        found = find_contradictions(two_claims(left, right))
+        assert [f["kind"] for f in found] == [kind], f"{left!r} vs {right!r} -> {found}"
+        assert found[0]["material"], f"material disagreement reported as minor: {found[0]}"
+
+
+def test_date_words_do_not_make_two_claims_about_the_same_thing_look_untrelated():
+    from backend.research.claims import comparable_text, similarity, signature
+
+    left = signature(comparable_text("The tower was completed on March 31, 1889."))
+    right = signature(comparable_text("The tower was completed on April 2, 1889."))
+    assert similarity(left, right) >= 0.34, "the month is the disagreement, not a different topic"
+
+
 def test_identifiers_and_names_are_not_figures():
     assert "9" not in comparable_text("The primary legislation is section 9 of the Data Protection Act 2018.")
     assert "2018" not in comparable_text("the Data Protection Act 2018")

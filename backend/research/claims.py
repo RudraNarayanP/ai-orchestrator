@@ -20,12 +20,75 @@ from backend.models import Claim, ClaimStatus, ProviderResponse
 from backend.verification.llm import Endpoint, LLMClient, extract_json
 
 NUMBER_RE = re.compile(r"(?<![\w.])(-?\$?\s?\d[\d,]*\.?\d*\s?(?:%|percent|billion|million|thousand|bn|m|k|x)?)(?![\w])", re.I)
-DATE_RE = re.compile(
-    r"\b((?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?"
-    r"|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[ .-]??"
-    r"(\d{1,2})(?:st|nd|rd|th)?(?:[ ,.-]+(\d{4}))?|"
-    r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})|(\d{4})\b)"
+_MONTH = (
+    r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?"
+    r"|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?"
 )
+_MONTH_NUM = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+# "March 31, 1889" and "31 March 1889" are the same fact: the same day written in the
+# other order. The pattern is case-insensitive (months are capitalised in real prose)
+# and matches both orders so the two can be compared as one canonical key.
+DATE_RE = re.compile(
+    r"\b(?:"
+    rf"(?:{_MONTH})[ .-]?\d{{1,2}}(?:st|nd|rd|th)?(?:[ ,.-]+\d{{4}})?"  # March 31, 1889 / March 31
+    rf"|\d{{1,2}}(?:st|nd|rd|th)[ .-]+(?:{_MONTH})(?:[ ,.-]+\d{{4}})?"  # 31st March 1889 / 31st March
+    rf"|\d{{1,2}}[ .-]+(?:{_MONTH})(?:[ ,.-]+\d{{4}})?"                 # 31 March 1889 / 31 March
+    rf"|(?:{_MONTH})[ .-]+\d{{4}}"                                      # March 2024
+    r"|\d{1,4}[/-]\d{1,2}[/-]\d{1,4}"                                   # 31/3/1889, 3-4-89, 1889-03-31
+    r")\b",
+    re.I,
+)
+
+
+def date_keys(text: str) -> list[str]:
+    """Canonical calendar dates in a claim: 'YYYY-MM-DD', 'YYYY-MM' or 'MD-mm-dd'.
+
+    Two AIs describing the same day in different orders or with different punctuation
+    must produce the same key, or their agreement is reported as a conflict.
+    """
+    keys: list[str] = []
+    for match in DATE_RE.finditer(text or ""):
+        chunk = match.group(0)
+        month = re.search(rf"\b(?:{_MONTH})\b", chunk, re.I)
+        digits = re.findall(r"\d+", chunk)
+        if month:
+            mm = _MONTH_NUM[month.group(0)[:3].lower()]
+            year = next((d for d in digits if len(d) == 4), None)
+            day = next((d for d in digits if len(d) <= 2), None)
+            if year and day:
+                keys.append(f"{year}-{mm:02d}-{int(day):02d}")
+            elif year:
+                keys.append(f"{year}-{mm:02d}")
+            elif day:
+                keys.append(f"MD-{mm:02d}-{int(day):02d}")
+            continue
+        parts = [d for d in re.split(r"[/-]", chunk) if d.isdigit()]
+        if len(parts) == 3:
+            first, second, third = parts
+            if len(first) == 4:  # 1889-03-31
+                keys.append(f"{first}-{int(second):02d}-{int(third):02d}")
+            else:  # 31/3/1889 or 3-4-89: day, then month, then (possibly short) year
+                year = third if len(third) == 4 else f"20{int(third):04d}"
+                keys.append(f"{year}-{int(second):02d}-{int(first):02d}")
+    return sorted(set(keys))
+
+
+def dates_conflict(left: list[str], right: list[str]) -> bool:
+    """Different calendar dates, allowing one side to be less precise.
+
+    "31 March 1889" against "March 1889" is the same fact at two resolutions, not a
+    disagreement; "March 1889" against "April 1889" is.
+    """
+    if set(left) == set(right):
+        return False
+    for a in left:
+        for b in right:
+            if a.startswith("MD-") or b.startswith("MD-"):
+                continue  # a day and month with no year cannot nest a full date
+            if a == b or a.startswith(b) or b.startswith(a):
+                return False
+    return True
+
 YEAR_RE = re.compile(r"\b(19\d{2}|20\d{2})\b")
 YES_NO_RE = re.compile(r"\b(yes|no|true|false|did|did not|doesn'?t|does not|is not|aren'?t|cannot|can'?t)\b", re.I)
 OPINION_RE = re.compile(
@@ -238,29 +301,53 @@ _STOP = {
 }
 
 
+def _number_token(raw: str) -> str:
+    """A figure stripped of the punctuation around it: '31,' and '31' are one figure.
+
+    The sentence stop and the comma before a year are not part of the number, and a
+    thousands separator must not make '1,234' disagree with '1234'.
+    """
+    t = (raw or "").strip().lower().replace(" ", "")
+    t = re.sub(r"^[^\d$-]+", "", t)
+    t = re.sub(r"[.,;:!?]+$", "", t)
+    t = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", t)  # 1,234 and 1234 are one figure
+    return t
+
+
 def signature(text: str) -> dict[str, Any]:
     """The checkable skeleton of a claim: figures, dates, polarity."""
-    low = (text or "").lower()
-    numbers = [n.group(1).strip().lower().replace(" ", "") for n in NUMBER_RE.finditer(text or "") if n.group(1)]
-    years = sorted({y.group(1) for y in YEAR_RE.finditer(text or "")})
-    months = sorted({m.group(0).lower() for m in DATE_RE.finditer(text or "") if m.group(0)})
-    # A declarative claim asserts; a negated one denies. Defaulting the positive
-    # side is what lets "supports X" vs "does not support X" register as a
-    # conflict instead of silently agreeing on everything but the verb.
+    text = text or ""
+    low = text.lower()
+    numbers = [t for t in (_number_token(n.group(1)) for n in NUMBER_RE.finditer(text)) if t]
+    # The day and the year inside "31 March 1889" are part of a date, not competing
+    # figures: `plain_numbers` leaves them out so two AIs giving the same day in the
+    # other order are not read as disagreeing about a number. `numbers` keeps them --
+    # that is what evidence matching and claim identity have always compared.
+    in_date = [
+        t
+        for t in (
+            _number_token(n.group(1)) for span in DATE_RE.finditer(text) for n in NUMBER_RE.finditer(span.group(0))
+        )
+        if t
+    ]
+    return {
+        "numbers": sorted(set(numbers)),
+        "plain_numbers": sorted(set(numbers) - set(in_date)),
+        "years": sorted({y.group(1) for y in YEAR_RE.finditer(text)}),
+        "dates": date_keys(text),
+        "polarity": _polarity(low),
+        "tokens": sorted({t for t in re.findall(r"[a-z0-9']+", low) if t not in _STOP and len(t) > 2}),
+    }
+
+
+def _polarity(low: str) -> str:
+    """A declarative claim asserts; a negated one denies."""
     if re.search(
         r"\b(not|never|no longer|failed to|without|cannot|can'?t|doesn'?t|does not|didn'?t|isn'?t|aren'?t|lacks|absent|lacking|lacks)\b",
         low,
     ):
-        polarity = "neg"
-    else:
-        polarity = "pos"
-    return {
-        "numbers": sorted(set(numbers)),
-        "years": years,
-        "dates": months,
-        "polarity": polarity,
-        "tokens": sorted({t for t in re.findall(r"[a-z0-9']+", low) if t not in _STOP and len(t) > 2}),
-    }
+        return "neg"
+    return "pos"
 
 
 def jaccard(a: set[str], b: set[str]) -> float:
@@ -467,8 +554,11 @@ def dedupe(claims: list[Claim]) -> list[Claim]:
                 continue
             same_numbers = sig["numbers"] == esig["numbers"]
             same_years = sig["years"] == esig["years"]
+            # The day lives inside a date, not inside `numbers`, so two different dates
+            # would otherwise merge into one claim and the conflict would vanish.
+            same_dates = not dates_conflict(sig["dates"], esig["dates"])
             overlap = similarity(sig, esig)
-            if overlap >= 0.5 and (same_numbers or (not sig["numbers"] and not esig["numbers"])) and same_years:
+            if overlap >= 0.5 and (same_numbers or (not sig["numbers"] and not esig["numbers"])) and same_years and same_dates:
                 target = existing
                 break
         if target:
@@ -502,7 +592,7 @@ def reconcile_with_prior(new: list[Claim], prior: list[Claim]) -> list[Claim]:
         best = 0.0
         for p in prior:
             psig = signature(p.claim)
-            if sig["polarity"] != psig["polarity"] or sig["numbers"] != psig["numbers"] or sig["years"] != psig["years"] or sig["dates"] != psig["dates"]:
+            if sig["polarity"] != psig["polarity"] or sig["numbers"] != psig["numbers"] or sig["years"] != psig["years"] or dates_conflict(sig["dates"], psig["dates"]):
                 continue
             score = similarity(sig, psig)
             if score >= 0.5 and score > best:
@@ -525,6 +615,14 @@ UNIT_TOKENS = {
     "kg", "km", "miles", "mile", "feet", "feet", "inch", "hours", "minutes", "seconds", "days",
     "dollars", "usd", "eur", "eur", "x", "times",
 }
+# The month is the part two claims disagree about, not the part that makes them about
+# the same thing: leaving it in scoring pushed "March 31, 1889" vs "April 2, 1889" below
+# the topic threshold and the real date conflict was never reported.
+MONTH_TOKENS = {
+    "jan", "january", "feb", "february", "mar", "march", "apr", "april", "may", "jun", "june",
+    "jul", "july", "aug", "august", "sep", "sept", "september", "oct", "october", "nov",
+    "november", "dec", "december",
+}
 
 
 def similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
@@ -535,8 +633,8 @@ def similarity(left: dict[str, Any], right: dict[str, Any]) -> float:
     the conflict would be missed. So numbers and units are removed before scoring,
     and the figure itself is compared separately.
     """
-    a = {t for t in left["tokens"] if t not in UNIT_TOKENS and not t.replace(".", "").isdigit()}
-    b = {t for t in right["tokens"] if t not in UNIT_TOKENS and not t.replace(".", "").isdigit()}
+    a = {t for t in left["tokens"] if t not in UNIT_TOKENS and t not in MONTH_TOKENS and not t.replace(".", "").isdigit()}
+    b = {t for t in right["tokens"] if t not in UNIT_TOKENS and t not in MONTH_TOKENS and not t.replace(".", "").isdigit()}
     reduced = jaccard(a, b)
     if a and b and reduced >= 0.2:
         return reduced
@@ -589,17 +687,27 @@ def find_contradictions(claims: list[Claim]) -> list[dict[str, Any]]:
                 continue
             kind = None
             detail = ""
+            # Calendar dates before anything else, and compared canonically: the same
+            # day in the other order is agreement, not a "figure conflict".
+            if not kind and lsig["dates"] and rsig["dates"] and dates_conflict(lsig["dates"], rsig["dates"]):
+                kind = "date"
+                detail = f"{lsig['dates']} vs {rsig['dates']}"
             # Years before figures: "March 2024" vs "March 2025" is a date
             # conflict, and reporting it as a numeric one hides what actually
             # disagrees and makes the wrong follow-up question.
             if not kind and lsig["years"] and rsig["years"] and set(lsig["years"]) != set(rsig["years"]):
                 kind = "date"
                 detail = f"{lsig['years']} vs {rsig['years']}"
-            if not kind and lsig["numbers"] and rsig["numbers"] and set(lsig["numbers"]) != set(rsig["numbers"]):
-                both = set(lsig["numbers"]) | set(rsig["numbers"])
-                if len(both) > len(lsig["numbers"]) and len(both) > len(rsig["numbers"]):
+            if (
+                not kind
+                and lsig["plain_numbers"]
+                and rsig["plain_numbers"]
+                and set(lsig["plain_numbers"]) != set(rsig["plain_numbers"])
+            ):
+                both = set(lsig["plain_numbers"]) | set(rsig["plain_numbers"])
+                if len(both) > len(lsig["plain_numbers"]) and len(both) > len(rsig["plain_numbers"]):
                     kind = "figure"
-                    detail = f"{sorted(set(lsig['numbers']))[:3]} vs {sorted(set(rsig['numbers']))[:3]}"
+                    detail = f"{lsig['plain_numbers'][:3]} vs {rsig['plain_numbers'][:3]}"
             if not kind and lsig["polarity"] and rsig["polarity"] and lsig["polarity"] != rsig["polarity"]:
                 kind = "polarity"
                 detail = f"{lsig['polarity']} vs {rsig['polarity']}"
