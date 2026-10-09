@@ -330,10 +330,27 @@ The verifier's ledger is deterministic before any model touches it:
 | what we found | weight |
 |---|---|
 | page opened and contains the claim's exact figures/dates | confirmed, tier-weighted |
+| figure or date is in the clause that names the claim's event | confirmed -- and the passage we quote is that clause |
+| date is on the page but not in the clause of the event the claim names | **not_checked**, left for the curator |
 | page is about it but does not contain the figure | **citation mismatch** |
 | domain does not resolve | **hallucinated citation** |
 | confirmed but old, for a current question | outdated, discounted |
 | paywalled / bot-gated | blocked, contributes nothing |
+
+**A date has to belong to the event.** "Construction began in January 1887 and was finished
+on 31 March 1889" contains everything the claim "completed in 1887" asks for, so whole-page
+matching accepted it (live, Eiffel Tower runs). `backend/evidence/events.py` now pairs each
+date in the claim with the event cue nearest to it and accepts only a clause of the page
+carrying both that cue and that date, stated at least as precisely as the claim states it --
+so a bare year in a title ("Data Protection Act 2018") cannot stand in for "25 May 2018" --
+and the clause must still be about the claim's subject, so "Renovations were completed on
+24 June 1985" cannot date the tower's completion. The cue vocabulary is explicit and small
+(start / end / open / in force / enacted / published, ~50 phrases) so every acceptance and
+refusal can be traced to a listed word. This step only ever *refuses* support: a page that
+never says which event a date belongs to is recorded `not_checked`, which counts as nothing
+in the ledger, and the curator decides. Known limit, in the safe direction: a paraphrase that
+swaps the subject noun ("Work on the foundations began in January 1887" for "Construction of
+the tower began in January 1887") is left unverified rather than guessed.
 
 Domain tiers run primary official > original research > government > journalism >
 technical > community > social > unsourced-AI-claim. Provider agreement is recorded
