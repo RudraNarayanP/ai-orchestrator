@@ -20,6 +20,7 @@ from backend.models import (
     Job,
     JobStatus,
     ResearchMode,
+    RoundRecord,
     SourceCheckStatus,
     SourceTier,
 )
@@ -135,6 +136,96 @@ def test_exporting_a_job_that_is_still_running_is_refused(client):
     client.app_.state.store.save_job(job)
     client.app_.state.manager.jobs[job.id] = job
     assert client.get(f"/api/jobs/{job.id}/export").status_code == 409
+
+
+# ----------------------------------------------------- `run.py ask` persistence
+
+
+class _FakeEngine:
+    def __init__(self, *args, **kwargs):
+        self.stopped = False
+
+    async def start(self):
+        pass
+
+    async def stop(self, keep_windows=True):
+        self.stopped = True
+
+
+class _FakeCatalog:
+    def __init__(self, settings, engine):
+        pass
+
+    def all(self):
+        return {}
+
+
+def _patch_cli(monkeypatch, tmp_path, runner):
+    """Point `run.py ask` at a throwaway database and a scripted runner: no browser, no network."""
+    import run
+
+    db = tmp_path / "cli.db"
+    settings = base_settings(storage={"db_path": str(db)})
+    monkeypatch.setattr(run, "load", lambda *a, **kw: settings)
+    monkeypatch.setattr("backend.browser.factory.create_engine", lambda *a, **kw: _FakeEngine())
+    monkeypatch.setattr("backend.providers.registry.ProviderCatalog", _FakeCatalog)
+    monkeypatch.setattr("backend.providers.registry.endpoint_for", lambda *a, **kw: None)
+    monkeypatch.setattr("backend.orchestrator.runner.ResearchRunner", runner)
+    return str(db)
+
+
+def test_cli_ask_stores_the_job_and_the_evidence_it_prints(monkeypatch, tmp_path, capsys):
+    import asyncio
+    import run
+
+    class Runner:
+        def __init__(self, settings, adapters, **kwargs):
+            pass
+
+        async def run(self, job):
+            done = finished_job(job.question)
+            job.final, job.claims, job.evidence = done.final, done.claims, done.evidence
+            job.rounds = [RoundRecord(number=1), RoundRecord(number=2)]
+            job.status = JobStatus.COMPLETED
+            return job
+
+    db = _patch_cli(monkeypatch, tmp_path, Runner)
+    assert asyncio.run(run._one_shot("warfarin question", "STANDARD", None, None)) == 0
+
+    from backend.storage.db import Store
+
+    rows = Store(base_settings(storage={"db_path": db})).list_jobs(limit=5)
+    assert [r["status"] for r in rows] == ["completed"]
+    assert rows[0]["answer_text"].startswith("Not without medical advice")
+    assert rows[0]["rounds_run"] == 2, "history must show the rounds that actually ran"
+    assert db in capsys.readouterr().out, "the CLI must name the file it actually wrote"
+
+    snapshot = Store(base_settings(storage={"db_path": db})).job_snapshot(rows[0]["id"])
+    assert snapshot["claims"] and snapshot["evidence"], "the audit trail is stored too, not just the headline"
+
+
+def test_cli_ask_leaves_a_row_when_the_run_dies_halfway(monkeypatch, tmp_path):
+    """The job is stored before the browser work starts, so a crash mid-run is still in history."""
+    import asyncio
+    import pytest
+
+    import run
+
+    class Runner:
+        def __init__(self, settings, adapters, **kwargs):
+            pass
+
+        async def run(self, job):
+            raise RuntimeError("the browser connection went away")
+
+    db = _patch_cli(monkeypatch, tmp_path, Runner)
+    with pytest.raises(RuntimeError):
+        asyncio.run(run._one_shot("a question that never finished", "STANDARD", None, None))
+
+    from backend.storage.db import Store
+
+    rows = Store(base_settings(storage={"db_path": db})).list_jobs(limit=5)
+    assert len(rows) == 1 and rows[0]["status"] == "pending"
 
 
 def test_a_failed_job_still_exports_honestly(client):

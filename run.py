@@ -216,6 +216,7 @@ async def _one_shot(question: str, mode: str | None, rounds: int | None, args: a
     from backend.models import Job, ResearchMode
     from backend.orchestrator.runner import ResearchRunner
     from backend.providers.registry import ProviderCatalog, endpoint_for
+    from backend.storage.db import Store
 
     job = Job(
         question=question,
@@ -223,6 +224,8 @@ async def _one_shot(question: str, mode: str | None, rounds: int | None, args: a
         max_rounds=int(rounds or settings.research.max_rounds),
     )
     started = time.time()
+    store = Store(settings)
+    store.save_job(job)
 
     async def emit(kind, message, provider=None, round_no=None, **payload):
         colour = {
@@ -277,10 +280,16 @@ async def _one_shot(question: str, mode: str | None, rounds: int | None, args: a
             + (f" | failed: {', '.join(answer.providers_failed)}" if answer.providers_failed else "")
         )
         print(f"browser sessions: {finished.browser_sessions_used}  verifier calls: {finished.verifier_calls}")
-        print(f"job id: {finished.id}  (stored in data/omnibrain.db)")
+        print(f"job id: {finished.id}  (stored in {settings.storage.db_path})")
         return 0
     finally:
         await engine.stop(keep_windows=False)
+        job.rounds_run = max([r.number for r in job.rounds], default=job.rounds_run)
+        try:
+            store.save_job(job)
+        except Exception as exc:  # noqa: BLE001 -- the answer is already printed; storage must not swallow it
+            print(f"warning: the job was not stored ({type(exc).__name__}: {exc})")
+        store.close()
 
 
 def cmd_ask(args: argparse.Namespace) -> int:
