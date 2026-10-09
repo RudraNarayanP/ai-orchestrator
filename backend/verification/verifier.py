@@ -32,7 +32,7 @@ from backend.models import (
     WebResearchStatus,
 )
 from backend.research.router import addresses_question, future_year
-from backend.research.lint import evidence_report, is_what_do_we_know, lint_answer
+from backend.research.lint import covers_part, evidence_report, is_what_do_we_know, lint_answer, question_parts
 from backend.research.style import (
     ANSWER_CONTRACT,
     BANNED_PHRASES,
@@ -1158,6 +1158,47 @@ def _provenance(v: ClaimVerdict) -> str:
     return ", ".join(hosts[:2])
 
 
+def _compound_answer(report: VerifierReport, question: str) -> str:
+    """The answer for a question that asks several things and settles some of them. Returns "" when this shape does not apply.
+
+    Live (job_261009210109_ccd924ec): the curator judged "the Act received Royal Assent on 23 May
+    2018" supported on an opened page, the commencement half was never settled, and the whole
+    answer came back "Couldn't verify that one." -- which hid a date we had. Nothing here decides
+    what counts as documented; it only routes the verdicts the ledger already holds onto the part
+    of the question each one answers, so an unresolved half cannot delete a settled one.
+    """
+    if not question or is_claim_check(question):
+        return ""
+    parts = question_parts(question)
+    if len(parts) < 2:
+        return ""
+    S = ClaimStatus
+    documented = [v for v in report.verdicts if v.verdict in {S.SUPPORTED, S.PARTIALLY_SUPPORTED}]
+    contested = [v for v in report.verdicts if v.verdict == S.CONTESTED]
+    settled: list[tuple[str, str]] = []
+    disputed: list[str] = []
+    open_parts: list[str] = []
+    for part in parts:
+        best = max(
+            (v for v in documented if covers_part(part, v.claim)),
+            key=lambda v: len(v.strong_evidence),
+            default=None,
+        )
+        if best is not None:
+            if best.claim not in {c for c, _ in settled}:
+                settled.append((best.claim, _provenance(best)))
+            continue
+        rival = next((v.claim for v in contested if covers_part(part, v.claim)), "")
+        if rival:
+            if rival not in disputed:
+                disputed.append(rival)
+        else:
+            open_parts.append(part)
+    if not settled:
+        return ""
+    return evidence_report(settled, open_parts, disputed)
+
+
 def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int, question: str = "") -> FinalAnswer:
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
@@ -1171,6 +1212,10 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
         documented = [(v.claim, _provenance(v)) for v in report.verdicts if v.verdict in {S.SUPPORTED, S.PARTIALLY_SUPPORTED}]
         state = ""
         text = evidence_report(documented, unknowns, [v.claim for v in report.verdicts if v.verdict == S.CONTESTED])
+    elif state in {"UNVERIFIED", "CONFLICT"} and (partial := _compound_answer(report, question)):
+        # One part of a multi-part question settled is not the whole question unknown: the
+        # documented half is stated with its source and the other half is named as undocumented.
+        text = partial
     elif state:
         shown = render_truth(state, question=question, answer=lint_answer(report.answer, question=question, unknowns=unknowns).text, aspect=_aspect(report) if state == "PARTLY" else "")
         text = humanize(shown, "high" if state in {"TRUE", "FALSE"} else "low")

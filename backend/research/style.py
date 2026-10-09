@@ -541,6 +541,16 @@ def _wh_head(text: str) -> bool:
     return bool(_WH_START.match(_WH_PREP.sub("", text or "", count=1)))
 
 
+def is_question_clause(text: str) -> bool:
+    """Does this stretch of words stand on its own as something asked -- a content question or a yes/no one?
+
+    Used to decide whether a clause after a comma or an "and" is a second thing being asked,
+    or the same question described further.
+    """
+    t = text or ""
+    return bool(_wh_head(t) or _YESNO_START.match(t))
+
+
 def is_claim_check(question: str) -> bool:
     """A yes/no question or a statement the user wants checked ("is X true", "X works like Y, right?") -- not "what is X".
 

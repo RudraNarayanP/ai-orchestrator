@@ -240,6 +240,74 @@ def evidence_report(documented: list[tuple[str, str]], undocumented: list[str], 
     return "\n".join(lines)
 
 
+_CONJ_HEAD = re.compile(r"^\s*(?:and|or|plus|along with|as well as|but)\s+", re.I)
+# A clause opened by one of these after a comma describes the thing already named; it does not
+# ask a second question ("the tower, which is in Paris, ..."). "who" is left out: after a comma
+# it is usually relative, but "who does it apply to" is a real second question.
+_RELATIVE_HEAD = re.compile(r"^\s*(?:which|that|because)\b", re.I)
+_QPART_SPLIT = re.compile(r"\s*[,;]\s*|\s+(?:and|or|plus|along with|as well as)\s+", re.I)
+
+
+def question_parts(question: str) -> list[str]:
+    """The separate things a question asks for, in the order it asks them.
+
+    "When did the Act receive Royal Assent, and when did it come into force?" asks two, and one
+    of them may be documented while the other is not -- so a single refusal over it would hide
+    what we actually established. Returns one element for a question that asks one thing.
+    """
+    from backend.research.style import is_question_clause  # local import: style also uses this module
+
+    text = re.sub(r"\s+", " ", (question or "").strip())
+    if not text:
+        return []
+    # ", and when..." splits on the comma first, so the conjunction is left glued to the next
+    # clause; it is filler either way and comes off before the clause is judged.
+    segments = [_CONJ_HEAD.sub("", s.strip(" ,;"), count=1) for s in _QPART_SPLIT.split(text)]
+    segments = [s for s in segments if s]
+    parts = [s for s in segments if not _RELATIVE_HEAD.match(s) and is_question_clause(s)]
+    return parts if len(parts) > 1 else [text]
+
+
+_TEMPORAL_ASK = re.compile(r"\b(when|what year|which year|what date|which date|since when|how old)\b", re.I)
+_MONTH_WORD = re.compile(
+    r"\b(january|february|march|april|june|july|august|september|october|november|december)\b", re.I
+)
+_WRITTEN_DATE = re.compile(r"\b\d{1,2}(?:st|nd|rd|th)?\s+\d{4}\b|\b\d{1,4}[/.-]\d{1,2}[/.-]\d{1,4}\b")
+_A_YEAR = re.compile(r"\b(?:1[5-9]\d{2}|20\d{2})\b")
+
+
+def states_a_time(text: str) -> bool:
+    """Does this sentence actually date something -- a year, a month, or a written day?"""
+    return bool(_A_YEAR.search(text or "") or _MONTH_WORD.search(text or "") or _WRITTEN_DATE.search(text or ""))
+
+
+def _shared_words(left: str, right: str) -> set[str]:
+    """Content words the two share, tolerant of endings: "open" reaches "opened", "force" doesn't reach "forces"."""
+    a, b = _tokens(left), _tokens(right)
+    out: set[str] = set()
+    for w in a:
+        for v in b:
+            if w == v or (min(len(w), len(v)) >= 4 and (w.startswith(v) or v.startswith(w))):
+                out.add(w)
+                break
+    return out
+
+
+def covers_part(part: str, claim: str) -> bool:
+    """Does this claim state the thing this part of the question asks for?
+
+    Two shared content words is the floor, because the subject alone is not an answer: a page
+    saying "the Eiffel Tower is 1083 feet tall" shares "Eiffel Tower" with "in which year was
+    the Eiffel Tower completed" and answers nothing about it. So a part that asks when also
+    needs the claim to actually carry a date.
+    """
+    if len(_shared_words(part, claim)) < 2:
+        return False
+    if _TEMPORAL_ASK.search(part or "") and not states_a_time(claim):
+        return False
+    return True
+
+
 def check_structure(text: str, documented: list[str], undocumented: list[str]) -> list[Finding]:
     """Fact A documented / B documented / C undocumented must keep exactly that structure."""
     findings: list[Finding] = []
