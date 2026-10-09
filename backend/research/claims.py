@@ -609,6 +609,12 @@ def find_contradictions(claims: list[Claim]) -> list[dict[str, Any]]:
             if pair in seen:
                 continue
             seen.add(pair)
+            # Two claims that both come from the same single provider are that AI
+            # being loose with its own wording, not sources disagreeing. Live run
+            # (uk-dpa-age, level 3): gemini-vs-gemini "polarity" and chatgpt-vs-
+            # chatgpt "date" splits were flagged material and the answer became
+            # "Couldn't verify" although every provider said 13.
+            same_provider = len(set(left.provider_sources) | set(right.provider_sources)) == 1
             conflicts.append(
                 {
                     "kind": kind,
@@ -616,7 +622,8 @@ def find_contradictions(claims: list[Claim]) -> list[dict[str, Any]]:
                     "left": left,
                     "right": right,
                     "topic_overlap": round(topic_overlap, 2),
-                    "material": kind in {"figure", "date", "polarity"} and topic_overlap >= 0.45,
+                    "same_provider": same_provider,
+                    "material": kind in {"figure", "date", "polarity"} and topic_overlap >= 0.45 and not same_provider,
                 }
             )
     return conflicts

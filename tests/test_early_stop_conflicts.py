@@ -74,3 +74,57 @@ async def test_a_side_conflict_does_not_block_the_early_stop(net):
     assert [c["provider"] for c in log] == ["chatgpt"], "one round, no follow-up, no parallel AIs"
     assert job.assessments[0].sufficient and job.assessments[0].strong_primary
     assert any(c.ai_opened is True for r in job.responses for c in r.citations), "listed under an opened heading = opened by the AI"
+
+
+# live uk-dpa-age run, level 3: every provider said 13, yet gemini-vs-gemini and chatgpt-vs-chatgpt splits were
+# flagged material and the answer became "Couldn't verify that one."
+def _claim(cid, text, *providers):
+    return Claim(id=cid, job_id="j", claim=text, kind="fact", provider_sources=list(providers))
+
+
+SELF_SPLIT = [
+    _claim("g1", "A child aged 13 can consent to information society services in the UK.", "gemini"),
+    _claim("g2", "A child aged 13 cannot consent to information society services in the UK without a parent.", "gemini"),
+    _claim("o1", "Acme Corp released the Bolt router in March 2024.", "chatgpt"),
+    _claim("o2", "Acme Corp released the Bolt router in March 2025.", "chatgpt"),
+]
+
+
+def test_claims_from_one_provider_are_never_sources_disagreeing():
+    found = find_contradictions(SELF_SPLIT)
+    assert found, "the pairs still look like conflicts on their own"
+    assert all(f["same_provider"] and not f["material"] for f in found)
+
+
+def test_a_cross_provider_split_is_still_material():
+    found = find_contradictions([
+        _claim("g", "Acme Corp released the Bolt router in March 2024.", "gemini"),
+        _claim("o", "Acme Corp released the Bolt router in March 2025.", "chatgpt"),
+    ])
+    assert found and found[0]["material"] and not found[0]["same_provider"]
+    shared = find_contradictions([
+        _claim("g", "Acme Corp released the Bolt router in March 2024.", "gemini"),
+        _claim("o", "Acme Corp released the Bolt router in March 2025.", "gemini", "chatgpt"),
+    ])
+    assert shared and shared[0]["material"], "a second provider on one side makes it a real disagreement"
+
+
+async def test_runner_records_no_disagreement_for_one_provider_against_itself():
+    from types import SimpleNamespace
+
+    from backend.models import Job
+    from backend.orchestrator.runner import ResearchRunner
+
+    emitted = []
+
+    async def emit(*args, **kwargs):
+        emitted.append(args)
+
+    fake = SimpleNamespace(cancel=SimpleNamespace(raise_if_cancelled=lambda: None), _emit=emit)
+    job = Job(question="Q?")
+    result = await ResearchRunner._disagreements(fake, job, SELF_SPLIT, 1)
+    assert result == [] and job.disagreements == [] and emitted == []
+    cross = SELF_SPLIT + [_claim("x", "Acme Corp released the Bolt router in March 2023.", "copilot")]
+    result = await ResearchRunner._disagreements(fake, Job(question="Q?"), cross, 1)
+    assert result and all(d.severity == "material" for d in result)
+    assert all(len(set(",".join(d.positions).split(","))) > 1 for d in result)

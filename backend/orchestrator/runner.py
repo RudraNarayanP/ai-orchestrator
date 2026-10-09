@@ -940,6 +940,9 @@ class ResearchRunner:
         existing = {d.topic for d in job.disagreements}
         found: list[Disagreement] = []
         for conflict in conflicts:
+            if conflict.get("same_provider"):
+                # one AI against itself is never "sources disagreeing"
+                continue
             left, right = conflict["left"], conflict["right"]
             topic = left.topic or right.topic or left.claim[:40]
             key = f"{topic}|{conflict['kind']}"
