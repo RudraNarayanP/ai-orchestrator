@@ -725,9 +725,6 @@ async def gather_from_links(
         if link.get("snippet") and not ev.snippet:
             ev.snippet = str(link["snippet"])[:400]
         fresh = freshness(ev.published)
-        if fresh["verdict"] == "outdated" and ev.check_status == SourceCheckStatus.CONFIRMED:
-            ev.check_status = SourceCheckStatus.OUTDATED
-            ev.check_notes = (ev.check_notes or "") + f"; {fresh['age_days']} days old"
         if ev.check_status == SourceCheckStatus.UNREACHABLE and not _looks_like_host(ev.domain or ""):
             ev.check_status = SourceCheckStatus.HALLUCINATED
             ev.check_notes = (ev.check_notes or "") + "; domain does not exist"
@@ -741,6 +738,23 @@ async def gather_from_links(
         out = [ev]
         if attribute_to and page.ok and not link.get("counter"):
             out.extend(_attributed_copies(ev, page, attribute_to, skip=link.get("claim_id")))
+        # Age is only a problem for a claim that could have changed since the page was
+        # written. Applied per row, because one page can evidence a 2018 event date and a
+        # present-day price at the same time.
+        texts = {cid: text for cid, text in (attribute_to or [])}
+        if link.get("claim_id") and claim:
+            texts.setdefault(str(link["claim_id"]), claim)
+        if fresh["verdict"] == "outdated":
+            from backend.evidence.events import claim_ages
+
+            for row in out:
+                if row.check_status != SourceCheckStatus.CONFIRMED:
+                    continue
+                if claim_ages(texts.get(row.claim_id or "", "")):
+                    row.check_status = SourceCheckStatus.OUTDATED
+                    row.check_notes = (row.check_notes or "") + f"; {fresh['age_days']} days old"
+                else:
+                    row.check_notes = (row.check_notes or "") + f"; {fresh['age_days']} days old, states a fixed past event"
         return out
 
     gathered = await asyncio.gather(*(one(link) for link in items)) if items else []

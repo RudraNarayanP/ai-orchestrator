@@ -266,3 +266,37 @@ def bind_event_dates(claim: str, page_text: str) -> dict[str, Any] | None:
     if all(v["verdict"] == "bound" for v in verdicts):
         return {**verdicts[0], "verdict": "bound"}
     return next(v for v in verdicts if v["verdict"] == "unknown")
+
+
+# Words that put a claim in the past perfect: whatever the page says about that moment
+# cannot be superseded by a later page.
+_PAST_FORMS = tuple(
+    {
+        cue
+        for group in EVENT_CUES.values()
+        for cue in group
+        if " " not in cue or cue in {"came into force", "came into effect", "took effect", "received royal assent", "topped out", "was laid"}
+    }
+) + (
+    "signed", "born", "died", "founded", "established", "won", "lost",
+    "launched", "assented", "adopted", "ratified",
+)
+
+
+def claim_ages(claim: str, *, today_year: int | None = None) -> bool:
+    """Can this claim change under its own feet?
+
+    Freshness only means something about a state of affairs: a 2019 page is weak evidence
+    for "the price is X", and a 2018 page is perfectly good evidence for "received Royal
+    Assent on 23 May 2018". Demoting the second made an established historical date look
+    unverifiable because its source was old (live DPA 2018 run). Anything not plainly a
+    completed past event still ages, so freshness is scoped here, never switched off.
+    """
+    from datetime import datetime, timezone
+
+    text = (claim or "").lower()
+    years = [int(key[:4]) for _, _, key in dated(text) if key[:4].isdigit()]
+    if not years:
+        return True
+    year = today_year if today_year is not None else datetime.now(timezone.utc).year
+    return not (max(years) < year and any(form in text for form in _PAST_FORMS))

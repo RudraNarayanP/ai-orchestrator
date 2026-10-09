@@ -64,6 +64,20 @@ CURRENT_RE = re.compile(
     re.I,
 )
 
+_PAST_EVENT_RE = re.compile(
+    r"\b(when did|when was|what happened|happened|took place|was born|was founded|was established"
+    r"|was signed|was passed|was enacted|received royal assent|royal assent|came into force"
+    r"|came into effect|was completed|was finished|was opened|was built|first (?:published|released|aired|tested)"
+    r"|in 1\d{3}\b|in 20[0-2]\d\b|at the time|\d+(?:st|nd|rd|th) century)\b",
+    re.I,
+)
+_CURRENCY_ASK_RE = re.compile(
+    r"\b(latest|recent|recently|currently|right now|today|tonight|this (?:year|week|month)|still"
+    r"|who (?:is|are|owns|leads|governs)|what (?:is|are) the (?:price|cost|population|version)"
+    r"|weather|stock|market|election|version|score)\b",
+    re.I,
+)
+
 HIGH_STAKES = {
     StakesDomain.LEGAL: re.compile(r"\b(law|legal|lawsuit|court|ruling|verdict|contract|liab(?:ility|le)|patent|trademark|copyright|criminal|deport|fine|regulation|antitrust|compliance|gdpr|licence agreement)\b", re.I),
     StakesDomain.MEDICAL: re.compile(r"\b(dosage|dose|symptom|diagnos|medication|drug|treatment|cancer|disease|illness|hospital|therapy|vaccine|side effect|medical|health|risk of dying|pregnan)\b", re.I),
@@ -208,7 +222,13 @@ def classify(
     computed, expr = try_arithmetic(text)
     entities = re.findall(r"\b([A-Z][A-Za-z0-9.'-]{2,})\b", text)
     proper_nouns = [e for e in entities if e not in ("I",)]
-    time_sensitive = bool(CURRENT_RE.search(signal_text)) and not bool(re.search(r"\b(20\d{2})\b", low) and re.search(r"\b(history|past|in 20\d{2})\b", low))
+    # A year in the question is not a request for current data: "when did the Data
+    # Protection Act 2018 receive Royal Assent" asks about an event fixed in 2018, and
+    # calling it current made a 2018 source look too old to state its own date. Only a
+    # present-tense ask outvotes a past-event anchor.
+    past_event = bool(_PAST_EVENT_RE.search(signal_text))
+    asking_now = bool(_CURRENCY_ASK_RE.search(signal_text))
+    time_sensitive = (asking_now or bool(CURRENT_RE.search(signal_text))) and not (past_event and not asking_now)
 
     stakes = StakesDomain.NONE
     for domain, pattern in HIGH_STAKES.items():
