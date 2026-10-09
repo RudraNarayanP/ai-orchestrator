@@ -79,7 +79,10 @@ AI_SOURCE_RE = re.compile(r"(chatgpt\.com|gemini\.google|copilot\.microsoft|meta
 
 BLOCK_HINT_RE = re.compile(
     r"(are you a robot|unusual traffic|access denied|enable javascript and cookies|"
-    r"verify you are a human|captcha|attention required|rate limit exceeded|403 forbidden)",
+    r"verify you are a human|captcha|attention required|rate limit exceeded|403 forbidden|"
+    # the Cloudflare interstitial, verbatim from live runs: it was filed as "unreachable",
+    # which hides that a source refused us rather than failing
+    r"you have been blocked|please enable cookies|checking your browser|performance & security by cloudflare)",
     re.I,
 )
 PAYWALL_RE = re.compile(r"(subscribe to read|sign in to read|this article is limited|paywall|metered access)", re.I)
@@ -293,8 +296,13 @@ async def fetch_page(
             if got and got.text:
                 got.notes.append("http path failed, read through the dedicated browser window")
                 return got
+            # the live driver reads provider sites only, so a blocked source often has
+            # no second path at all -- say so instead of returning a silent failure
+            page.notes.append("browser re-read gave no readable text")
         except Exception as exc:  # noqa: BLE001
             page.notes.append(f"browser fetch failed: {type(exc).__name__}")
+    elif not page.ok:
+        page.notes.append("no browser re-read configured")
     return page
 
 
@@ -349,6 +357,12 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
     year in the claim appears somewhere in the page. A page about the same topic
     that lacks the figure is a mismatch, which is exactly the failure mode models
     produce when they paraphrase a headline into a statistic.
+
+    What this layer cannot decide is the *role* of a figure: a page saying "began in
+    January 1887 and was completed on 31 March 1889" contains everything the claim
+    "completed in 1887" asks for, so it reads as present here. That is what the
+    curator's verdict is for, and a refutation backed by an opened page is reported as
+    false, never as support (see truth_state).
     """
     text_lower = (page.text or "").lower()
     if not text_lower:
@@ -375,14 +389,19 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
     for year in sig["years"][:4]:
         if year not in text_lower:
             missing.append(year)
-    for date in sig["dates"][:3]:
-        if not any(part in text_lower for part in re.split(r"[\s.]+", date) if len(part) > 3):
-            missing.append(date)
     names = subject_names(claim)
+    # Compare the date as it was written, not as a canonical key: a page says
+    # "31 March 1889" and never "1889-03-31". Still a hard requirement -- the month
+    # name or the year has to be on the page for a date claim to be confirmed.
+    for date in (sig.get("date_strings") or sig["dates"])[:3]:
+        if not any(part in text_lower for part in re.split(r"[\s./-]+", date) if len(part) > 3):
+            missing.append(date)
     if names:
         folded = _fold((page.text or "") + " " + (page.title or "") + " " + (page.final_url or page.url or ""))
-        if not any(n in folded for n in names):
-            missing.append("subject: " + ", ".join(names[:3]))
+        # Every name the claim is about, not any one of them: "the Eiffel Tower" was being
+        # confirmed by a Blackpool Tower page because both pages say "tower".
+        if not all(n in folded for n in names):
+            missing.append("subject: " + ", ".join(n for n in names if n not in folded)[:80])
 
     if BLOCK_HINT_RE.search((page.text or "")[:2000]) or "gate" in " ".join(page.notes):
         status = SourceCheckStatus.BLOCKED
@@ -405,7 +424,11 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
         # word happens to sit (live: Oxford DPhil "100,000 words" -- the stored excerpt was the page header, so the
         # eval could not see the figure the claim stood on).
         figure_idx = -1
-        for figure in list(sig["numbers"][:6]) + list(sig["years"][:4]):
+        for figure in (
+            list(sig["numbers"][:6])
+            + list(sig["years"][:4])
+            + [p for d in (sig.get("date_strings") or [])[:3] for p in re.split(r"[\s./-]+", d) if len(p) > 3]
+        ):
             pos = text_lower.find(str(figure).lower())
             if pos < 0:
                 pos = _find_digits(text_lower, re.sub(r"[^0-9]", "", str(figure)))
@@ -654,8 +677,13 @@ async def gather_from_links(
             elif counter and check["status"] != SourceCheckStatus.CONFIRMED:
                 return []
         else:
+            if not page.ok and (BLOCK_HINT_RE.search((page.text or "")[:3000]) or "gate" in " ".join(page.notes)):
+                # A security page is not an unreadable server: say which one it was.
+                status = SourceCheckStatus.BLOCKED
+            else:
+                status = SourceCheckStatus.CONFIRMED if page.ok else SourceCheckStatus.UNREACHABLE
             check = {
-                "status": SourceCheckStatus.CONFIRMED if page.ok else SourceCheckStatus.UNREACHABLE,
+                "status": status,
                 "coverage": None,
                 "excerpt": (page.text or "")[:400] or None,
                 "missing": [],

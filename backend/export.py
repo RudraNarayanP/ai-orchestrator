@@ -92,7 +92,11 @@ def job_markdown(snap: dict[str, Any]) -> str:
     if claims:
         lines += ["## Claim ledger", "", "| Claim | Verdict | Asserted by |", "|---|---|---|"]
         for c in claims:
-            verdict = inline(c.get("status")) + (f" / {inline(c.get('confidence'))}" if c.get("confidence") else "")
+            # Confidence.NONE is spelled "insufficient_evidence", the same word as the
+            # status, so a bare `insufficient_evidence / insufficient_evidence` says
+            # nothing twice over.
+            confidence = c.get("confidence")
+            verdict = inline(c.get("status")) + (f" / {inline(confidence)}" if confidence and confidence != c.get("status") else "")
             by = ", ".join(inline(p, 40) for p in (c.get("providers") or c.get("providers_json") or []))
             lines.append(f"| {inline(c.get('claim'), 400)} | {verdict} | {by} |")
         lines.append("")

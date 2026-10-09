@@ -987,7 +987,12 @@ def confidence_label(confidence: Confidence) -> str:
     return CONFIDENCE_LABEL.get(confidence, "Low confidence")
 
 
-def truth_state(report: VerifierReport) -> str:
+def _asked_figures(text: str) -> set[str]:
+    """The numbers in a sentence, without the punctuation attached to them."""
+    return {a.strip(".,") for a in re.findall(r"\d[\d,.]*", text or "") if a.strip(".,")}
+
+
+def truth_state(report: VerifierReport, question: str = "") -> str:
     """TRUE / PARTLY / FALSE / CONFLICT / UNVERIFIED, read off the evidence ledger's verdicts -- never off tone.
 
     Anything short of settled evidence is UNVERIFIED or CONFLICT; this never rounds uncertainty up.
@@ -1000,7 +1005,21 @@ def truth_state(report: VerifierReport) -> str:
     supported = verdicts.count(S.SUPPORTED)
     refuted = verdicts.count(S.REFUTED)
     partial = verdicts.count(S.PARTIALLY_SUPPORTED)
-    if conf in (Confidence.NONE, Confidence.LOW) or not (supported or refuted or partial):
+    # A refutation that cites a page we opened is a finding, not a gap: the ledger
+    # established the premise is wrong, so "Couldn't verify that one." would understate
+    # it (live: "Is it true the Eiffel Tower was completed in 1887?" -- refuted on the
+    # official history pages, reported as unverified because no claim was "supported").
+    refuted_on_evidence = [v for v in report.verdicts if v.verdict == S.REFUTED and v.strong_evidence]
+    if conf is Confidence.NONE or not (supported or refuted or partial):
+        return "UNVERIFIED"
+    if refuted_on_evidence and not supported and not partial:
+        return "FALSE"
+    # The number the user themselves put in the question, refuted on an opened page, is a
+    # "no", not a "partly right": the correction is the answer, not one item beside it.
+    asked = _asked_figures(question)
+    if asked and any(asked & _asked_figures(v.claim) for v in refuted_on_evidence):
+        return "FALSE"
+    if conf == Confidence.LOW:
         return "UNVERIFIED"
     if refuted and not supported and not partial:
         return "FALSE"
@@ -1037,7 +1056,7 @@ def _provenance(v: ClaimVerdict) -> str:
 def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int, question: str = "") -> FinalAnswer:
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
-    state = truth_state(report) if question and (report.verdicts or report.confidence == Confidence.NONE) else ""
+    state = truth_state(report, question) if question and (report.verdicts or report.confidence == Confidence.NONE) else ""
     state = premise_state(state, question, lint_answer(report.answer, question=question).text) if state else state
     S = ClaimStatus
     settled = {S.SUPPORTED, S.REFUTED, S.PARTIALLY_SUPPORTED, S.CONTESTED}

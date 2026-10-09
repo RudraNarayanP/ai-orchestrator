@@ -335,6 +335,11 @@ def signature(text: str) -> dict[str, Any]:
         "plain_numbers": sorted(set(numbers) - set(in_date)),
         "years": sorted({y.group(1) for y in YEAR_RE.finditer(text)}),
         "dates": date_keys(text),
+        # The words the date was actually written with. Page matching needs these: a
+        # page says "31 March 1889", never "1889-03-31", so checking the canonical key
+        # against a page body rejects every date claim (live: the Eiffel Tower's
+        # completion page was called a mismatch with "claim figures absent: 1887-01").
+        "date_strings": sorted({m.group(0).lower() for m in DATE_RE.finditer(text)}),
         "polarity": _polarity(low),
         "tokens": sorted({t for t in re.findall(r"[a-z0-9']+", low) if t not in _STOP and len(t) > 2}),
     }
