@@ -30,7 +30,7 @@ from backend.browser.live_chrome import LiveChromeNeedsUser, LiveChromeUnavailab
 from backend.cancel import CancelToken, JobCancelled
 from backend.models import Citation, ProviderResponse, ProviderStatus, new_id
 from backend.settings import ProviderConfig, Settings
-from browser.adapters.dom_library import DOM_LIBRARY_JS
+from browser.adapters.dom_library import DOM_LIBRARY_JS, DOM_LIBRARY_VERSION
 from browser.adapters.selectors import SelectorSet, selectors_for
 
 EventHook = Callable[..., Awaitable[None]]
@@ -208,7 +208,7 @@ class ChatAdapter:
         key = id(page)
         if key in self._pages_with_library:
             try:
-                if await page.evaluate("!!(window.__omnibrain && window.__omnibrain.version === 3)"):
+                if await page.evaluate(f"!!(window.__omnibrain && window.__omnibrain.version === {DOM_LIBRARY_VERSION})"):
                     return
             except Exception:  # noqa: BLE001
                 pass
@@ -335,10 +335,29 @@ class ChatAdapter:
             return {**self._sel_dict, "safe_dismiss": True}
         return self._sel_dict
 
+    async def continue_as_guest(self, page, emit: EventHook | None = None, round_no: int = 0) -> list[str]:
+        """Close a sign-up / log-in nudge with the site's own visible "Stay logged out" / "Continue without account" /
+        close control, so a provider that allows chatting without an account is used as a guest instead of being
+        reported as needing a login. Never logs in or signs up, and never touches a captcha / age / consent / terms
+        dialog (the page script refuses those)."""
+        try:
+            res = await self._call(page, "guestDismiss", self._sel_dict)
+        except DOMUnavailable as exc:
+            if needs_user_in(exc):
+                raise
+            return []
+        clicked = [str(c) for c in ((res or {}).get("clicked") or [])] if isinstance(res, dict) else []
+        if clicked:
+            self.guest_log = [*getattr(self, "guest_log", []), *clicked]
+            await page.wait_for_timeout(700)
+            await self._safe_emit(emit, "provider", f"{self.provider}: continued without an account ({'/'.join(clicked[:2])})", self.provider, round_no)
+        return clicked
+
     async def prepare(self, page, emit: EventHook, round_no: int) -> dict[str, Any]:
         """Dismiss chrome that blocks the composer, then confirm we can type."""
         state: dict[str, Any] = {"ok": False}
         for attempt in range(3):
+            guest = await self.continue_as_guest(page, emit, round_no)
             try:
                 clicked = await self._call(page, "dismiss", self._dismiss_cfg(page))
             except DOMUnavailable as exc:
@@ -354,10 +373,16 @@ class ChatAdapter:
             if state["state"] == "ready":
                 check_gate = getattr(page, "check_gate", None)
                 if check_gate is not None:
+                    await self.continue_as_guest(page, emit, round_no)  # a nudge that popped up just now
                     await check_gate()  # live Chrome: a consent / announcement dialog over the page is the person's to answer
                 state["ok"] = True
+                if guest or getattr(self, "guest_log", None):
+                    state["guest"] = True
                 return state
-            if state["state"] in {"login_wall", "blocked", "rate_limited"}:
+            if state["state"] in {"blocked", "rate_limited"}:
+                return state
+            if state["state"] == "login_wall" and not (guest and attempt < 2) and not (attempt == 0 and not state.get("credentialForm")):
+                # one more look on the first pass: a sign-up nudge often renders a moment after the page
                 return state
             if attempt == 1 and hasattr(page, "check_gate"):
                 # Live Chrome drives new tabs in the background and never raises them by default. A few apps (meta.ai)
@@ -733,6 +758,7 @@ class ChatAdapter:
                 continue
             await page.wait_for_timeout(1500)
             try:
+                await self.continue_as_guest(page)
                 await self._call(page, "dismiss", self._dismiss_cfg(page))
             except Exception:  # noqa: BLE001
                 pass

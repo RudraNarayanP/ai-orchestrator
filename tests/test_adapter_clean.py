@@ -75,3 +75,14 @@ def test_pi_read_aloud_and_more_options_controls_are_not_part_of_the_answer():
     assert adapter()._clean(raw) == "The Eiffel Tower was completed in 1889.\nSource: Britannica."
     assert "read aloud" in adapter()._clean("You can read aloud the passage below.").lower(), "only a whole control line is dropped"
 
+
+def test_the_page_library_version_check_matches_the_library():
+    """base._install used to look for version 3 while the library said 4, so it re-injected on every call."""
+    import inspect
+
+    from browser.adapters import base
+    from browser.adapters.dom_library import DOM_LIBRARY_JS, DOM_LIBRARY_VERSION
+
+    assert f"window.__omnibrain.version === {DOM_LIBRARY_VERSION}) return 'already'" in DOM_LIBRARY_JS
+    assert f"    version: {DOM_LIBRARY_VERSION},\n" in DOM_LIBRARY_JS
+    assert "DOM_LIBRARY_VERSION" in inspect.getsource(base.ChatAdapter._install)

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Guest-chat refusals fixture</title>
+<!-- Dialogs that mention logging in but must NOT be closed for guest chat: an age check, a terms acceptance, a
+     captcha, and a nudge whose only buttons are log in / sign up. guestDismiss must press nothing here. -->
+</head><body>
+<textarea placeholder="Ask" id="q" style="position:fixed;bottom:20px;left:20px;width:500px;height:40px"></textarea>
+<div role="dialog" id="age"><p>Log in or confirm your age to continue. What year were you born?</p>
+  <button onclick="window.__clicked.push('age-close')">Close</button><button onclick="window.__clicked.push('age-login')">Log in</button></div>
+<div role="dialog" id="terms"><p>Sign up free. By continuing you agree to our Terms of Service and Privacy Policy.</p>
+  <button onclick="window.__clicked.push('terms-continue')">Continue without account</button></div>
+<div role="dialog" id="captcha"><p>Log in. Verify you are human.</p>
+  <button aria-label="Close" onclick="window.__clicked.push('captcha-close')">&times;</button></div>
+<div role="dialog" id="only-login"><p>Sign in to keep chatting</p>
+  <button onclick="window.__clicked.push('signin')">Sign in</button><button onclick="window.__clicked.push('google')">Continue with Google</button>
+  <a href="https://example.invalid/login" onclick="window.__clicked.push('link');return false">Continue without account</a></div>
+<script>window.__clicked = [];</script>
+</body></html>

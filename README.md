@@ -78,6 +78,13 @@ anonymously is used anonymously, and one that shows a login wall, captcha, age g
 or onboarding form is reported `blocked` and skipped (`providers.<name>.requires_login`
 in the config only tells `doctor` which sites to nag about).
 
+Guest chat: when a site that allows chatting without an account puts up a sign-up
+nudge, OmniBrain closes it with the site's own visible "Stay logged out" /
+"Continue without account" / close control and chats as a guest. It never presses
+"Log in", "Sign up" or "Continue with Google", never follows a link out of the page,
+and never touches a dialog about a captcha, your age or birth date, cookies/consent
+or terms -- those stay yours and the provider is reported as needing you.
+
 *Why not just drive my existing logged-in Chrome?* Chrome 136 and later ignore
 `--remote-debugging-port` on the default profile, so there is no port to attach to
 without relaunching Chrome against a *different*, logged-out profile. The supported

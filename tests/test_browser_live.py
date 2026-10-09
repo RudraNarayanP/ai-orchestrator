@@ -637,3 +637,54 @@ async def test_configured_modes_are_switched_on_before_the_question_is_sent(brow
         assert any("mode deep_research -> plan_gated" in e for e in events), events
     finally:
         await engine.stop(keep_windows=False)
+
+
+async def test_a_sign_up_nudge_is_closed_with_stay_logged_out_and_the_chat_runs_as_a_guest(browser_settings, fixture_server):
+    """The user (2026-10-09): these providers chat without an account. A 'Log in / Sign up for free / Stay logged out'
+    nudge must be closed with the site's own 'Stay logged out', never 'Log in' or 'Sign up', and the answer captured."""
+    url = fixture_server.rsplit("/", 1)[0] + "/guest_nudge.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"chatgpt": {"enabled": True, "label": "ChatGPT", "url": url, "max_retries": 0}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("chatgpt", engine, settings, settings.providers["chatgpt"])
+        adapter.sel.stable_ms = 700
+        adapter.sel.tiny_fragment_ms = 1500
+        adapter.sel.never_started_ms = 12000
+        adapter.sel.force_capture_ms = 25000
+        adapter.sel.hard_timeout_ms = 45000
+        events = []
+
+        async def emit(kind, message, provider=None, round_no=None):
+            events.append(message)
+
+        response = await adapter.ask("jobguest", "When was the Eiffel Tower completed and how tall is it?", 1, emit=emit)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        assert "March 31, 1889" in response.answer_text, response.answer_text
+        page = await engine.open_research_page("chatgpt", url)
+        assert await page.evaluate("window.__guest") is True
+        assert await page.evaluate("window.__loginClicked") is False, "Log in / Sign up must never be pressed"
+        assert any("continued without an account" in e and "Stay logged out" in e for e in events), events
+    finally:
+        await engine.stop(keep_windows=False)
+
+
+async def test_guest_chat_never_touches_age_terms_captcha_or_login_only_dialogs(browser_settings, fixture_server):
+    url = fixture_server.rsplit("/", 1)[0] + "/guest_refusals.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"chatgpt": {"enabled": True, "label": "ChatGPT", "url": url, "max_retries": 0}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("chatgpt", engine, settings, settings.providers["chatgpt"])
+        page = await engine.open_research_page("chatgpt", url)
+        res = await adapter._call(page, "guestDismiss", adapter._sel_dict)
+        assert res["clicked"] == [], res
+        assert await page.evaluate("window.__clicked") == [], "nothing may be pressed in a gate or a login-only dialog"
+        assert len(res["skipped"]) == 4, res
+        assert await adapter.continue_as_guest(page) == []
+    finally:
+        await engine.stop(keep_windows=False)

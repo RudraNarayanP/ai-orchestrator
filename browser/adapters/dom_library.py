@@ -8,10 +8,13 @@ about as often as we can test.
 
 from __future__ import annotations
 
+# Bumped whenever the page-side API changes, so a page holding an older copy gets the new one.
+DOM_LIBRARY_VERSION = 5
+
 # Installed with page.evaluate(DOM_LIBRARY_JS) before any interaction.
 DOM_LIBRARY_JS = r"""
 (() => {
-  if (window.__omnibrain && window.__omnibrain.version === 4) return 'already';
+  if (window.__omnibrain && window.__omnibrain.version === 5) return 'already';
   const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
   const lower = (s) => (s || '').toLowerCase();
 
@@ -378,6 +381,61 @@ DOM_LIBRARY_JS = r"""
     return !!dlg && TERMS_GATE_RE.test(norm(dlg.innerText || ''));
   }
 
+  // ---- guest chat ------------------------------------------------------------------------------------------------
+  // Several providers chat without an account but first put up a sign-up nudge (ChatGPT logged out: "Log in /
+  // Sign up for free / Stay logged out"). Only the site's own VISIBLE "Stay logged out" / "Continue without account"
+  // / close control inside such a nudge is pressed. Never: log in, sign up, "continue with Google", accept/agree,
+  // upgrade -- and nothing at all inside a captcha / age / consent / terms dialog (those stay the person's).
+  const GUEST_NUDGE_RE = /(log ?in|sign ?(in|up)|create (a |an |your )?(free )?account|stay logged out|without (an )?account)/i;
+  const GUEST_GATE_RE = /(captcha|robot|are you (a )?human|verify (that )?you|birth|\bborn\b|your age|age verification|over 18|at least 1[3-8]|cookie|consent|terms (of|and|&)|privacy policy|\baccept|\bagree)/i;
+  const GUEST_BTN_RE = /^(stay logged out|stay signed out|continue (without|w\/o) (an )?account|continue as (a )?guest|use (it )?without (an )?account|chat without (an )?account|try (it )?without (an )?account|close|dismiss|\u00d7|\u2715|\u2716)$/i;
+  const GUEST_ARIA_RE = /^(close|dismiss|close (the )?(dialog|modal|popup|banner))$/i;
+  const GUEST_PREFER_RE = /(logged out|signed out|without|guest)/i;
+  function guestContainers() {
+    const out = new Set();
+    for (const d of document.querySelectorAll('[role="dialog"], [role="alertdialog"], [aria-modal="true"], dialog[open]')) {
+      if (visible(d)) out.add(d);
+    }
+    // a nudge drawn as a plain fixed overlay over the middle of the page (no dialog role)
+    try {
+      let el = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+      while (el && el !== document.body && el !== document.documentElement) {
+        const st = getComputedStyle(el);
+        if (st.position === 'fixed' && visible(el)) { out.add(el); break; }
+        el = el.parentElement;
+      }
+    } catch (e) {}
+    return [...out];
+  }
+  function guestDismiss(cfg) {
+    const clicked = [];
+    const skipped = [];
+    for (const box of guestContainers()) {
+      const text = norm(box.innerText || '');
+      if (!GUEST_NUDGE_RE.test(text)) continue;
+      if (GUEST_GATE_RE.test(text) || TERMS_GATE_RE.test(text)) { skipped.push('gate:' + text.slice(0, 60)); continue; }
+      // the composer itself lives in a fixed footer on some sites: that is the app, not a nudge
+      if (box.querySelector('textarea, [contenteditable="true"], [role="textbox"]')) continue;
+      const options = [];
+      for (const b of box.querySelectorAll('button, [role="button"], a')) {
+        if (!visible(b) || b.disabled || b.getAttribute('aria-disabled') === 'true') continue;
+        if (b.tagName === 'A') {
+          const href = (b.getAttribute('href') || '').trim();
+          if (href && href !== '#' && !/^javascript:/i.test(href)) continue;  // a real link could lead to a login page
+        }
+        const label = norm(b.innerText || '');
+        const aria = norm(b.getAttribute('aria-label') || b.getAttribute('title') || '');
+        const ok = (label && GUEST_BTN_RE.test(label)) || (!label.replace(/[\u00d7\u2715\u2716]/g, '') && GUEST_ARIA_RE.test(aria));
+        if (ok) options.push({b, label: label || aria});
+      }
+      if (!options.length) { skipped.push('no-guest-control:' + text.slice(0, 60)); continue; }
+      options.sort((x, y) => (GUEST_PREFER_RE.test(y.label) ? 1 : 0) - (GUEST_PREFER_RE.test(x.label) ? 1 : 0));
+      try { options[0].b.click(); clicked.push(options[0].label.slice(0, 40)); } catch (e) {}
+      if (clicked.length >= 2) break;
+    }
+    return {clicked, skipped};
+  }
+
   // ---- provider mode toggles (Thinking / Search / Deep Research) --------------------------------------------------
   // Read-only discovery of the toggles that sit beside the composer, with their on/off state when the page exposes one.
   // Only top-level controls near the composer count (a sidebar "Search chats" is not the web-search mode). A control
@@ -451,7 +509,8 @@ DOM_LIBRARY_JS = r"""
   }
 
   const api = {
-    version: 4,
+    version: 5,
+    guestDismiss(cfg) { return guestDismiss(cfg); },
     modeControls(cfg) { return modeControls(cfg); },
     modeMenus(cfg) { return modeMenus(cfg); },
     setMode(cfg, mode, want) {
