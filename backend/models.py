@@ -493,6 +493,12 @@ class SufficiencyAssessment(BaseModel):
     unresolved: list[str] = Field(default_factory=list)
     """material claims no opened source confirmed"""
 
+    unjudged: list[str] = Field(default_factory=list)
+    """unresolved wordings the curator never put a verdict on -- open questions were not asked"""
+
+    open_key: list[str] = Field(default_factory=list)
+    """judged-but-unproven material claims that actually answer the question asked"""
+
     unanswered_subquestions: list[str] = Field(default_factory=list)
     """parts of a multi-part question that no answer addressed at all"""
     unanswered_subquestions: list[str] = Field(default_factory=list)

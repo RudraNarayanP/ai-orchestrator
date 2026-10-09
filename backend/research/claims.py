@@ -341,10 +341,16 @@ def signature(text: str) -> dict[str, Any]:
 
 
 def _polarity(low: str) -> str:
-    """A declarative claim asserts; a negated one denies."""
+    """A declarative claim asserts; a negated one denies.
+
+    Only the main clause carries the polarity: "one month unless the request is complex"
+    and "one month without undue delay" assert the same thing, and reading the exception
+    as the claim made two agreeing researchers look opposed (live SAR run, twice).
+    """
+    main = re.split(r"\b(?:unless|except|but not|provided that|provided the|save for|irrespective of|without)\b", low, maxsplit=1)[0]
     if re.search(
-        r"\b(not|never|no longer|failed to|without|cannot|can'?t|doesn'?t|does not|didn'?t|isn'?t|aren'?t|lacks|absent|lacking|lacks)\b",
-        low,
+        r"\b(not|never|no longer|failed to|cannot|can'?t|doesn'?t|does not|didn'?t|isn'?t|aren'?t|lacks|absent|lacking)\b",
+        main,
     ):
         return "neg"
     return "pos"
@@ -735,3 +741,49 @@ def find_contradictions(claims: list[Claim]) -> list[dict[str, Any]]:
                 }
             )
     return conflicts
+
+
+def annotate_unadjudicated(claims: list[Claim], judged: set[str]) -> int:
+    """Say why a claim is still `unverified` when the curator never judged that wording.
+
+    This states a fact about the run -- which claims were put to the curator -- rather than
+    guessing that two sentences mean the same thing. No status changes: an unjudged claim
+    is not supported, it is unjudged, and the ledger is allowed to say so precisely.
+    """
+    marked = 0
+    for claim in claims:
+        if claim.status != ClaimStatus.UNVERIFIED or claim.rationale or claim.id in judged:
+            continue
+        claim.rationale = f"the curator judged {len(judged)} claim(s) and this wording was not among them"
+        marked += 1
+    return marked
+
+
+def apply_verdicts(claims: list[Claim], verdicts: list[Any]) -> int:
+    """Write each adjudicated verdict onto the claim it judged, and return how many landed.
+
+    The verdict and the claim are the same fact judged once; if the verdict only lives in
+    the report, the ledger keeps saying `unverified` beside a high-confidence answer and
+    every later check that reads the claim is judging a stale record (live SAR run
+    2026-10-09: 24 claims unverified while the curator had supported 6 of them).
+    """
+    by_id = {c.id: c for c in claims}
+    applied = 0
+    for verdict in verdicts or []:
+        claim = by_id.get(getattr(verdict, "claim_id", None))
+        if claim is None:
+            continue
+        claim.status = verdict.verdict
+        claim.confidence = verdict.confidence
+        claim.rationale = verdict.reasoning
+        strong = list(verdict.strong_evidence or [])
+        if verdict.verdict in {ClaimStatus.REFUTED, ClaimStatus.CONTESTED}:
+            for url in strong:
+                if url not in claim.contradicting:
+                    claim.contradicting.append(url)
+        else:
+            for url in strong:
+                if url not in claim.supporting:
+                    claim.supporting.append(url)
+        applied += 1
+    return applied

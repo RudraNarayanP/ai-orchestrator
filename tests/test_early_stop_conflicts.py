@@ -80,6 +80,28 @@ def test_date_words_do_not_make_two_claims_about_the_same_thing_look_untrelated(
     assert similarity(left, right) >= 0.34, "the month is the disagreement, not a different topic"
 
 
+def test_a_subordinate_exception_is_not_the_polarity_of_the_claim():
+    """Live SAR run, twice: "one month, unless complex" against "one month without undue
+    delay" was read as pos-vs-neg and reported as sources disagreeing."""
+    for left, right in [
+        (
+            "An organisation generally has one calendar month to respond to a SAR, unless the request is complex.",
+            "An organisation must respond to a SAR within one calendar month without undue delay.",
+        ),
+        (
+            "The ICO allows an extension of two months except where the request is straightforward.",
+            "The ICO allows an extension of two months where the request is complex.",
+        ),
+    ]:
+        found = find_contradictions(two_claims(left, right))
+        assert found == [], f"{left!r} vs {right!r} -> {[(f['kind'], f['detail']) for f in found]}"
+    # a real denial still reads as a denial
+    assert find_contradictions(two_claims(
+        "The ICO does not allow any extension of the one-month deadline.",
+        "The ICO allows an extension of the one-month deadline.",
+    )), "a genuine yes/no split must still be a conflict"
+
+
 def test_identifiers_and_names_are_not_figures():
     assert "9" not in comparable_text("The primary legislation is section 9 of the Data Protection Act 2018.")
     assert "2018" not in comparable_text("the Data Protection Act 2018")

@@ -195,7 +195,8 @@ class Store:
                        supporting_json, contradicting_json, status, confidence, rationale)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(id) DO UPDATE SET status=excluded.status, confidence=excluded.confidence,
-                     rationale=excluded.rationale, providers_json=excluded.providers_json""",
+                     rationale=excluded.rationale, providers_json=excluded.providers_json,
+                     supporting_json=excluded.supporting_json, contradicting_json=excluded.contradicting_json""",
                 (
                     claim.id, job.id, claim.round, claim.claim, claim.kind, claim.topic,
                     json.dumps(claim.provider_sources, ensure_ascii=False),

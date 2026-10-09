@@ -493,6 +493,16 @@ class ResearchRunner:
 
         if report is None:
             report = await self._lightweight_report(job, analysis, claims, evidence, responses, round_no)
+        else:
+            # The last assessment ran before the curator judged anything. Re-run it on the
+            # adjudicated claims, or the stop note reports as open what the evidence settled
+            # and the answer then contradicts it (live SAR run: "5 material claim(s) still
+            # unconfirmed" next to a High-confidence answer).
+            assessment = self._assess(
+                job, analysis, claims, evidence, disagreements, round_no,
+                focus="after verification", judged={v.claim_id for v in report.verdicts},
+            )
+            job.assessments.append(assessment)
         return self._complete(
             job,
             report,
@@ -985,6 +995,7 @@ class ResearchRunner:
         round_no: int,
         *,
         focus: str,
+        judged: frozenset[str] = frozenset(),
     ) -> SufficiencyAssessment:
         # A page that was opened and says the OPPOSITE is confirmed evidence too, but
         # it never counts toward establishing a claim.
@@ -996,12 +1007,20 @@ class ResearchRunner:
         contradicted = {e.claim_id for e in refuting if e.claim_id}
         established = [
             c for c in material
-            if c.id not in contradicted and any(e.claim_id == c.id for e in confirmed)
+            if c.id not in contradicted
+            and (any(e.claim_id == c.id for e in confirmed) or c.status in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED})
         ]
         # Contradicted and nothing backs it: that question is settled (it is false),
         # so it is not "unresolved" -- but it also establishes nothing.
         refuted_only = [c for c in material if c.id in contradicted and not any(e.claim_id == c.id for e in confirmed)]
-        unresolved = [c.claim for c in material if c not in established and c not in refuted_only]
+        open_claims = [c for c in material if c not in established and c not in refuted_only]
+        unresolved = [c.claim for c in open_claims]
+        # A claim the curator never put a verdict on is not a claim it found unproven.
+        # Counting those as open made the stop note contradict the answer it had just
+        # settled with opened evidence (live SAR run: "3 material claim(s) still
+        # unconfirmed" beside High confidence, with 7 claims supported and 11 unjudged).
+        open_judged = [c for c in open_claims if not judged or c.id in judged]
+        open_unjudged = [c for c in open_claims if judged and c.id not in judged]
         failure_signals = sorted(
             {s for r in job.responses if r.role in {"primary", "secondary", "thread_follow_up"} and not r.superseded for s in r.failure_signals}
         )
@@ -1036,6 +1055,9 @@ class ResearchRunner:
         best = max((router.asked_overlap(question, c.claim) for c in on_point), default=0)
         key = [c for c in on_point if best >= 2 and router.asked_overlap(question, c.claim) >= max(2, best - 1)] or on_point
         key_ids = {c.id for c in key}
+        # An unproven side remark is not a hole in the answer, so it must not be phrased
+        # as one next to a High-confidence reply.
+        judged_open_on_point = [c for c in open_judged if c.id in key_ids]
         key_conflicts = [d for d in material_conflicts if set(d.claim_ids) & key_ids]
         if key:
             contradictions = len(key_conflicts)
@@ -1090,14 +1112,33 @@ class ResearchRunner:
             reasons.append(f"{len(confirmed)} source(s) opened but none attach to a claim the researchers actually made")
         elif coverage < 0.8:
             recommends = EscalationLevel.PARALLEL
-            reasons.append(f"{len(unresolved)} material claim(s) still unconfirmed")
+            if judged_open_on_point:
+                # Name what is still open. A bare count beside a High-confidence answer
+                # reads as though the answer itself is unresolved.
+                if len(judged_open_on_point) == 1:
+                    shown = judged_open_on_point[0].claim.strip()
+                    if len(shown) > 70:
+                        shown = shown[:67].rstrip() + "..."
+                    reasons.append(f"still unconfirmed: {shown}")
+                else:
+                    reasons.append(f"{len(judged_open_on_point)} material claim(s) still unconfirmed")
+            elif open_judged:
+                reasons.append(f"{len(open_judged)} side claim(s) the curator could not prove")
+            else:
+                reasons.append(
+                    f"{len(established)} claim(s) settled by opened evidence; "
+                    f"{len(open_unjudged)} further wording(s) the curator did not judge"
+                )
         if refuted_only:
             recommends = max(recommends, EscalationLevel.PARALLEL, key=int)
             reasons.append(f"{len(refuted_only)} claim(s) contradicted by an opened source; the true answer is still open")
         if contradictions:
             recommends = EscalationLevel.DEEP
             reasons.append(f"{contradictions} material conflict(s)")
-        if failure_signals:
+        # A researcher's own hedge stops being the controlling signal once the ledger
+        # established every distinct material claim; suppressing it only then.
+        hedge_settled = strong_primary or (bool(established) and not judged_open_on_point)
+        if failure_signals and not hedge_settled:
             recommends = max(recommends, EscalationLevel.PARALLEL, key=int)
             reasons.append("an explicit inability to verify appeared in the answers")
         if analysis.high_stakes and not has_primary:
@@ -1120,6 +1161,8 @@ class ResearchRunner:
             failure_signals=failure_signals + [f"no_sources:{p}" for p in no_sources] + [f"mismatch:{len(mismatch)}"] if mismatch or no_sources else failure_signals,
             established=[c.claim for c in established],
             unresolved=unresolved,
+            unjudged=[c.claim for c in open_unjudged],
+            open_key=[c.claim for c in judged_open_on_point],
             unanswered_subquestions=unanswered,
             confirmed_sources=len(confirmed),
             independent_domains=len(domains),
@@ -1264,7 +1307,7 @@ class ResearchRunner:
             self.verifier = Verifier(endpoint, min_independent_sources=self.settings.research.min_independent_sources, deep=self.settings.verifier.deep_verification)
         job.status = JobStatus.VERIFYING
         await self._emit("status", "adversarial verification (evidence, not votes)", round_no=round_no, job=job)
-        return await self.verifier.verify(
+        report = await self.verifier.verify(
             job_id=job.id,
             question=self._q(job),
             round_no=round_no,
@@ -1274,6 +1317,11 @@ class ResearchRunner:
             disagreements=disagreements,
             corrections=list(job.corrections),
         )
+        # Land the verdicts on the claims now, not at the end: the next round's
+        # sufficiency check reads the ledger, and a stale `unverified` re-asks what
+        # the curator already settled with an opened page.
+        claim_ops.apply_verdicts(claims, report.verdicts)
+        return report
 
     async def _lightweight_report(
         self,
@@ -1298,11 +1346,16 @@ class ResearchRunner:
             reason="escalation rules did not require the adversarial pass",
         )
         report.verifier_model = "deterministic ledger (no verifier call)"
+        claim_ops.apply_verdicts(claims, report.verdicts)
         job.reports.append(report)
         return report
 
     def _complete(self, job: Job, report: VerifierReport | None, responses: list[ProviderResponse], *, rounds: int, stop: str) -> Job:
         job.status = JobStatus.SYNTHESIZING
+        if report is not None:
+            # The ledger and the answer are the same judgement read twice: decide it once.
+            claim_ops.apply_verdicts(job.claims, report.verdicts)
+            claim_ops.annotate_unadjudicated(job.claims, {v.claim_id for v in report.verdicts})
         if report is None:
             job.final = FinalAnswer(
                 answer="I don't know.",
@@ -1319,6 +1372,21 @@ class ResearchRunner:
             job.stop_reason = stop
             return job
         final = build_final_answer(report, responses, rounds, self._q(job))
+        # Confidence can never outrun the ledger: when a claim that answers the question
+        # was judged and left unproven, "High" beside a stop note saying so is a
+        # contradiction (live SAR run 2026-10-09).
+        open_on_point = [
+            c for c in job.claims
+            if c.status in {ClaimStatus.INSUFFICIENT_EVIDENCE, ClaimStatus.CONTESTED, ClaimStatus.REFUTED}
+            and router.addresses_question(self._q(job), c.claim)
+        ]
+        if open_on_point and final.confidence == Confidence.HIGH:
+            final.confidence = Confidence.MODERATE
+            final.confidence_label = confidence_label(Confidence.MODERATE)
+            shown = open_on_point[0].claim.strip()
+            final.caveats = [
+                "One part of this is not confirmed: " + (shown if len(shown) <= 110 else shown[:107].rstrip() + "...")
+            ] + list(final.caveats)
         # community-sourced owner reports are a labelled caveat of their own, never part of the answer
         final.caveats = [c for c in final.caveats if c][:5] + review_caveats(job.reviews)
         if not any(r.status.value == "completed" for r in responses):
@@ -1346,7 +1414,14 @@ class ResearchRunner:
         if assessment.sufficient and (assessment.strong_primary or assessment.contradictions == 0):
             return f"remaining uncertainty is not material to the question (round {round_no})"
         if round_no >= max_rounds:
-            return f"stopped at max rounds ({max_rounds}) with material uncertainty still open"
+            if assessment.open_key:
+                return f"stopped at max rounds ({max_rounds}) with material uncertainty still open"
+            if not assessment.unresolved:
+                return f"stopped at max rounds ({max_rounds}) with every material claim settled by opened evidence"
+            return (
+                f"stopped at max rounds ({max_rounds}); the claims the curator judged are settled by opened evidence "
+                f"and {len(assessment.unjudged)} further wording(s) the curator did not judge"
+            )
         material = [d for d in disagreements if d.severity == "material"]
         if material:
             return f"sources still conflict on {material[0].topic}; reported as unresolved rather than averaged"

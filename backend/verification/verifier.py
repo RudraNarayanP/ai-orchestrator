@@ -152,7 +152,7 @@ class Verifier:
             return report
         # Deterministic cross-check: a model that calls a claim "supported" with
         # zero confirmed sources in our own records gets overruled, not trusted.
-        self._reconcile(report, claims, evidence, question)
+        self._reconcile(report, claims, evidence, question, disagreements)
         report.reviewer_status, report.synthesis_status, report.fallback_reason = "COMPLETED", "CURATED", ""
         report.raw_output = reply.text[:4000]
         report.verifier_model = f"{self.endpoint.provider}:{self.endpoint.model}"
@@ -745,7 +745,14 @@ class Verifier:
                 best, best_score = c.id, score
         return best if best_score >= 0.6 else ""
 
-    def _reconcile(self, report: VerifierReport, claims: list[Claim], evidence: list[Evidence], question: str = "") -> None:
+    def _reconcile(
+        self,
+        report: VerifierReport,
+        claims: list[Claim],
+        evidence: list[Evidence],
+        question: str = "",
+        disagreements: list[Disagreement] | None = None,
+    ) -> None:
         """A model cannot promote a claim our own ledger does not support."""
         confirmed_by_claim: dict[str, int] = {}
         domains_by_claim: dict[str, set[str]] = {}
@@ -804,6 +811,28 @@ class Verifier:
                     report.confidence = best["confidence"]
                     report.important_disagreement = best["disagreement"]
                     report.caveats = list(best["caveats"])
+        # A material conflict outranks the model's confidence: a claim cannot be settled
+        # and contested in the same breath. The curated path was free to say "high" beside
+        # "sources still conflict" (live SAR run 2026-10-09: verdicts supported, confidence
+        # high, stop note conflicted). But a conflict whose other side no page confirms is
+        # already decided by the evidence, not open -- capping on that would throw away an
+        # answered question (test_architecture X-Y-X: 2024 rested on pages that failed).
+        contested_ids: set[str] = set()
+        for conflict in disagreements or []:
+            if conflict.severity != "material":
+                continue
+            sides = [cid for cid in conflict.claim_ids if cid in claims_by_id and confirmed_by_claim.get(cid)]
+            if len(sides) >= 2:
+                contested_ids.update(sides)
+        if contested_ids:
+            for verdict in report.verdicts:
+                if verdict.claim_id in contested_ids and verdict.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED}:
+                    verdict.verdict = ClaimStatus.CONTESTED
+                    verdict.confidence = Confidence.LOW
+                    verdict.problems.append("contested: two sources we opened confirm opposite claims")
+            if report.confidence == Confidence.HIGH:
+                report.confidence = Confidence.MODERATE
+                report.confidence_note = (report.confidence_note or "") + " Capped: sources materially disagree on a claim this answer rests on."
         self.attach_sources(report, evidence)
         overall = report.confidence
         supported = [v for v in report.verdicts if v.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED}]
