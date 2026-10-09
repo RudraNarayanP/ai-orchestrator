@@ -263,3 +263,38 @@ def test_inline_flattens_and_truncates():
     assert inline("a\n\n  b\t c") == "a b c"
     assert len(inline("x" * 1000, 50)) <= 51
     assert inline(None) == ""
+
+
+def test_an_incomplete_review_is_recorded_in_the_export():
+    """`status: completed` alone makes a job whose review was cut off read as a finished one.
+
+    The live truncated run (job_261009212243_87a51614) stored reviewer_status=COMPLETED with no
+    verdicts; the corrected record has to say INCOMPLETE where a person reading the audit will see it.
+    """
+    md = job_markdown(
+        {
+            "question": "In which year was the Eiffel Tower completed?",
+            "status": "completed",
+            "final": {
+                "answer": "Documented:\n- finished on 31 March 1889 (gov.example).",
+                "reviewer_status": "INCOMPLETE",
+                "synthesis_status": "FALLBACK",
+                "fallback_reason": "curator review cut off mid-reply: 0 of 12 claims judged, 12 left unjudged",
+            },
+        }
+    )
+    assert "review: INCOMPLETE/FALLBACK" in md, md
+    assert "## Review status" in md, md
+    assert "cut off mid-reply" in md and "12 left unjudged" in md, md
+
+
+def test_a_completed_review_records_its_status_and_adds_no_gap_section():
+    md = job_markdown(
+        {
+            "question": "q",
+            "status": "completed",
+            "final": {"answer": "a", "reviewer_status": "COMPLETED", "synthesis_status": "CURATED"},
+        }
+    )
+    assert "review: COMPLETED/CURATED" in md, md
+    assert "## Review status" not in md, "a finished review is not reported as a gap"

@@ -436,6 +436,12 @@ def _tidy(text: str) -> str:
 _CAVEAT_REWRITES = (
     (re.compile(r"^verifier model unavailable", re.I), "The AI reviewer wasn't available, so this rests only on the pages I could open and check."),
     (re.compile(r"^verifier output unusable", re.I), "The AI reviewer's reply couldn't be used, so this rests only on the pages I could open and check."),
+    # A review that never finished is the same kind of gap, and the user has to hear it the same
+    # way: the raw reason ("curator review cut off mid-reply: 0 of 12 claims judged") is internal
+    # vocabulary and would be dropped, leaving a confident-looking answer with no hint.
+    (re.compile(r"^verifier review incomplete \(cut off mid-reply", re.I), "The AI reviewer's reply was cut off before it finished, so the points it never reached rest only on the pages I could open and check."),
+    (re.compile(r"^verifier review incomplete \(returned no verdicts", re.I), "The AI reviewer returned no judgements at all, so this rests only on the pages I could open and check."),
+    (re.compile(r"^verifier review incomplete", re.I), "The AI reviewer's pass was incomplete, so this rests only on the pages I could open and check."),
     (re.compile(r"^\(?no model verifier active", re.I), ""),
     (re.compile(r"^verifier answer overruled", re.I), ""),
     (re.compile(r"^voice scrub removed", re.I), ""),

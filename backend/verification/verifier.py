@@ -198,7 +198,10 @@ class Verifier:
             recovered.raw_output = reply.text[:4000]
             recovered.verifier_model = f"{self.endpoint.provider}:{self.endpoint.model} (review incomplete)"
             recovered.caveats = list(recovered.caveats) + [
-                f"the curator's pass was {what}; what it judged stands, the rest is decided by the evidence ledger"
+                # Prefixed like the other reviewer failures so style.plain_caveats can turn it
+                # into a sentence a person reads: the review not finishing has to reach the user,
+                # not only the database row.
+                f"verifier review incomplete ({what}): what it judged stands, the rest is decided by the evidence ledger"
             ]
             return recovered
 

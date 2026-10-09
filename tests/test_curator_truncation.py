@@ -201,3 +201,24 @@ def test_an_incomplete_final_pass_carries_the_earlier_verdicts_forward():
     assert claim.id in {v.claim_id for v in cut_off.verdicts}, "the earlier verdict is carried forward"
     assert claim.status == ClaimStatus.SUPPORTED, "and it reaches the claim ledger"
     assert finished.final is not None
+
+
+async def test_the_reader_is_told_the_review_never_finished(fake_openai):
+    """INCOMPLETE cannot live only in the database row.
+
+    The internal reason ("curator review cut off mid-reply: 0 of 12 claims judged") is vocabulary
+    the voice rules strip from prose, and scrubbing it in silence would hand back an answer that
+    looks fully reviewed. The gap has to arrive as a plain sentence.
+    """
+    from backend.verification.verifier import build_final_answer
+
+    claim, evidence = claim_and_evidence(confirmed=5)
+    report = await verify(fake_openai, [TRUNCATED], [claim], evidence)
+    final = build_final_answer(report, [], 3, "How much is the Bolt?")
+
+    assert report.reviewer_status == "INCOMPLETE"
+    assert final.caveats, "the unfinished review reaches the user, it is not scrubbed as bookkeeping"
+    caveat = final.caveats[0].lower()
+    assert "reviewer" in caveat and ("cut off" in caveat or "incomplete" in caveat), final.caveats
+    for internal in ("ledger", "verdict", "curator", "claim id", "round 3", "0 of 12"):
+        assert internal not in caveat, final.caveats

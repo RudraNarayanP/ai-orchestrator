@@ -61,6 +61,9 @@ def job_markdown(snap: dict[str, Any]) -> str:
         f"status: {inline(snap.get('status'))}" if snap.get("status") else "",
         f"asked: {_when(snap.get('created_at'))}" if _when(snap.get("created_at")) else "",
         f"rounds: {final.get('rounds_run', snap.get('rounds_run'))}" if final.get("rounds_run", snap.get("rounds_run")) else "",
+        f"review: {inline(final.get('reviewer_status'))}/{inline(final.get('synthesis_status'))}"
+        if final.get("reviewer_status") or final.get("synthesis_status")
+        else "",
     ]
     meta = [m for m in meta if m]
     if meta:
@@ -71,6 +74,11 @@ def job_markdown(snap: dict[str, Any]) -> str:
     label = final.get("confidence_label") or snap.get("confidence")
     if label:
         lines += [f"**Confidence:** {inline(label)}", ""]
+    # "status: completed" alone would make a job whose review was cut off read as a finished one.
+    review = final.get("reviewer_status") or ""
+    if review not in {"", "COMPLETED", "NOT_RUN"}:
+        reason = final.get("fallback_reason") or "the reviewer never finished"
+        lines += ["## Review status", "", _block(f"{review}: {reason}"), ""]
     if final.get("why"):
         lines += ["## Why", "", _block(final["why"]), ""]
     if final.get("important_disagreement"):
