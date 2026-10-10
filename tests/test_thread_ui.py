@@ -27,7 +27,13 @@ def server(tmp_path, monkeypatch, adapters):
 
 
 @pytest.fixture
-async def page(server):
+def tolerated():
+    """URL fragments whose >=400 responses the test itself caused, so they are not "problems"."""
+    return set()
+
+
+@pytest.fixture
+async def page(server, tolerated):
     async with async_playwright() as pw:
         try:
             browser = await pw.chromium.launch(headless=True, channel="chrome")
@@ -37,8 +43,13 @@ async def page(server):
         page = await context.new_page()
         problems: list[str] = []
         page.on("pageerror", lambda exc: problems.append("pageerror: " + str(exc)))
-        page.on("console", lambda msg: problems.append("console: " + msg.text) if msg.type == "error" and "502" not in msg.text else None)
-        page.on("response", lambda r: problems.append(f"http {r.status}: {r.url}") if r.status >= 400 and r.status != 502 else None)
+        # Chrome reports a failed resource as a console error whose text carries no URL, so the
+        # deliberate 404s are excused by the message's location -- anything else still fails.
+        page.on("console", lambda msg: problems.append("console: " + msg.text)
+                if msg.type == "error" and "502" not in msg.text
+                and not any(frag in (msg.location or {}).get("url", "") for frag in tolerated) else None)
+        page.on("response", lambda r: problems.append(f"http {r.status}: {r.url}")
+                if r.status >= 400 and r.status != 502 and not any(frag in r.url for frag in tolerated) else None)
         page.on("requestfailed", lambda req: problems.append("requestfailed: " + req.url))
         page.on("dialog", lambda d: d.accept())
         await page.goto(server)
@@ -150,3 +161,53 @@ async def test_provider_text_is_never_html(page, adapters):
     await send(page, "hi")
     assert "<img" in await page.locator(".th-ai .th-text").first.inner_text()
     assert await page.evaluate("window.__pwned === undefined") and await page.locator(".th-ai img, .th-ai b").count() == 0
+
+
+# The panel used to be unhidden before the thread had been fetched, so it could be visible while
+# empty or still showing the previous thread. These watch the moment of reveal, not a later state:
+# "it fills in eventually" was never the bug.
+REVEAL_PROBE = """() => {
+  window.__reveals = [];
+  const detail = document.querySelector('#thDetail');
+  new MutationObserver(() => {
+    if (!detail.hidden) window.__reveals.push(document.querySelector('#thHeading').textContent.trim());
+  }).observe(detail, { attributes: true, attributeFilter: ['hidden'] });
+}"""
+
+
+async def test_the_detail_panel_is_never_revealed_without_its_heading(page):
+    await page.click("#openThreads")
+    await page.wait_for_selector("#thList")
+    await page.evaluate(REVEAL_PROBE)
+    await page.fill("#thTitle", "Vienna stay")
+    await page.fill("#thProject", "Fluges")
+    await page.click("#thCreate")
+    await page.wait_for_selector("#thDetail:not([hidden])")
+
+    reveals = await page.evaluate("window.__reveals")
+    assert reveals, "the panel was never revealed"
+    assert all(text for text in reveals), f"revealed with an empty heading: {reveals}"
+    assert "Vienna stay" in await page.locator("#thHeading").inner_text()
+
+
+async def test_a_thread_that_will_not_load_shows_an_error_not_a_blank_or_stale_panel(page, tolerated):
+    tolerated.add("/api/threads/th_missing")
+    await page.click("#openThreads")
+    await page.wait_for_selector("#thList")
+    await page.evaluate(REVEAL_PROBE)
+    await page.fill("#thTitle", "Prague notes")
+    await page.click("#thCreate")
+    await page.wait_for_selector("#thDetail:not([hidden])")
+    assert "Prague notes" in await page.locator("#thHeading").inner_text()
+
+    await page.evaluate("openThread('th_missing')")
+    await page.wait_for_function("document.querySelector('#thStatus').textContent.includes('Could not open this thread')")
+    reveals = await page.evaluate("window.__reveals")
+
+    assert all(text for text in reveals), f"revealed with an empty heading: {reveals}"
+    heading = await page.locator("#thHeading").inner_text()
+    assert "Prague notes" not in heading, f"the previous thread is still on screen: {heading!r}"
+    status = await page.locator("#thStatus").inner_text()
+    assert "Could not open this thread" in status, status
+    assert await page.locator("#thDetail").is_visible(), "a failed load must not leave the panel hidden and blank"
+    assert await page.locator("#thBack").is_visible(), "the way back to the list stays available"

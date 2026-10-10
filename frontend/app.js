@@ -424,14 +424,37 @@ async function createThread() {
   }
 }
 
-async function openThread(id) {
-  thread.id = id;
+function showThreadDetail() {
   $("#thListBox").hidden = true;
   $("#thDetail").hidden = false;
-  thStatus("");
+}
+
+async function openThread(id) {
+  thread.id = id;
   const sel = $("#thProvider");
   if (!sel.options.length) for (const [name, label] of enabledProviders()) sel.append(new Option(label, name));
-  await refreshThread();
+  // Reveal the panel only once it has something to show. It used to be unhidden before the fetch
+  // returned, so the screen briefly held either the previous thread's title or an empty pane, and
+  // anything watching for "detail visible, heading present" could catch it mid-flash.
+  $("#thHeading").textContent = "";
+  $("#thSegments").textContent = "";
+  $("#thMessages").textContent = "";
+  $("#thEmpty").hidden = true;
+  thStatus("");
+  try {
+    const [view, segs] = await Promise.all([memCall(`/api/threads/${id}?last=300`), memCall(`/api/threads/${id}/segments`)]);
+    if (thread.id !== id) return;  // another thread was opened while this one loaded: its reply is stale
+    paintThread(view, segs);
+    showThreadDetail();
+  } catch (e) {
+    if (thread.id !== id) return;
+    // A thread that will not load still gets an explanation rather than a blank panel or the
+    // previous thread's text, and "all threads" remains there to go back by.
+    $("#thHeading").textContent = "Untitled thread";
+    $("#thEmpty").hidden = false;
+    thStatus("Could not open this thread: " + e.message, true);
+    showThreadDetail();
+  }
   $("#thText").focus();
 }
 
