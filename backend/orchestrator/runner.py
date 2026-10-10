@@ -1423,7 +1423,13 @@ class ResearchRunner:
             if assessment.open_key:
                 return f"stopped at max rounds ({max_rounds}) with material uncertainty still open"
             if not assessment.unresolved:
-                return f"stopped at max rounds ({max_rounds}) with every material claim settled by opened evidence"
+                if assessment.established:
+                    return f"stopped at max rounds ({max_rounds}) with every material claim settled by opened evidence"
+                # An empty ledger is not a settled one. Live (job_261010102501_fadb739c): every
+                # provider came back broken or login-walled, so there were 0 claims and 0 opened
+                # pages -- and the run stored "every material claim settled by opened evidence",
+                # reporting our failure to gather anything as a completed verification.
+                return f"stopped at max rounds ({max_rounds}); nothing was established, so there was no claim left to settle"
             return (
                 f"stopped at max rounds ({max_rounds}); the claims the curator judged are settled by opened evidence "
                 f"and {len(assessment.unjudged)} further wording(s) the curator did not judge"

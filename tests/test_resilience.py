@@ -7,7 +7,15 @@ instead of a crash, a hang, or a confidently wrong answer.
 
 from __future__ import annotations
 
-from backend.models import Claim, Job, ProviderResponse, ProviderStatus, ResearchMode, SourceCheckStatus
+from backend.models import (
+    Claim,
+    Job,
+    ProviderResponse,
+    ProviderStatus,
+    ResearchMode,
+    SourceCheckStatus,
+    SufficiencyAssessment,
+)
 from backend.orchestrator.runner import ResearchRunner
 from backend.evidence.sources import SourceTier
 from tests.conftest import adapters_from
@@ -256,3 +264,21 @@ def test_unusable_this_job_means_every_response_was_a_wall_or_a_break():
         r('chatgpt', ProviderStatus.LOGGED_OUT),
     ]
     assert ResearchRunner._unusable_this_job(seen) == {'copilot', 'google_ai', 'qwen'}
+
+
+def test_an_empty_ledger_is_never_reported_as_a_settled_one(settings):
+    """Live (job_261010102501_fadb739c): every provider came back broken or login-walled, so the
+    run held 0 claims and 0 opened pages -- and it stored "stopped at max rounds (3) with every
+    material claim settled by opened evidence". Nothing was ever settled; a list that is empty
+    because nothing was gathered is not a list that is empty because everything was answered."""
+    runner = ResearchRunner(settings, {}, engine=None)
+
+    nothing = SufficiencyAssessment(job_id="j", round=3, sufficient=False)
+    note = runner._stop_reason(nothing, [], None, 3, 3)
+    assert "every material claim settled" not in note, note
+    assert "nothing was established" in note, note
+
+    settled = SufficiencyAssessment(
+        job_id="j", round=3, established=["The Act received Royal Assent on 23 May 2018."]
+    )
+    assert "every material claim settled by opened evidence" in runner._stop_reason(settled, [], None, 3, 3)
