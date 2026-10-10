@@ -48,6 +48,9 @@ LOGIN_RE = re.compile(
 )
 # An age gate asks the person for a personal declaration; we never answer it for them.
 BROKEN_RE = re.compile(r"(access denied|are you a robot|unusual traffic|verify you are a human|confirm your age|what year were you born|date of birth|verify your age|what should i call you|preferred name)", re.I)
+# A Cloudflare browser check renders nothing but its own <title>; the interstitial body is empty, so the
+# page-text test above cannot see it. Same wording ``evidence/sources.py`` already uses for a blocked source.
+CF_CHALLENGE_RE = re.compile(r"(just a moment|checking your browser|you have been blocked|please enable cookies|performance & security by cloudflare)", re.I)
 # Signals that the provider actually went and looked something up (section 17).
 WEB_RESEARCH_RE = re.compile(
     r"(searched the web|browsed|browsing|searching the web|web results|"
@@ -291,6 +294,11 @@ class ChatAdapter:
         body_head = (state.get("bodyHead") or "") + " " + (state.get("title") or "")
         if state.get("blocked") or BROKEN_RE.search(body_head):
             state["state"] = "blocked"
+        elif not state.get("inputHere") and CF_CHALLENGE_RE.search(body_head):
+            # Only when there is no composer to type into: a page that works and happens to contain the
+            # phrase must not be downgraded, and a bot check must not be reported as selector drift.
+            state["state"] = "blocked"
+            state["gate"] = state.get("gate") or "cloudflare browser check"
         elif state.get("rateLimited"):
             state["state"] = "rate_limited"
         elif not state.get("inputHere") and (state.get("loginWall") or LOGIN_RE.search(body_head)):
@@ -539,7 +547,8 @@ class ChatAdapter:
             response.note(
                 mapping.get(state, ProviderStatus.BROKEN),
                 error=f"readiness={state}" + (f" ({ready['gate']})" if state == "blocked" and ready.get("gate") else ""),
-                detail=(ready.get("bodyHead") or "")[:300],
+                # a bot-check interstitial renders no body text at all; its title is the only thing on record
+                detail=(ready.get("bodyHead") or ready.get("title") or "")[:300],
             )
             await emit("provider", f"{self.provider}: {response.status.value} — {state}", self.provider, round_no)
             return False
