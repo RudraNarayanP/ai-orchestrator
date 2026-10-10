@@ -50,6 +50,20 @@ from backend.research.style import (
 from backend.research.prompts import fence_all
 from backend.verification.llm import Endpoint, LLMClient
 
+# The stored copy of the curator's reply. The trim is ours, so it has to read as ours: a *complete*
+# reply longer than this used to be stored in the same shape as one the model never finished (live
+# job_261010170703_e3fa8deb round 2: reviewer_status=COMPLETED, all 14 claims judged, stored
+# raw_output ending mid-URL at exactly 4000 characters).
+RAW_STORED_CHARS = 4000
+
+
+def stored_raw(text: str) -> str:
+    """Keep the reply for the audit trail, and say so when we are the ones who cut it short."""
+    if len(text) <= RAW_STORED_CHARS:
+        return text
+    return f"{text[:RAW_STORED_CHARS]}\n[stored copy trimmed by OmniBrain at {RAW_STORED_CHARS} of {len(text)} characters]"
+
+
 CONFIDENCE_LABEL = {
     Confidence.HIGH: "High confidence",
     Confidence.MODERATE: "Moderate confidence",
@@ -147,7 +161,7 @@ class Verifier:
                 reason=(reply.error or ("verifier output was cut off and could not be repaired" if reply.truncated else "verifier returned unparsable output")),
                 status="UNAVAILABLE" if not reply.ok else "INVALID_OUTPUT",
             )
-            report.raw_output = reply.text[:4000]
+            report.raw_output = stored_raw(reply.text)
             report.verifier_model = self.endpoint.model
             return report
 
@@ -195,7 +209,7 @@ class Verifier:
             # What the curator decided stands; what it never reached is decided by the
             # evidence ledger with the same claim-level rules, never by inventing a verdict.
             recovered.verdicts = report.verdicts + [v for v in recovered.verdicts if v.claim_id not in judged]
-            recovered.raw_output = reply.text[:4000]
+            recovered.raw_output = stored_raw(reply.text)
             recovered.verifier_model = f"{self.endpoint.provider}:{self.endpoint.model} (review incomplete)"
             recovered.caveats = list(recovered.caveats) + [
                 # Prefixed like the other reviewer failures so style.plain_caveats can turn it
@@ -224,7 +238,7 @@ class Verifier:
             ]
         else:
             report.reviewer_status, report.synthesis_status, report.fallback_reason = "COMPLETED", "CURATED", ""
-        report.raw_output = reply.text[:4000]
+        report.raw_output = stored_raw(reply.text)
         report.verifier_model = f"{self.endpoint.provider}:{self.endpoint.model}"
         report.answer, leaked = scrub(report.answer)
         report.why, _ = scrub(report.why or "")

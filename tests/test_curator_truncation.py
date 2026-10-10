@@ -26,7 +26,7 @@ from backend.models import SourceCheckStatus
 from backend.verification.llm import json_parses
 from backend.verification.verifier import Verifier
 from tests.conftest import base_settings
-from tests.test_llm_paths import claim_and_evidence, endpoint_for
+from tests.test_llm_paths import claim_and_evidence, endpoint_for, verdict_json
 
 # The exact shape that got through: valid prefix, prose that reads fine, verdict list cut
 # off mid-object.
@@ -222,3 +222,33 @@ async def test_the_reader_is_told_the_review_never_finished(fake_openai):
     assert "reviewer" in caveat and ("cut off" in caveat or "incomplete" in caveat), final.caveats
     for internal in ("ledger", "verdict", "curator", "claim id", "round 3", "0 of 12"):
         assert internal not in caveat, final.caveats
+
+
+# ------------------------------------------- our own trim must not read as the model's stop
+
+async def test_a_complete_reply_we_cut_short_says_we_cut_it_short(fake_openai):
+    """Live job_261010170703_e3fa8deb round 2 (2026-10-10, headless Playwright, real curator):
+    reviewer_status=COMPLETED with all 14 claims judged, and the stored ``raw_output`` ended
+    mid-URL at exactly 4000 characters -- the same shape as the cut-off replies this file exists to
+    catch. Whoever reads the row cannot tell a model that stopped from a copy we trimmed."""
+    from backend.verification.verifier import RAW_STORED_CHARS
+
+    claim, evidence = claim_and_evidence(confirmed=5)
+    reply = json.dumps(verdict_json(claim, why="the primary page states the date in its own words; "
+                                             + ("a second independent page corroborates it. " * 200)))
+    assert len(reply) > RAW_STORED_CHARS, "the reply has to outgrow the stored cap"
+
+    report = await verify(fake_openai, [reply], [claim], evidence)
+
+    assert report.reviewer_status == "COMPLETED", report.fallback_reason
+    assert report.raw_output.startswith("{"), "the reply itself is still what a reader sees first"
+    assert f"[stored copy trimmed by OmniBrain at {RAW_STORED_CHARS} of {len(reply)} characters]" in report.raw_output
+
+
+def test_a_reply_that_fits_is_stored_exactly_as_it_arrived():
+    from backend.verification.verifier import RAW_STORED_CHARS, stored_raw
+
+    assert stored_raw(TRUNCATED) == TRUNCATED, "no marker on a reply we did not touch"
+    assert "trimmed" not in stored_raw(json.dumps({"answer": "x", "verdicts": []}))
+    cut = stored_raw("y" * RAW_STORED_CHARS + "z")
+    assert cut.startswith("y" * RAW_STORED_CHARS) and "trimmed by OmniBrain" in cut
