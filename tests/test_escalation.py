@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from backend.models import Job, ProviderStatus, ResearchMode, SourceCheckStatus
+from backend.models import Job, ProviderStatus, ResearchMode, SourceCheckStatus, SufficiencyAssessment
 from backend.orchestrator.runner import ResearchRunner
 from backend.evidence.sources import SourceTier
 from tests.conftest import adapters_from
@@ -246,3 +246,65 @@ async def test_partial_success_targets_only_the_open_claim(settings, net):
     assert any("$499" in c["prompt"] or "Bolt costs" in c["prompt"] for c in round2)
     established_already = ["revenue", "12000", "San Francisco"]
     assert not all(any(term in c["prompt"] for term in established_already) for c in round2)
+
+
+# ------------------------------------------------------- the round budget, reported as what it is
+
+def _assess(**kw):
+    return SufficiencyAssessment(job_id="j", **kw)
+
+
+def test_exhausted_budget_names_the_configured_round_count(settings):
+    runner = ResearchRunner(settings, {}, engine=None)
+    note = runner._stop_reason(_assess(round=3, open_key=["The Act came into force in 2018."]), [], None, 3, 3)
+    assert note == "stopped at max rounds (3) with material uncertainty still open", note
+
+
+def test_a_settled_ledger_is_reported_against_the_configured_budget_too(settings):
+    runner = ResearchRunner(settings, {}, engine=None)
+    note = runner._stop_reason(_assess(round=3, established=["Royal Assent 23 May 2018"]), [], None, 3, 3)
+    assert note == "stopped at max rounds (3) with every material claim settled by opened evidence", note
+
+
+def test_an_early_stop_never_claims_the_budget_ran_out(settings):
+    runner = ResearchRunner(settings, {}, engine=None)
+    note = runner._stop_reason(_assess(round=1, sufficient=True, contradictions=0), [], None, 1, 3)
+    assert "max rounds" not in note, note
+
+
+def test_the_exempt_follow_up_round_is_reported_as_extra_not_as_a_bigger_budget(settings):
+    """The same-conversation follow-up is granted ON TOP of the budget, so the record has to say
+    which number is the user's. Live runs reported "max rounds (4)" for a 3-round setting, which read
+    as though the loop had overrun its own limit; the ceiling moved, the budget did not."""
+    runner = ResearchRunner(settings, {}, engine=None)
+    note = runner._stop_reason(
+        _assess(round=4, open_key=["The Act came into force in 2018."]), [], None, 4, 4, "", 1
+    )
+
+    assert "max rounds (3)" in note, note
+    assert "max rounds (4)" not in note, note
+    assert "1 follow-up round granted on top" in note, note
+
+
+async def test_the_exempt_follow_up_round_stays_outside_the_configured_budget(settings, net):
+    """End to end, on the path that actually grants the exemption: one configured round, and the
+    same-conversation follow-up as an extra step on top.
+
+    The bound is the behaviour (`_stop_reason`'s numbers are checked by the tests above); what this
+    pins is that the record tells the truth about it -- a run that executed two rounds under a
+    one-round budget must not read as a two-round budget, nor as a loop that overran its limit.
+    """
+    scripts = {
+        "chatgpt": {"answer": "KEY CLAIMS\n1. The Act came into force on 25 May 2018.", "citations": []},
+        "gemini": {"answer": "KEY CLAIMS\n1. No one has established that.", "citations": []},
+    }
+    job, _, _ = await run_job(settings, scripts, "When did the Act come into force?", max_rounds=1)
+    research = [r for r in job.rounds if r.kind != "thread_follow_up"]
+    follow = [r for r in job.rounds if r.kind == "thread_follow_up"]
+
+    assert len(research) == 1, f"exactly the one configured research round: {[r.number for r in research]}"
+    assert len(follow) == 1, "the follow-up ran as its own exempt step"
+    assert max(r.number for r in job.rounds) == 2, [r.number for r in job.rounds]
+    assert "max rounds (1)" in job.stop_reason, job.stop_reason
+    assert "max rounds (2)" not in job.stop_reason, job.stop_reason
+    assert "1 follow-up round granted on top" in job.stop_reason, job.stop_reason

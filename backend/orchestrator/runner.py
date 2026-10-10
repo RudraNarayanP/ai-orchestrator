@@ -231,6 +231,10 @@ class ResearchRunner:
         if self._driver_down:
             return await self._driver_down_fail(job)
         max_rounds = max(1, job.max_rounds)
+        # Rounds the design grants ON TOP of that budget -- currently only the same-conversation
+        # follow-up with the primary researcher. Tracked separately so the ceiling can grow while the
+        # record still reports the budget the user actually configured.
+        exempt_rounds = 0
         job.status = JobStatus.RESEARCHING
         # "Answer now" shortcuts skip the provider's own research; acceptable in
         # QUICK, never in a round whose job is to establish evidence.
@@ -310,7 +314,10 @@ class ResearchRunner:
                 job, analysis, primary, round_no, responses, claims, evidence, disagreements, assessment
             )
             if len(job.responses) > before:
-                max_rounds += 1  # the follow-up is a step of its own, not a round taken from the budget
+                # The follow-up is a step of its own, not a round taken from the budget: the ceiling
+                # grows by one, while the configured budget it is reported against does not.
+                max_rounds += 1
+                exempt_rounds += 1
             if self._settled(assessment, disagreements) and not analysis.high_stakes:
                 report = await self._lightweight_report(job, analysis, claims, evidence, responses, round_no)
                 return self._complete(job, report, responses, rounds=round_no, stop="settled by a same-conversation follow-up with the primary researcher")
@@ -528,7 +535,7 @@ class ResearchRunner:
             report,
             responses,
             rounds=round_no,
-            stop=self._stop_reason(assessment, disagreements, analysis, round_no, max_rounds, job.stop_note),
+            stop=self._stop_reason(assessment, disagreements, analysis, round_no, max_rounds, job.stop_note, exempt_rounds),
         )
 
     # ----------------------------------------------- same-conversation follow-up
@@ -1495,24 +1502,30 @@ class ResearchRunner:
         """Sufficient, and nothing that matters conflicts. Strong primary evidence already accounts for conflicts that touch the asked claims."""
         return assessment.sufficient and (assessment.strong_primary or assessment.contradictions == 0)
 
-    def _stop_reason(self, assessment: SufficiencyAssessment, disagreements: list[Disagreement], analysis: Any, round_no: int, max_rounds: int, note: str = "") -> str:
+    def _stop_reason(self, assessment: SufficiencyAssessment, disagreements: list[Disagreement], analysis: Any, round_no: int, max_rounds: int, note: str = "", exempt_rounds: int = 0) -> str:
         if note:
             return note
+        # The number a reader recognises is the budget they configured. The same-conversation
+        # follow-up is allowed on top of it, so saying "max rounds (4)" for a 3-round setting made the
+        # record look like the loop had overrun its own limit.
+        cap = f"max rounds ({max(1, max_rounds - exempt_rounds)})"
+        if exempt_rounds:
+            cap += f" plus {exempt_rounds} follow-up round granted on top"
         if assessment.sufficient and (assessment.strong_primary or assessment.contradictions == 0):
             return f"remaining uncertainty is not material to the question (round {round_no})"
         if round_no >= max_rounds:
             if assessment.open_key:
-                return f"stopped at max rounds ({max_rounds}) with material uncertainty still open"
+                return f"stopped at {cap} with material uncertainty still open"
             if not assessment.unresolved:
                 if assessment.established:
-                    return f"stopped at max rounds ({max_rounds}) with every material claim settled by opened evidence"
+                    return f"stopped at {cap} with every material claim settled by opened evidence"
                 # An empty ledger is not a settled one. Live (job_261010102501_fadb739c): every
                 # provider came back broken or login-walled, so there were 0 claims and 0 opened
                 # pages -- and the run stored "every material claim settled by opened evidence",
                 # reporting our failure to gather anything as a completed verification.
-                return f"stopped at max rounds ({max_rounds}); nothing was established, so there was no claim left to settle"
+                return f"stopped at {cap}; nothing was established, so there was no claim left to settle"
             return (
-                f"stopped at max rounds ({max_rounds}); the claims the curator judged are settled by opened evidence "
+                f"stopped at {cap}; the claims the curator judged are settled by opened evidence "
                 f"and {len(assessment.unjudged)} further wording(s) the curator did not judge"
             )
         material = [d for d in disagreements if d.severity == "material"]
