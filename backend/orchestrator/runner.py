@@ -31,6 +31,7 @@ from backend.models import (
     FollowUp,
     Job,
     JobStatus,
+    PartGap,
     ProviderResponse,
     ProviderStatus,
     ResearchMode,
@@ -51,6 +52,7 @@ from backend.research import memory
 from backend.research import citations as citation_ops
 from backend.research import corrections as correction_ops
 from backend.research.prompts import angle_for, escalation_prompt, follow_up_prompt, research_prompt, thread_follow_up_prompt
+from backend.research.lint import covers_part, question_parts
 from backend.research.style import style_prompt
 from backend.verification.llm import Endpoint, LLMClient
 from backend.verification.verifier import Verifier, build_final_answer, confidence_label
@@ -412,12 +414,26 @@ class ResearchRunner:
                 job=job,
             )
 
-            actionable = [f for f in report.follow_ups if f.question]
-            if not report.needs_more_research or not actionable or round_no >= max_rounds:
+            actionable = [f for f in report.follow_ups if f.question] if report.needs_more_research else []
+            # Which part of the QUESTION the user typed is still open, and what kind of gap it is --
+            # read off the ledger, not off the curator's appetite. Without this, a pass that asked for
+            # nothing ended the loop with a half of the question never researched, and the answer
+            # reported our own silence as "not documented".
+            report.part_gaps = _part_gaps(self._q(job), claims, evidence, report.verdicts)
+            part_asks = self._part_follow_ups(job, report.part_gaps, round_no + 1, primary)
+            seen = {f.question for f in actionable}
+            actionable += [f for f in part_asks if f.question not in seen]
+            if not actionable or round_no >= max_rounds:
                 break
             # Stop rules: the curator may ask, but it does not get to keep asking.
             if assessment.strong_primary:
                 job.stop_note = "the AI opened a primary source that supports every claim; the curator's request for more research was not followed"
+                open_parts = [g for g in report.part_gaps if g.reason != "not_adjudicated"]
+                if open_parts:
+                    # A settled primary source and an unanswered half of the question can coexist;
+                    # saying only the first part would hide the second from whoever reads the record.
+                    gap = open_parts[0]
+                    job.stop_note += f" -- this part of the question is still open: {gap.part[:80]} ({GAP_WORDING[gap.reason]})"
                 break
             if stalled >= 2:
                 job.stop_note = "the last two targeted rounds added no new confirmed claim or source; stopped instead of asking again"
@@ -427,12 +443,16 @@ class ResearchRunner:
             next_round = round_no + 1
             job.status = JobStatus.FOLLOWUP
             job.level = EscalationLevel.DEEP
+            gap_notes = [f"{g.part[:60]} ({GAP_WORDING[g.reason]})" for g in report.part_gaps if g.reason != "not_adjudicated"]
             job.escalation_log.append(
                 EscalationStep(
                     level=EscalationLevel.DEEP,
-                    reason=f"verifier found {len(actionable)} unresolved point(s); researching those specifically",
+                    reason=(
+                        f"verifier found {len(actionable)} unresolved point(s); researching those specifically"
+                        + (f" -- open part(s) of the question: {'; '.join(gap_notes[:2])}" if gap_notes else "")
+                    ),
                     providers=[],
-                    triggered_by=[u[:60] for u in report.unresolved[:4]] or ["needs_more_research"],
+                    triggered_by=[u[:60] for u in report.unresolved[:4]] or gap_notes[:1] or ["needs_more_research"],
                     round=next_round,
                 )
             )
@@ -1291,6 +1311,52 @@ class ResearchRunner:
             )
         return out
 
+    def _part_follow_ups(self, job: Job, gaps: list[PartGap], next_round: int, primary: str) -> list[FollowUp]:
+        """One targeted question per open part of the question the user actually asked.
+
+        The AI that already holds the conversation is asked first; when it cannot settle the part,
+        the ask goes to the independents the existing policy selects (researchers nobody has asked
+        yet). `not_adjudicated` is deliberately not put to any provider: pages are attached and no
+        further browser round changes that -- the curator pass owes them a verdict, so spending
+        provider budget on it would buy noise.
+        """
+        asks = []
+        for gap in gaps:
+            if gap.reason == "not_adjudicated" or not gap.part:
+                continue
+            needle = gap.part[:60]
+            already = [f for f in job.follow_ups if needle and needle in f.question]
+            # First sight of the part goes to the AI we are already talking to; a repeat goes wider.
+            target = [primary] if (not already and primary in self.adapters) else []
+            asks.append(
+                FollowUp(
+                    job_id=job.id,
+                    question=_PART_ASKS[gap.reason].format(part=gap.part[:280]),
+                    reason=f"{GAP_WORDING[gap.reason]} ({'same conversation' if target else 'independent researchers'})",
+                    target_providers=target,
+                    claim_ids=gap.claim_ids,
+                    round=next_round,
+                )
+            )
+        return asks
+
+    def _note_part_gaps(self, job: Job, report: VerifierReport) -> list[PartGap]:
+        """Record on the report which parts of the question this run leaves open, and say so in the answer.
+
+        Done here rather than in the loop because every path ends in `_complete` -- including the
+        early "the ledger is settled" returns, where a half of the question that nobody ever claimed
+        would otherwise leave the answer quietly incomplete. The caveat is prefixed like the other
+        reviewer gaps so style.plain_caveats renders it as a sentence, and it goes first: an
+        unanswered half of the user's own question is the thing they most need to hear, and an answer
+        that simply omits it reads as though the question had been answered.
+        """
+        report.part_gaps = _part_gaps(self._q(job), job.claims, job.evidence, report.verdicts)
+        open_parts = [g for g in report.part_gaps if g.reason != "not_adjudicated"]
+        if open_parts:
+            gap = open_parts[0]
+            report.caveats = [f"question part unresolved ({gap.reason}): {gap.part}"] + list(report.caveats)
+        return open_parts
+
     async def _verify(
         self,
         job: Job,
@@ -1352,6 +1418,7 @@ class ResearchRunner:
 
     def _complete(self, job: Job, report: VerifierReport | None, responses: list[ProviderResponse], *, rounds: int, stop: str) -> Job:
         job.status = JobStatus.SYNTHESIZING
+        open_parts: list[PartGap] = []
         if report is not None and report.reviewer_status == "INCOMPLETE":
             # A pass that was cut off mid-reply must not erase what an earlier completed
             # pass established: carry those verdicts forward, and invent nothing to fill gaps.
@@ -1362,6 +1429,7 @@ class ResearchRunner:
             # The ledger and the answer are the same judgement read twice: decide it once.
             claim_ops.apply_verdicts(job.claims, report.verdicts)
             claim_ops.annotate_unadjudicated(job.claims, claim_ops.adjudicated_ids(report.verdicts))
+            open_parts = self._note_part_gaps(job, report)
         if report is None:
             job.final = FinalAnswer(
                 answer="I don't know.",
@@ -1404,6 +1472,19 @@ class ResearchRunner:
         job.final = final
         job.status = JobStatus.COMPLETED
         job.stop_reason = stop
+        if open_parts:
+            # "every material claim settled" and "a part of the question is still open" in one
+            # sentence reads as a contradiction: the first is about the claims that were raised, the
+            # second about what the user asked. The claim phrase is narrowed rather than dropped so
+            # the record still says what the evidence did settle.
+            gap = open_parts[0]
+            if "with every material claim settled by opened evidence" in job.stop_reason:
+                job.stop_reason = job.stop_reason.replace(
+                    "with every material claim settled by opened evidence",
+                    "with the claims it raised settled by opened evidence",
+                )
+            if "still open" not in job.stop_reason:
+                job.stop_reason += f" -- a part of the question is still open: {gap.part[:80]} ({GAP_WORDING[gap.reason]})"
         job.finished_at = time.time()
         for record in job.rounds:
             record.finished_at = record.finished_at or time.time()
@@ -1516,6 +1597,87 @@ def _merge_disagreements(existing: list[Disagreement], found: list[Disagreement]
             continue
         existing.append(dis)
     return existing
+
+
+# Which check statuses mean "we actually read the page" and which mean "the site refused us".
+# A row that is only `not_checked` is a provider quote or an unopened link: it proves nothing
+# about what the page says, so it never counts as evidence for a part.
+_PAGES_READ = {
+    SourceCheckStatus.CONFIRMED,
+    SourceCheckStatus.MISMATCH,
+    SourceCheckStatus.OUTDATED,
+    SourceCheckStatus.IRRELEVANT,
+    SourceCheckStatus.HALLUCINATED,
+}
+_PAGES_REFUSED = {SourceCheckStatus.BLOCKED, SourceCheckStatus.UNREACHABLE, SourceCheckStatus.BROKEN_URL}
+
+GAP_WORDING = {
+    "missing_evidence": "no source we opened states it",
+    "source_blocked": "the page that would state it refused us",
+    "not_adjudicated": "the pages we hold were never weighed against it",
+    "contradiction": "the sources disagree and neither side was settled",
+}
+
+# Each ask names the gap it is trying to close, and repeats the one rule that matters: report only
+# what a page you actually opened says. A provider listing a link it never read is not evidence.
+_PART_ASKS = {
+    "missing_evidence": (
+        "Answer this part of the question and nothing else: {part} "
+        "Nothing we have states it. Search for the primary or official source, OPEN it, and report the "
+        "sentence that answers it with the URL. Mark every source OPENED or MENTIONED ONLY. If no source "
+        "you can open states it, say that -- do not fill the gap with a likely-sounding answer."
+    ),
+    "source_blocked": (
+        "Answer this part of the question: {part} "
+        "The page that would state it blocked or refused us, so it has not been read by anyone here. "
+        "Try to open it yourself, and if you cannot, find another source -- the official one first -- "
+        "open that, and report what it actually says. Say plainly which sources you OPENED."
+    ),
+    "contradiction": (
+        "Settle this part of the question: {part} "
+        "Sources disagree about it. Find the primary document that decides it, OPEN it, quote the sentence "
+        "that settles it, and say which side of the disagreement that document supports and why."
+    ),
+}
+
+
+def _part_gaps(question: str, claims: list[Claim], evidence: list[Evidence], verdicts: list[Any]) -> list[PartGap]:
+    """Which parts of the question the user actually asked are still open, and what kind of gap each is.
+
+    Read off the ledger, never off a model: `analysis.sub_questions` only exists when the analysis
+    model answered, so a part could go unresearched because a helper LLM was unavailable. Splitting
+    the user's own question is deterministic. The reason matters because the remedies differ --
+    and `not_adjudicated` is our review's gap, which must not burn a provider round or be phrased
+    as though the sources were silent.
+    """
+    parts = question_parts(question)
+    if len(parts) < 2:
+        return []
+    S = ClaimStatus
+    gaps: list[PartGap] = []
+    for part in parts:
+        matching = [c for c in claims if covers_part(part, c.claim)]
+        ids = {c.id for c in matching}
+        about = [v for v in verdicts if getattr(v, "claim_id", None) in ids]
+        if any(v.verdict in {S.SUPPORTED, S.PARTIALLY_SUPPORTED} for v in about):
+            continue  # this part is answered; nothing to research
+        rows = [e for e in evidence if e.claim_id in ids]
+        read = [e for e in rows if e.check_status in _PAGES_READ]
+        refused = [e for e in rows if e.check_status in _PAGES_REFUSED]
+        adjudicated = [v for v in about if v.verdict is not S.NOT_REVIEWED]
+        if any(v.verdict == S.CONTESTED for v in about):
+            reason = "contradiction"
+        elif read and not adjudicated:
+            # We inspected pages for this part and no verdict ever weighed them: our review's gap.
+            reason = "not_adjudicated"
+        elif refused and not read:
+            reason = "source_blocked"
+        else:
+            # Nothing we actually read speaks to this part -- no row at all, or only a provider's
+            # quote of a page it never opened, which is not a page anyone here has read.
+            reason = "missing_evidence"
+        gaps.append(PartGap(part=" ".join(part.split()), reason=reason, claim_ids=sorted(ids)))
+    return gaps
 
 
 def _unanswered_subquestions(analysis: Any, claims: list[Claim]) -> list[str]:

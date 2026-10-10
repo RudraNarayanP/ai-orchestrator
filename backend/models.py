@@ -371,6 +371,27 @@ class Disagreement(BaseModel):
     resolved_by_round: int | None = None
 
 
+class PartGap(BaseModel):
+    """A part of the user's own question that is still open, and what is actually missing.
+
+    The reason matters because the fixes differ: a part with no page attached needs research;
+    a part whose page the site refused needs a different route to the same primary source; a part
+    whose attached pages were never weighed needs a curator pass, not another provider round; and a
+    contradicted part needs an independent tie-break. `reason` is one of:
+
+      ``missing_evidence``  no page we opened was ever attached to it (a provider merely naming a
+                            URL it never inspected does not count -- see Citation.ai_opened)
+      ``source_blocked``    we tried to open something for it and the site refused
+      ``not_adjudicated``   pages are attached but no verdict ever weighed them -- our gap, not the
+                            sources' gap, so it must never be phrased as "not documented"
+      ``contradiction``     the evidence or the verdicts actively disagree about it
+    """
+
+    part: str
+    reason: str
+    claim_ids: list[str] = Field(default_factory=list)
+
+
 class FollowUp(BaseModel):
     """A targeted question generated from an unresolved conflict (section 14)."""
 
@@ -410,6 +431,10 @@ class VerifierReport(BaseModel):
     confidence: Confidence = Confidence.LOW
     confidence_note: str | None = None
     sources: list[Citation] = Field(default_factory=list)
+    part_gaps: list[PartGap] = Field(default_factory=list)
+    """Which parts of the question this pass left open, and what kind of gap each one is. The loop
+    researches the part instead of guessing from a list of claim rewordings, and the persisted report
+    says whether the missing thing was evidence, source access, adjudication or a tie-break."""
 
     needs_more_research: bool = False
     follow_ups: list[FollowUp] = Field(default_factory=list)

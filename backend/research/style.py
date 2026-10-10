@@ -443,6 +443,16 @@ _CAVEAT_REWRITES = (
     (re.compile(r"^verifier review incomplete \(returned no verdicts", re.I), "The AI reviewer returned no judgements at all, so this rests only on the pages I could open and check."),
     (re.compile(r"^verifier review incomplete \(claim limit reached", re.I), "There was more to check than one review pass could hold, and I didn't get through all of it, so the parts I missed rest only on the pages I could open and check."),
     (re.compile(r"^verifier review incomplete", re.I), "The AI reviewer's pass was incomplete, so this rests only on the pages I could open and check."),
+    # A half of the user's own question that research could not settle. The part text is kept: a
+    # generic "some parts are unconfirmed" would not tell them WHICH one they still need to chase.
+    (re.compile(r"^question part unresolved \(missing_evidence\): (.+)$", re.I | re.S),
+     "I could not answer this part: \\1 No source I opened states it."),
+    (re.compile(r"^question part unresolved \(source_blocked\): (.+)$", re.I | re.S),
+     "I could not answer this part: \\1 The page that would state it refused us."),
+    (re.compile(r"^question part unresolved \(contradiction\): (.+)$", re.I | re.S),
+     "I could not settle this part: \\1 The sources disagree."),
+    (re.compile(r"^question part unresolved \((?:not_adjudicated|\w+)\): (.+)$", re.I | re.S),
+     "I could not answer this part: \\1"),
     (re.compile(r"^\(?no model verifier active", re.I), ""),
     (re.compile(r"^verifier answer overruled", re.I), ""),
     (re.compile(r"^voice scrub removed", re.I), ""),
