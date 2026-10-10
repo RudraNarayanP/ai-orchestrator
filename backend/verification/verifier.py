@@ -208,7 +208,22 @@ class Verifier:
         # Deterministic cross-check: a model that calls a claim "supported" with
         # zero confirmed sources in our own records gets overruled, not trusted.
         self._reconcile(report, claims, evidence, question, disagreements)
-        report.reviewer_status, report.synthesis_status, report.fallback_reason = "COMPLETED", "CURATED", ""
+        # A claim the prompt had no room for is not a claim the evidence disproved.
+        omitted = await self._review_omitted(
+            report, question=question, claims=claims, evidence=evidence, responses=responses,
+            disagreements=disagreements, round_no=round_no, corrections=corrections,
+        )
+        if omitted:
+            report.reviewer_status = "INCOMPLETE"
+            report.synthesis_status = "CURATED"
+            report.fallback_reason = (
+                f"review limit reached: {len(omitted)} claim(s) answering the question were never adjudicated"
+            )
+            report.caveats = list(report.caveats) + [
+                f"verifier review incomplete (claim limit reached): {len(omitted)} claim(s) were never adjudicated"
+            ]
+        else:
+            report.reviewer_status, report.synthesis_status, report.fallback_reason = "COMPLETED", "CURATED", ""
         report.raw_output = reply.text[:4000]
         report.verifier_model = f"{self.endpoint.provider}:{self.endpoint.model}"
         report.answer, leaked = scrub(report.answer)
@@ -293,10 +308,12 @@ class Verifier:
         """Ask again about only the claims a cut-off reply never judged -- two calls, then stop.
 
         Nothing is invented on the way out: whatever is still unjudged is returned so the
-        caller can record the gap instead of papering over it.
+        caller can record the gap instead of papering over it -- including the claims the call
+        budget never reached, which would otherwise vanish from the count.
         """
         batches = [missing[i : i + self.RECOVERY_BATCH] for i in range(0, len(missing), self.RECOVERY_BATCH)]
-        unjudged: list[Claim] = []
+        # Beyond the budget the claims were not even put to the curator; they are still unjudged.
+        unjudged: list[Claim] = list(missing[self.RECOVERY_BATCH * self.RECOVERY_CALLS :])
         for batch in batches[: self.RECOVERY_CALLS]:
             payload = self._material(question, batch, evidence, responses, disagreements, round_no, corrections)
             parsed, reply = await self.client.complete_json(
@@ -311,6 +328,71 @@ class Verifier:
             judged = {v.claim_id for v in part.verdicts}
             unjudged.extend([c for c in batch if c.id not in judged])
         return unjudged
+
+    async def _review_omitted(
+        self,
+        report: VerifierReport,
+        *,
+        question: str,
+        claims: list[Claim],
+        evidence: list[Evidence],
+        responses: list[ProviderResponse],
+        disagreements: list[Disagreement],
+        round_no: int,
+        corrections: list[Any] | None,
+    ) -> list[Claim]:
+        """Put the claims the prompt had no room for to the curator, then write down what is still unadjudicated.
+
+        `focus` caps one pass at MAX_CLAIMS, so a claim can end a "completed" review with no
+        verdict at all -- and an absent row is what the answer layer reads as "not documented",
+        turning our own uninvestigated claim into a claim about the evidence. Two things happen
+        here, in this order:
+
+        1. the omitted claims that answer the question AND have pages of ours attached are put to
+           the curator in further batches, reusing the recovery budget (no new limit invented);
+        2. every claim still without a verdict is recorded as NOT_REVIEWED, with confidence NONE.
+
+        Nothing is promoted: a claim only ever moves up on its own evidence, never beside a claim
+        that was settled, and a NOT_REVIEWED row sits at the floor of every ranking.
+        """
+        by_claim: dict[str, list[Evidence]] = {}
+        for e in evidence:
+            if e.claim_id:
+                by_claim.setdefault(e.claim_id, []).append(e)
+        judged = {v.claim_id for v in report.verdicts}
+        pending = [
+            c for c in claims if c.id not in judged and addresses_question(question, c.claim) and by_claim.get(c.id)
+        ]
+        # Most pages first, then the most providers: the reviewable claims with the most to say.
+        pending.sort(
+            key=lambda c: (len({e.domain for e in by_claim[c.id] if e.domain}), len(c.provider_sources)),
+            reverse=True,
+        )
+        left = await self._recover_missing(
+            report,
+            pending,
+            question=question,
+            claims=claims,
+            evidence=evidence,
+            responses=responses,
+            disagreements=disagreements,
+            round_no=round_no,
+            corrections=corrections,
+        )
+        judged = {v.claim_id for v in report.verdicts}
+        for claim in claims:
+            if claim.id in judged:
+                continue
+            report.verdicts.append(
+                ClaimVerdict(
+                    claim_id=claim.id,
+                    claim=claim.claim,
+                    verdict=ClaimStatus.NOT_REVIEWED,
+                    confidence=Confidence.NONE,
+                    reasoning="never adjudicated: it was not put to the curator and no page we opened was checked against it",
+                )
+            )
+        return left
 
     def _material(self, question, claims, evidence, responses, disagreements, round_no: int = 1, corrections: list[Any] | None = None) -> str:
         claims, evidence = self.focus(claims, evidence)
@@ -540,6 +622,10 @@ class Verifier:
         elif bad:
             verdict, confidence = ClaimStatus.INSUFFICIENT_EVIDENCE, Confidence.NONE
             problems.append("citation_mismatch")
+        elif not ev:
+            # Nothing was ever attached to this claim, so nothing was investigated: reporting
+            # "insufficient evidence" would dress up our own gap as a finding about the world.
+            verdict, confidence = ClaimStatus.NOT_REVIEWED, Confidence.NONE
         else:
             verdict, confidence = ClaimStatus.INSUFFICIENT_EVIDENCE, Confidence.NONE
 
@@ -664,11 +750,23 @@ class Verifier:
             )
         return out[:6]
 
+    # How much weight a verdict carries when picking the best-supported claim. Every status has
+    # an entry and unknown ones fall to the floor: a curator that invents a word must not crash
+    # the run (a KeyError here once killed a job over a verdict string "unverified").
+    _VERDICT_RANK = {
+        ClaimStatus.SUPPORTED: 4,
+        ClaimStatus.PARTIALLY_SUPPORTED: 3,
+        ClaimStatus.CONTESTED: 2,
+        ClaimStatus.REFUTED: 1,
+        ClaimStatus.INSUFFICIENT_EVIDENCE: 0,
+        ClaimStatus.NOT_REVIEWED: -1,
+    }
+
     def _best_supported(self, claims: list[Claim], verdicts: list[ClaimVerdict], evidence: list[Evidence], question: str = "") -> dict[str, Any]:
         ranked = sorted(
             verdicts,
             key=lambda v: (
-                {ClaimStatus.SUPPORTED: 4, ClaimStatus.PARTIALLY_SUPPORTED: 3, ClaimStatus.CONTESTED: 2, ClaimStatus.REFUTED: 1, ClaimStatus.INSUFFICIENT_EVIDENCE: 0}[v.verdict],
+                self._VERDICT_RANK.get(v.verdict, -2),
                 {Confidence.HIGH: 3, Confidence.MODERATE: 2, Confidence.LOW: 1, Confidence.NONE: 0}[v.confidence],
             ),
             reverse=True,
@@ -1165,7 +1263,8 @@ def _compound_answer(report: VerifierReport, question: str) -> str:
     2018" supported on an opened page, the commencement half was never settled, and the whole
     answer came back "Couldn't verify that one." -- which hid a date we had. Nothing here decides
     what counts as documented; it only routes the verdicts the ledger already holds onto the part
-    of the question each one answers, so an unresolved half cannot delete a settled one.
+    of the question each one answers, so an unresolved half cannot delete a settled one. A part no
+    verdict ever adjudicated is reported as not checked, never as undocumented.
     """
     if not question or is_claim_check(question):
         return ""
@@ -1173,14 +1272,15 @@ def _compound_answer(report: VerifierReport, question: str) -> str:
     if len(parts) < 2:
         return ""
     S = ClaimStatus
-    documented = [v for v in report.verdicts if v.verdict in {S.SUPPORTED, S.PARTIALLY_SUPPORTED}]
-    contested = [v for v in report.verdicts if v.verdict == S.CONTESTED]
     settled: list[tuple[str, str]] = []
     disputed: list[str] = []
+    contradicted: list[str] = []
     open_parts: list[str] = []
+    unchecked: list[str] = []
     for part in parts:
+        covering = [v for v in report.verdicts if covers_part(part, v.claim)]
         best = max(
-            (v for v in documented if covers_part(part, v.claim)),
+            (v for v in covering if v.verdict in {S.SUPPORTED, S.PARTIALLY_SUPPORTED}),
             key=lambda v: len(v.strong_evidence),
             default=None,
         )
@@ -1188,15 +1288,27 @@ def _compound_answer(report: VerifierReport, question: str) -> str:
             if best.claim not in {c for c, _ in settled}:
                 settled.append((best.claim, _provenance(best)))
             continue
-        rival = next((v.claim for v in contested if covers_part(part, v.claim)), "")
+        rival = next((v.claim for v in covering if v.verdict == S.CONTESTED), "")
         if rival:
             if rival not in disputed:
                 disputed.append(rival)
-        else:
+            continue
+        against = next((v.claim for v in covering if v.verdict == S.REFUTED and v.strong_evidence), "")
+        if against:
+            # A page saying the opposite is a finding, not an absence: calling it "not documented"
+            # would drop the answer we actually have.
+            contradicted.append(against)
+        elif any(v.verdict is not S.NOT_REVIEWED for v in covering):
+            # Something was adjudicated against this part and did not establish it: that is a
+            # statement about the evidence, and "not documented" is the honest wording.
             open_parts.append(part)
+        else:
+            # Nothing covered it at all, or every row is NOT_REVIEWED: this run never investigated
+            # the part. Reporting that as "not documented" would blame the sources for our own gap.
+            unchecked.append(part)
     if not settled:
         return ""
-    return evidence_report(settled, open_parts, disputed)
+    return evidence_report(settled, open_parts, disputed, unchecked, contradicted)
 
 
 def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int, question: str = "") -> FinalAnswer:
@@ -1211,7 +1323,13 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
         # "what do we actually know?": documented facts with provenance, then what is undocumented. No advice, no judgment.
         documented = [(v.claim, _provenance(v)) for v in report.verdicts if v.verdict in {S.SUPPORTED, S.PARTIALLY_SUPPORTED}]
         state = ""
-        text = evidence_report(documented, unknowns, [v.claim for v in report.verdicts if v.verdict == S.CONTESTED])
+        # "We checked and the page does not say" and "this run never checked" are different
+        # sentences about different things; the second must not borrow the first's heading.
+        checked = [v.claim for v in report.verdicts if v.verdict not in settled and v.verdict is not S.NOT_REVIEWED]
+        unchecked = [v.claim for v in report.verdicts if v.verdict is S.NOT_REVIEWED]
+        text = evidence_report(
+            documented, checked, [v.claim for v in report.verdicts if v.verdict == S.CONTESTED], unchecked
+        )
     elif state in {"UNVERIFIED", "CONFLICT"} and (partial := _compound_answer(report, question)):
         # One part of a multi-part question settled is not the whole question unknown: the
         # documented half is stated with its source and the other half is named as undocumented.

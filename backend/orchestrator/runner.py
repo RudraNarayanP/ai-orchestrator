@@ -500,7 +500,7 @@ class ResearchRunner:
             # unconfirmed" next to a High-confidence answer).
             assessment = self._assess(
                 job, analysis, claims, evidence, disagreements, round_no,
-                focus="after verification", judged={v.claim_id for v in report.verdicts},
+                focus="after verification", judged=claim_ops.adjudicated_ids(report.verdicts),
             )
             job.assessments.append(assessment)
         return self._complete(
@@ -1361,7 +1361,7 @@ class ResearchRunner:
         if report is not None:
             # The ledger and the answer are the same judgement read twice: decide it once.
             claim_ops.apply_verdicts(job.claims, report.verdicts)
-            claim_ops.annotate_unadjudicated(job.claims, {v.claim_id for v in report.verdicts})
+            claim_ops.annotate_unadjudicated(job.claims, claim_ops.adjudicated_ids(report.verdicts))
         if report is None:
             job.final = FinalAnswer(
                 answer="I don't know.",

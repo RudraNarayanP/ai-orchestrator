@@ -763,18 +763,31 @@ def find_contradictions(claims: list[Claim]) -> list[dict[str, Any]]:
     return conflicts
 
 
+def adjudicated_ids(verdicts: list[Any]) -> set[str]:
+    """The claim ids a verdict actually decided.
+
+    A `not_reviewed` row records that nothing was decided, so it is not an adjudication: counting
+    it as one would let a run report "3 material claim(s) still unconfirmed" about claims no one
+    ever checked, and would stop the ledger from saying which claims were simply never looked at.
+    """
+    return {v.claim_id for v in verdicts or [] if getattr(v, "verdict", None) != ClaimStatus.NOT_REVIEWED}
+
+
 def annotate_unadjudicated(claims: list[Claim], judged: set[str]) -> int:
-    """Say why a claim is still `unverified` when the curator never judged that wording.
+    """Say why a claim is still unadjudicated when the curator never judged that wording.
 
     This states a fact about the run -- which claims were put to the curator -- rather than
-    guessing that two sentences mean the same thing. No status changes: an unjudged claim
-    is not supported, it is unjudged, and the ledger is allowed to say so precisely.
+    guessing that two sentences mean the same thing. The status becomes NOT_REVIEWED, not
+    INSUFFICIENT_EVIDENCE: an unjudged claim is not one the pages failed to establish, and the
+    ledger is allowed to say precisely which of the two it is.
     """
     marked = 0
     for claim in claims:
-        if claim.status != ClaimStatus.UNVERIFIED or claim.rationale or claim.id in judged:
+        if claim.status not in {ClaimStatus.UNVERIFIED, ClaimStatus.NOT_REVIEWED} or claim.id in judged:
             continue
-        claim.rationale = f"the curator judged {len(judged)} claim(s) and this wording was not among them"
+        claim.status = ClaimStatus.NOT_REVIEWED
+        if not claim.rationale:
+            claim.rationale = f"the curator judged {len(judged)} claim(s) and this wording was not among them"
         marked += 1
     return marked
 
@@ -792,6 +805,15 @@ def apply_verdicts(claims: list[Claim], verdicts: list[Any]) -> int:
     for verdict in verdicts or []:
         claim = by_id.get(getattr(verdict, "claim_id", None))
         if claim is None:
+            continue
+        if verdict.verdict is ClaimStatus.NOT_REVIEWED and claim.status not in {
+            ClaimStatus.UNVERIFIED,
+            ClaimStatus.NOT_REVIEWED,
+        }:
+            # A later round that never re-mentioned a claim does not un-settle it: "not reviewed"
+            # describes this pass, and it must never overwrite a verdict an earlier pass earned
+            # (each round rewrites the whole ledger, so without this a claim supported in round 1
+            # would come back unreviewed in round 2 simply because focus dropped it).
             continue
         claim.status = verdict.verdict
         claim.confidence = verdict.confidence

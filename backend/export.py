@@ -13,6 +13,8 @@ import datetime as _dt
 import re
 from typing import Any
 
+from backend.models import Confidence
+
 _SPECIAL = re.compile(r"([\\`*_\[\]<>|])")
 _WS = re.compile(r"\s+")
 
@@ -100,11 +102,14 @@ def job_markdown(snap: dict[str, Any]) -> str:
     if claims:
         lines += ["## Claim ledger", "", "| Claim | Verdict | Asserted by |", "|---|---|---|"]
         for c in claims:
-            # Confidence.NONE is spelled "insufficient_evidence", the same word as the
-            # status, so a bare `insufficient_evidence / insufficient_evidence` says
-            # nothing twice over.
+            # Confidence.NONE is spelled "insufficient_evidence", the same word as the status, so
+            # a bare `insufficient_evidence / insufficient_evidence` says nothing twice over -- and
+            # beside `not_reviewed` it would be worse than noise: it reads as a claim about the
+            # evidence for a claim no one ever put to the evidence.
             confidence = c.get("confidence")
-            verdict = inline(c.get("status")) + (f" / {inline(confidence)}" if confidence and confidence != c.get("status") else "")
+            if confidence == Confidence.NONE.value:
+                confidence = None
+            verdict = inline(c.get("status")) + (f" / {inline(confidence)}" if confidence else "")
             by = ", ".join(inline(p, 40) for p in (c.get("providers") or c.get("providers_json") or []))
             lines.append(f"| {inline(c.get('claim'), 400)} | {verdict} | {by} |")
         lines.append("")

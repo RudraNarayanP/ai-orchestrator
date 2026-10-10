@@ -441,6 +441,7 @@ _CAVEAT_REWRITES = (
     # vocabulary and would be dropped, leaving a confident-looking answer with no hint.
     (re.compile(r"^verifier review incomplete \(cut off mid-reply", re.I), "The AI reviewer's reply was cut off before it finished, so the points it never reached rest only on the pages I could open and check."),
     (re.compile(r"^verifier review incomplete \(returned no verdicts", re.I), "The AI reviewer returned no judgements at all, so this rests only on the pages I could open and check."),
+    (re.compile(r"^verifier review incomplete \(claim limit reached", re.I), "There was more to check than one review pass could hold, and I didn't get through all of it, so the parts I missed rest only on the pages I could open and check."),
     (re.compile(r"^verifier review incomplete", re.I), "The AI reviewer's pass was incomplete, so this rests only on the pages I could open and check."),
     (re.compile(r"^\(?no model verifier active", re.I), ""),
     (re.compile(r"^verifier answer overruled", re.I), ""),

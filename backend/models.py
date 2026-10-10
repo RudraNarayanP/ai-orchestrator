@@ -96,6 +96,11 @@ class ClaimStatus(str, enum.Enum):
     CONTESTED = "contested"
     REFUTED = "refuted"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    NOT_REVIEWED = "not_reviewed"
+    """Nothing was ever adjudicated against this claim -- no curator verdict and no page of ours
+    checked against it. Deliberately not `insufficient_evidence`, which means we looked and the
+    pages did not establish it: a gap in our investigation must never read as a finding about the
+    world (AGENTS.md: unknown is not false)."""
 
 
 class Confidence(str, enum.Enum):
@@ -415,7 +420,8 @@ class VerifierReport(BaseModel):
 
     reviewer_status: str = "NOT_RUN"
     """COMPLETED (the model answered usably) | UNAVAILABLE (error, 429, timeout) | INVALID_OUTPUT (answered, unusable) |
-    NOT_RUN (the evidence settled it; no reviewer was needed)."""
+    INCOMPLETE (the reply was cut off, judged nothing, or left a claim that answers the question
+    unadjudicated) | NOT_RUN (the evidence settled it; no reviewer was needed)."""
 
     synthesis_status: str = "DETERMINISTIC"
     """CURATED (the model wrote the verdicts) | FALLBACK (the model failed, ledger wrote them) | DETERMINISTIC (by design)."""

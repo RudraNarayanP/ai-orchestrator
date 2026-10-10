@@ -104,15 +104,16 @@ def test_one_part_settled_states_it_and_names_the_other():
 
 
 def test_the_live_shape_one_supported_verdict_and_never_judged_second_half():
-    """job_261009210109_ccd924ec: ONE verdict, supported, no unjudged claims in the report at
-    all -- low confidence alone turned the whole thing into a flat "Couldn't verify that one."""
+    """job_261009210109_ccd924ec: ONE verdict, supported, no adjudication at all for the other
+    half -- low confidence alone turned the whole thing into a flat "Couldn't verify that one."""
     final = build_final_answer(
         report(verdict(ASSENT, ClaimStatus.SUPPORTED, [GOV]), confidence=Confidence.LOW),
         [], 3, TWO_PART,
     )
     assert "23 May 2018" in final.answer, final.answer
     assert "come into force" in final.answer, "the half we could not settle is named, not hidden"
-    assert "I couldn't find that documented." in final.answer
+    assert "Not checked:" in final.answer and "I didn't get that far." in final.answer, final.answer
+    assert "Not documented:" not in final.answer, "the review never reached that half; the sources were not consulted about it"
     assert final.answer != "Couldn't verify that one.", final.answer
 
 

@@ -218,11 +218,21 @@ def lint_report(text: str, *, question: str = "", unknowns: list[str] | tuple[st
 
 
 # ------------------------------------------------------------------ documented / undocumented structure
-def evidence_report(documented: list[tuple[str, str]], undocumented: list[str], disputed: list[str] | tuple[str, ...] = ()) -> str:
+def evidence_report(
+    documented: list[tuple[str, str]],
+    undocumented: list[str],
+    disputed: list[str] | tuple[str, ...] = (),
+    unreviewed: list[str] | tuple[str, ...] = (),
+    contradicted: list[str] | tuple[str, ...] = (),
+) -> str:
     """'What do we actually know?' Documented facts with provenance, then what is undocumented. No advice, no judgment.
 
     documented = [(fact, provenance)], e.g. ("Parents spent about INR 4 lakh on coaching", "the family's own statement, 2026").
     Unknowns stay unknown: they are listed as undocumented, never as probably true or probably false.
+    The last three buckets are kept apart on purpose, because they are claims about different things:
+    `disputed` is two sources disagreeing, `undocumented` is our pages not saying it, `unreviewed` is
+    this run never checking (folding that into `undocumented` would blame the sources for our own gap),
+    and `contradicted` is a page saying the opposite -- which is a finding, not an absence.
     """
     lines: list[str] = []
     if documented:
@@ -231,12 +241,18 @@ def evidence_report(documented: list[tuple[str, str]], undocumented: list[str], 
             lines.append(f"- {fact.rstrip('.')}" + (f" ({prov})." if prov else "."))
     else:
         lines.append(NOT_FOUND_PUBLIC)
+    if contradicted:
+        lines.append("The pages we opened say the opposite:")
+        lines.extend(f"- {c.rstrip('.')}." for c in contradicted)
     if disputed:
         lines.append("The sources disagree on:")
         lines.extend(f"- {d.rstrip('.')}." for d in disputed)
     if undocumented:
         lines.append("Not documented:")
         lines.extend(f"- {u.rstrip('.')} \u2014 I couldn't find that documented." for u in undocumented)
+    if unreviewed:
+        lines.append("Not checked:")
+        lines.extend(f"- {u.rstrip('.')} \u2014 I didn't get that far." for u in unreviewed)
     return "\n".join(lines)
 
 

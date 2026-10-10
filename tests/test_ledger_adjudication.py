@@ -176,15 +176,21 @@ async def test_wordings_the_curator_never_judged_are_not_reported_as_unconfirmed
     fn = curator(decide=only_primary, answer="Acme released the Bolt in March 2026.", confidence="high")
     job = await ask(base_settings(), scripts, verifier=make_curator(fake_openai.script(fn)))
 
-    judged = {v.claim_id for v in job.reports[-1].verdicts}
-    assert len(judged) == 1, "one wording judged, the rest left alone"
+    judged = claim_ops.adjudicated_ids(job.reports[-1].verdicts)
+    assert len(judged) == 1, "one wording adjudicated; the rest are recorded as never judged, not judged"
+    rows = {v.claim_id: v for v in job.reports[-1].verdicts}
+    assert len(rows) > len(judged), "every claim ends with a state rather than an absent row"
+    assert all(v.verdict is ClaimStatus.NOT_REVIEWED for cid, v in rows.items() if cid not in judged)
+    assert all(v.confidence == Confidence.NONE for cid, v in rows.items() if cid not in judged), "unreviewed buys no confidence"
     settled = [c for c in job.claims if c.claim == "Acme released the Bolt in March 2026."]
     assert settled and settled[0].status == ClaimStatus.SUPPORTED
     unjudged = [c for c in job.claims if c.id not in judged]
     assert unjudged
     for claim in unjudged:
-        assert claim.status == ClaimStatus.UNVERIFIED, f"an unjudged wording was promoted: {claim.claim!r}"
-        assert claim.rationale and "not among them" in claim.rationale, claim.claim
+        assert claim.status == ClaimStatus.NOT_REVIEWED, f"an unjudged wording must say so: {claim.claim!r}"
+        assert claim.status is not ClaimStatus.INSUFFICIENT_EVIDENCE, "never judged is not the same as not established"
+        assert claim.rationale and "never adjudicated" in claim.rationale, claim.rationale
+        assert not claim.supporting, "an unreviewed wording is not given evidence it never met"
     note = job.stop_reason or ""
     assert "still unconfirmed" not in note, note
     assert "did not judge" in note, note
@@ -240,13 +246,17 @@ async def test_an_unproven_claim_that_answers_the_question_is_called_unconfirmed
 # ----------------------------------------------------------------- the helpers
 
 
-def test_annotate_unadjudicated_says_it_was_not_judged_without_changing_status():
+def test_annotate_unadjudicated_marks_the_claim_as_never_reviewed_not_as_unproven():
+    """Naming the gap is not adjudicating it: the status says "not reviewed", never
+    "insufficient_evidence", which would read as though pages were consulted and failed to say it."""
     claims = [
         Claim(id="clm_a", job_id="j", claim="Acme released the Bolt in March 2026.", status=ClaimStatus.SUPPORTED),
         Claim(id="clm_b", job_id="j", claim="The Bolt launch date was March 2026."),
     ]
     assert claim_ops.annotate_unadjudicated(claims, {"clm_a"}) == 1
-    assert claims[1].status == ClaimStatus.UNVERIFIED, "annotating is not adjudicating"
+    assert claims[0].status == ClaimStatus.SUPPORTED, "an adjudicated claim keeps its verdict"
+    assert claims[1].status == ClaimStatus.NOT_REVIEWED
+    assert claims[1].status is not ClaimStatus.INSUFFICIENT_EVIDENCE, "annotating is not adjudicating"
     assert "not among them" in claims[1].rationale
     assert claim_ops.annotate_unadjudicated(claims, {"clm_a", "clm_b"}) == 0, "a judged claim keeps its own reason"
 

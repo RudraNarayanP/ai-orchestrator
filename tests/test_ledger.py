@@ -120,9 +120,17 @@ async def test_provider_agreement_never_raises_a_verdict_on_its_own():
     popular = Claim(job_id=job_id, claim=text, kind="statistic", provider_sources=["chatgpt", "gemini", "copilot", "qwen", "le_chat"])
     v_alone = verifier._verdict_for(alone, [])
     v_popular = verifier._verdict_for(popular, [])
-    assert v_alone.verdict == v_popular.verdict == ClaimStatus.INSUFFICIENT_EVIDENCE
-    assert v_alone.confidence == v_popular.confidence
+    # Five providers agreeing moves nothing: same verdict, same confidence either way.
+    assert v_alone.verdict == v_popular.verdict == ClaimStatus.NOT_REVIEWED
+    assert v_alone.confidence == v_popular.confidence == Confidence.NONE
     assert "not counted" in v_alone.reasoning.lower()
+    # And "nobody ever checked this" stays distinct from "we opened pages and they did not say it".
+    mismatched = Evidence(
+        job_id=job_id, claim_id="clm_x", url="https://acme.example/price", domain="acme.example",
+        tier=SourceTier.PRIMARY_OFFICIAL, check_status=SourceCheckStatus.MISMATCH, verbatim_excerpt="nothing about a price",
+    )
+    checked = verifier._verdict_for(Claim(job_id=job_id, claim=text, kind="statistic", provider_sources=["chatgpt"]), [mismatched])
+    assert checked.verdict == ClaimStatus.INSUFFICIENT_EVIDENCE, "an investigated claim keeps its own label"
 
 
 async def test_conflicting_primary_sources_are_reported_as_a_conflict(settings, net):
