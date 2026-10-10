@@ -370,5 +370,10 @@ def apply_outcome(response: ProviderResponse, outcome: VisionOutcome, prompt: st
     elif outcome.kind == "logged_out":
         response.note(ProviderStatus.LOGGED_OUT, error="readiness=login_wall", detail=f"{VISION_DETAIL}: {outcome.reason}")
     elif outcome.kind == "failed":
-        response.detail = f"{VISION_DETAIL} failed: {outcome.reason}"
+        # ``detail`` already holds what the DOM readiness probe saw, and that is the only record of
+        # *why* the page broke. Overwriting it left live runs with four "readiness=unknown" rows and
+        # nothing to attribute them to (job_261010102501_fadb739c, 2026-10-10).
+        reason = f"{VISION_DETAIL} failed: {outcome.reason}"
+        saw = (response.detail or "").strip()
+        response.detail = f"{reason} | the page showed: {saw}"[:400] if saw else reason
     return False

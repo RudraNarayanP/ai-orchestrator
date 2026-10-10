@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from backend.browser.engine import BrowserEngine
-from backend.browser.vision import OpenAIVisionClient, VisionFallback, click_allowed
+from backend.browser.vision import OpenAIVisionClient, VisionFallback, apply_outcome, click_allowed, VisionOutcome
 from backend.models import ProviderResponse, ProviderStatus
 from backend.settings import ProviderConfig, Settings, VisionConfig
 from browser.adapters import build_adapter
@@ -316,3 +316,24 @@ async def test_working_dom_path_never_calls_the_vision_model(rig):
     assert response.status == ProviderStatus.COMPLETED
     assert response.detail != "vision fallback"
     assert client.calls == []
+
+
+# ------------------------------------------------------- the fallback keeps the evidence
+
+def test_a_failed_fallback_keeps_the_page_text_the_dom_probe_had_recorded():
+    """Live run job_261010102501_fadb739c (2026-10-10): four providers came back
+    ``readiness=unknown`` and the only page text we had captured was overwritten by the vision
+    failure, so the audit trail could not say whether the site refused us or our selectors drifted."""
+    response = ProviderResponse(job_id="j", provider="gemini", prompt="",
+                                status=ProviderStatus.BROKEN, error="readiness=unknown",
+                                detail="About Gemini Subscriptions Sign in Conversation with Gemini")
+    assert apply_outcome(response, VisionOutcome("failed", "vision model returned nothing usable"), "q") is False
+    assert response.status == ProviderStatus.BROKEN, "a failed fallback invents no state"
+    assert response.detail.startswith("vision fallback failed")
+    assert "Sign in" in response.detail, "the evidence of what the page showed survives"
+
+
+def test_a_failed_fallback_with_nothing_recorded_reads_exactly_as_before():
+    response = ProviderResponse(job_id="j", provider="gemini", prompt="", status=ProviderStatus.BROKEN)
+    apply_outcome(response, VisionOutcome("failed", "no usable composer coordinates"), "q")
+    assert response.detail == "vision fallback failed: no usable composer coordinates"
