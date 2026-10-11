@@ -151,7 +151,7 @@ def test_claims_are_extracted_from_all_answers_at_once(monkeypatch):
         def __init__(self, endpoint):
             pass
 
-        async def complete_json(self, messages, temperature=None):
+        async def complete_json(self, messages, temperature=None, **_kw):
             await asyncio.sleep(0.3)
             return {"claims": [{"claim": "Section 9 was omitted by the 2026 Act.", "kind": "legal", "topic": "s9"}]}, None
 
@@ -304,7 +304,7 @@ def test_a_curator_that_is_too_slow_is_dropped_for_the_next_model(monkeypatch):
         def __init__(self, endpoint):
             self.endpoint = endpoint
 
-        async def complete_json(self, messages, temperature=None):
+        async def complete_json(self, messages, temperature=None, **_kw):
             calls.append(self.endpoint.model)
             if self.endpoint.model == "slow-reasoner":
                 await asyncio.sleep(5)
@@ -337,7 +337,7 @@ def test_no_cap_means_the_plain_client(monkeypatch):
         def __init__(self, endpoint):
             pass
 
-        async def complete_json(self, messages, temperature=None):
+        async def complete_json(self, messages, temperature=None, **_kw):
             return {"ok": 1}, LLMReply(text="{}", ok=True)
 
     monkeypatch.setattr(vmod, "LLMClient", FakeClient)
@@ -356,3 +356,58 @@ def test_a_question_out_of_time_starts_no_further_round():
     assert "stopped researching early" in job.stop_note and "settled" not in job.stop_note
     runner.settings.research.time_budget_s = 0
     assert runner._over_budget(SimpleNamespace(stop_note="")) is False
+
+
+# ---- 11. a present-tense claim about ANOTHER provision does not answer "is section 9 still in force?" (live run B)
+def test_a_present_claim_about_another_provision_does_not_settle_the_present_question():
+    from backend.research.style import answers_the_present, reference_anchors
+
+    assert reference_anchors("Is s. 9 of the Act and Article 8(1) of the GDPR still in force?") == {"section 9", "article 8"}
+    assert not answers_the_present(NOW_Q, "Article 8 of the UK GDPR currently establishes the 13-year threshold for consent.")
+    assert answers_the_present(NOW_Q, "As of 12 October 2026, section 9 of the Data Protection Act 2018 is no longer in force.")
+    assert not answers_the_present("Did section 9 lower the age to 13?", "Section 9 remains in force today.")
+    # no numbered provision in the question: any present-tense claim about it counts, as before
+    assert answers_the_present("Is the UK currently a party to the Lugano Convention?", "The UK is not currently a party.")
+
+    verdicts = [
+        v(S.NOT_REVIEWED, "As of 12 October 2026, section 9 of the Data Protection Act 2018 is no longer in force.", 0),
+        v(S.NOT_REVIEWED, "Section 9 of the Data Protection Act 2018 was omitted with effect from 31 December 2020.", 0),
+        v(S.PARTIALLY_SUPPORTED, "Article 8 of the UK GDPR currently establishes the 13-year threshold for consent.", 1),
+        v(S.PARTIALLY_SUPPORTED, "The UK's 13-year-old threshold for children's consent is now provided for by Article 8.", 1),
+    ]
+    report = rep("Article 8 of the UK GDPR currently establishes the 13-year threshold for consent.", *verdicts)
+    assert truth_state(report, NOW_Q) == "UNVERIFIED"
+    assert build_final_answer(report, [], 1, NOW_Q).answer == "Couldn't verify that one."
+
+
+# ---- 12. Le Chat's "New Connectors" announcement is closed with its own "Later" button, not reported as a consent page (live run B)
+def test_a_later_button_on_an_announcement_is_dismissed_but_accept_is_never_clicked():
+    from pathlib import Path
+
+    js = (Path(__file__).resolve().parents[1] / "browser" / "adapters" / "dom_library.py").read_text(encoding="utf-8")
+    want = next(line for line in js.splitlines() if "const want = " in line)
+    assert r"^\s*later\s*$" in want, "the bare 'Later' button of a product announcement must be a dismiss control"
+    assert "accept all" in want and "unsafe = /(accept|agree|allow|consent" in js, "the safe-dismiss refusal of accept / agree / allow stays"
+
+
+def test_the_curator_asks_a_cooling_model_last_and_never_waits_out_a_rate_limit_on_the_way(monkeypatch):
+    from backend.verification import verifier as vmod
+    from backend.verification.llm import Endpoint, LLMReply, cool_model
+
+    seen: list[tuple[str, bool]] = []
+
+    class FakeClient:
+        def __init__(self, endpoint):
+            self.endpoint = endpoint
+
+        async def complete_json(self, messages, temperature=None, fail_fast=False):
+            seen.append((self.endpoint.model, fail_fast))
+            return {"verdicts": []}, LLMReply(text="{}", ok=True, model=self.endpoint.model)
+
+    monkeypatch.setattr(vmod, "LLMClient", FakeClient)
+    endpoint = Endpoint(provider="openrouter", model="primary", base_url="http://x", fallback_models=("second",))
+    cool_model("http://x", "primary", 60)
+    curator = vmod.Verifier(endpoint, time_cap_s=30)
+    curator._deadline = time.monotonic() + 30
+    asyncio.run(curator._curate([{"role": "user", "content": "x"}]))
+    assert seen == [("second", True)], "the cooling primary is behind the healthy fallback, and a non-last model fails fast"

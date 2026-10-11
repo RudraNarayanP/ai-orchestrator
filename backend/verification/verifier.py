@@ -155,7 +155,12 @@ class Verifier:
 
         if not self.time_cap_s:
             return await self.client.complete_json(messages, temperature=self.endpoint.temperature)
+        from backend.verification.llm import cool_model, model_cooling, COOLDOWN_TIMEOUT_S  # noqa: PLC0415
+
         models = [self.endpoint.model] + [m for m in self.endpoint.fallback_models if m and m != self.endpoint.model]
+        # A model that just failed or timed out goes to the back: it is still tried, but only after the ones that were fine.
+        base = self.endpoint.base_url
+        models = [m for m in models if not model_cooling(base, m)] + [m for m in models if model_cooling(base, m)]
         last = LLMReply(text="", ok=False, error="curator not tried", model=self.endpoint.model)
         for index, model in enumerate(models):
             left = self._deadline - time.monotonic()
@@ -164,8 +169,11 @@ class Verifier:
             share = left if index == len(models) - 1 else min(left, max(self.FIRST_SHARE_MIN_S, self.time_cap_s * 0.55))
             client = LLMClient(dataclasses.replace(self.endpoint, model=model, fallback_models=()))
             try:
-                parsed, reply = await asyncio.wait_for(client.complete_json(messages, temperature=self.endpoint.temperature), timeout=share)
+                parsed, reply = await asyncio.wait_for(
+                    client.complete_json(messages, temperature=self.endpoint.temperature, fail_fast=index < len(models) - 1), timeout=share
+                )
             except asyncio.TimeoutError:
+                cool_model(base, model, COOLDOWN_TIMEOUT_S)
                 last = LLMReply(text="", ok=False, error=f"curator {model} gave no answer in {share:.0f}s", model=model)
                 continue
             if parsed is not None or reply.fatal:
@@ -1254,12 +1262,6 @@ def _is_page_claim(claim: str) -> bool:
     return bool(_PAGE_CLAIM_RE.search(claim or ""))
 
 
-_CURRENT_Q_RE = re.compile(r"\b(?:still|currently|now|today|at present|at the moment|as of|in force|remains?|nowadays)\b", re.I)
-_PRESENT_CLAIM_RE = re.compile(
-    r"\b(?:currently|remains?|remained|still|as of|at present|today|is in force|in force|not in force|no longer|now)\b", re.I
-)
-
-
 def current_status_unconfirmed(report: VerifierReport, question: str) -> bool:
     """A question about how things stand NOW needs a settled claim about how things stand now.
 
@@ -1269,12 +1271,10 @@ def current_status_unconfirmed(report: VerifierReport, question: str) -> bool:
     present-tense claims, at least one of them must be settled (supported / refuted / contested, or partly supported on
     evidence that is not outdated). Otherwise the key claim is unconfirmed and the answer says so.
     """
-    from backend.research.style import is_claim_check  # noqa: PLC0415
+    from backend.research.style import answers_the_present  # noqa: PLC0415
 
-    if not question or not _CURRENT_Q_RE.search(question) or not is_claim_check(question):
-        return False
     S = ClaimStatus
-    present = [v for v in report.verdicts if not _is_page_claim(v.claim) and _PRESENT_CLAIM_RE.search(v.claim)]
+    present = [v for v in report.verdicts if not _is_page_claim(v.claim) and answers_the_present(question, v.claim)]
     if not present:
         return False
 

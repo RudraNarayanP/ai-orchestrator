@@ -1109,6 +1109,12 @@ class ResearchRunner:
         if key:
             contradictions = len(key_conflicts)
 
+        # A question about NOW ("is section 9 still in force?") is answered by a present-tense claim about that provision. While
+        # none of those is established by an opened page, other confirmed claims (what Article 8 says) are not an answer.
+        from backend.research.style import answers_the_present  # noqa: PLC0415
+
+        now_claims = [c for c in claims if answers_the_present(question, c.claim)]
+        now_open = bool(now_claims) and not any(c in established for c in now_claims)
         # "Enough" is a property of the evidence, never of how the answer was
         # phrased.
         ledger_ok = (
@@ -1146,7 +1152,7 @@ class ResearchRunner:
         # still needs an actual claim to hang them on.
         if not material and attached and claims and len({e.domain for e in attached}) >= min_sources:
             sufficient = sufficient and not failure_signals and contradictions == 0
-        if not claims:
+        if not claims or now_open:
             sufficient = False
 
         recommends = EscalationLevel.PRIMARY
@@ -1176,6 +1182,9 @@ class ResearchRunner:
                     f"{len(established)} claim(s) settled by opened evidence; "
                     f"{len(open_unjudged)} further wording(s) the curator did not judge"
                 )
+        if now_open:
+            recommends = max(recommends, EscalationLevel.PARALLEL, key=int)
+            reasons.append(f"the claim that says how things stand now is unconfirmed: {now_claims[0].claim.strip()[:70]}")
         if refuted_only:
             recommends = max(recommends, EscalationLevel.PARALLEL, key=int)
             reasons.append(f"{len(refuted_only)} claim(s) contradicted by an opened source; the true answer is still open")

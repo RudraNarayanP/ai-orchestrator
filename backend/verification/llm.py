@@ -127,7 +127,7 @@ class LLMClient:
         headers.update(self.endpoint.headers or {})
         return headers
 
-    async def complete(self, messages: list[dict[str, str]], *, temperature: float | None = None, max_tokens: int | None = None, retries: int = 1) -> LLMReply:
+    async def complete(self, messages: list[dict[str, str]], *, temperature: float | None = None, max_tokens: int | None = None, retries: int = 1, fail_fast: bool = False) -> LLMReply:
         if not self.endpoint.enabled:
             return LLMReply(text="", ok=False, error="endpoint disabled or unconfigured", model=self.endpoint.model)
         # Free hosted models are rate limited and sometimes vanish; try the configured fallbacks in order, but only
@@ -139,7 +139,7 @@ class LLMClient:
         order = [m for m in models if not model_cooling(base, m)] + [m for m in models if model_cooling(base, m)]
         for index, model in enumerate(order):
             # With another model to turn to, a rate limit is not waited out: the next model is asked at once.
-            reply = await self._complete_with(model, messages, temperature, max_tokens, retries, fail_fast=index < len(order) - 1)
+            reply = await self._complete_with(model, messages, temperature, max_tokens, retries, fail_fast=fail_fast or index < len(order) - 1)
             if reply.ok or reply.fatal:
                 _COOLING.pop((base, model), None)
                 return reply
@@ -239,8 +239,8 @@ class LLMClient:
                 await _sleep(delay)
         return LLMReply(text="", ok=False, error=last_error, latency_s=round(time.time() - started, 2), model=model, status=status)
 
-    async def complete_json(self, messages: list[dict[str, str]], *, temperature: float | None = None) -> tuple[dict[str, Any] | None, LLMReply]:
-        reply = await self.complete(messages, temperature=temperature)
+    async def complete_json(self, messages: list[dict[str, str]], *, temperature: float | None = None, fail_fast: bool = False) -> tuple[dict[str, Any] | None, LLMReply]:
+        reply = await self.complete(messages, temperature=temperature, fail_fast=fail_fast)
         if not reply.ok:
             return None, reply
         parsed = extract_json(reply.text)

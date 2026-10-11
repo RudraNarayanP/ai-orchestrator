@@ -699,3 +699,35 @@ def render_truth(state: str, *, question: str = "", answer: str = "", aspect: st
         line = line.replace("\u2026.", "\u2026").replace("..", ".")
         return tiny(line, max_sentences=3, max_chars=300)
     return tiny(answer, max_sentences=3, max_chars=280)
+
+# ---- questions about the present: which claim answers them ------------------------------------------------------------
+_NOW_Q_RE = re.compile(r"\b(?:still|currently|now|today|at present|at the moment|as of|in force|remains?|nowadays)\b", re.I)
+_NOW_CLAIM_RE = re.compile(
+    r"\b(?:currently|remains?|remained|still|as of|at present|today|is in force|in force|not in force|no longer|now|omitted|repealed|revoked)\b", re.I
+)
+_REF_RE = re.compile(
+    r"\b(sections?|secs?|s|articles?|arts?|clauses?|rules?|regulations?|paragraphs?|schedules?)\.?\s*(\d+[a-z]?)\b", re.I
+)
+_REF_WORD = {"s": "section", "sec": "section", "sections": "section", "secs": "section", "art": "article", "arts": "article", "articles": "article"}
+
+
+def reference_anchors(text: str) -> set[str]:
+    """'section 9', 'article 8' ... the numbered provision a question is about, in one spelling."""
+    out = set()
+    for kind, num in _REF_RE.findall(text or ""):
+        kind = kind.lower().rstrip("s") if kind.lower() not in _REF_WORD else _REF_WORD[kind.lower()]
+        out.add(f"{_REF_WORD.get(kind, kind)} {num.lower()}")
+    return out
+
+
+def asks_about_now(question: str) -> bool:
+    return bool(question) and bool(_NOW_Q_RE.search(question)) and is_claim_check(question)
+
+
+def answers_the_present(question: str, claim: str) -> bool:
+    """A present-tense claim about the thing the question names. When the question names a numbered provision, the claim has to
+    name that same provision: a claim about Article 8 does not say whether section 9 is still in force."""
+    if not asks_about_now(question) or not _NOW_CLAIM_RE.search(claim or ""):
+        return False
+    anchors = reference_anchors(question)
+    return not anchors or bool(anchors & reference_anchors(claim))
