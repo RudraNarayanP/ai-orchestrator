@@ -59,12 +59,39 @@ def load():
     return load_settings()
 
 
+def config_findings(settings, include_environment: bool = False):
+    """Everything wrong or doubtful about the setup, as backend.config_check.Finding rows."""
+    from backend.config_check import check_settings, environment_findings, tracked_secret_findings
+    from backend.settings import read_raw_settings
+
+    found = list(check_settings(settings, read_raw_settings()))
+    found += tracked_secret_findings(ROOT)
+    if include_environment:
+        found = environment_findings() + found
+    return found
+
+
+def print_findings(found) -> int:
+    """Print findings, errors first. Returns the number of errors."""
+    for f in sorted(found, key=lambda x: x.level != "error"):
+        print(f"  {f.level.upper():<7} {f.key}: {f.message}")
+    return sum(1 for f in found if f.level == "error")
+
+
 def cmd_doctor(_: argparse.Namespace) -> int:
     settings = load()
     from backend.verification.llm import LLMClient, Endpoint
     from backend.settings import PROFILES_DIR
 
     print(BANNER)
+    found = config_findings(settings, include_environment=True)
+    errors = sum(1 for f in found if f.level == "error")
+    print("setup")
+    if found:
+        print_findings(found)
+    else:
+        print("  ok: python, packages, config keys and data folders all check out")
+    print()
     live = settings.browser.driver == "chrome_use"
     if live:
         for line in asyncio.run(live_driver_report(settings)):
@@ -117,6 +144,9 @@ def cmd_doctor(_: argparse.Namespace) -> int:
     print()
     print("note: automation is not hidden from these sites -- navigator.webdriver stays true.")
     print("If a site objects, OmniBrain reports the provider as blocked instead of working around it.")
+    if errors:
+        print(f"\n{errors} setup error(s) above must be fixed before 'run.py serve' will start.")
+        return 1
     return 0
 
 
@@ -171,6 +201,22 @@ def cmd_serve(args: argparse.Namespace) -> int:
     from backend.logs import uvicorn_log_config
 
     settings = load()
+    from backend.config_check import port_in_use
+
+    if not 1 <= int(args.port) <= 65535:
+        print(f"error: --port {args.port} is not a valid port (use 1-65535).")
+        return 2
+    found = config_findings(settings)
+    if found:
+        print("setup")
+        print_findings(found)
+    if any(f.level == "error" for f in found):
+        print("not starting: fix the error(s) above (config/settings.yaml), then run again. 'run.py doctor' checks everything.")
+        return 2
+    if port_in_use(args.host, int(args.port)):
+        print(f"error: port {args.port} is already in use -- an OmniBrain server may already be running. "
+              f"Stop it with 'run.py stop --port {args.port}', or pick another with --port.")
+        return 2
     log_path = setup_file_logging(args, settings)
     print(BANNER)
     print(f"  http://{args.host}:{args.port}")
@@ -496,7 +542,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    return int(args.func(args) or 0)
+    from backend.settings import ConfigError
+
+    try:
+        return int(args.func(args) or 0)
+    except ConfigError as exc:
+        print(f"config error: {exc}")
+        print("Fix config/settings.yaml (or delete it to start again from config/settings.example.yaml).")
+        return 2
+    except KeyboardInterrupt:
+        print("\ninterrupted.")
+        return 130
 
 
 if __name__ == "__main__":

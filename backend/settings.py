@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_DIR = ROOT / "config"
@@ -287,21 +287,67 @@ class Settings(BaseModel):
         return data
 
 
+class ConfigError(ValueError):
+    """The settings file cannot be used. ``str(error)`` is a short, fixable message for a person, not a traceback."""
+
+    def __init__(self, path: Path, problems: list[str]):
+        self.path = path
+        self.problems = problems
+        super().__init__(f"{path.name} is not usable:\n" + "\n".join(f"  - {p}" for p in problems))
+
+
 def _read_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
-    with path.open("r", encoding="utf-8") as fh:
-        loaded = yaml.safe_load(fh) or {}
-    return loaded if isinstance(loaded, dict) else {}
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            loaded = yaml.safe_load(fh) or {}
+    except yaml.YAMLError as exc:
+        mark = getattr(exc, "problem_mark", None)
+        where = f"line {mark.line + 1}, column {mark.column + 1}" if mark else "unknown position"
+        reason = getattr(exc, "problem", None) or str(exc).splitlines()[0]
+        raise ConfigError(path, [f"YAML syntax error at {where}: {reason}. Fix the indentation or quoting there (or delete the file to start again from settings.example.yaml)."]) from exc
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError(path, [f"cannot read the file ({type(exc).__name__}: {exc}). Save it as UTF-8."]) from exc
+    if not isinstance(loaded, dict):
+        raise ConfigError(path, [f"the top level must be a mapping of sections (browser:, verifier:, providers: ...), found {type(loaded).__name__}."])
+    return loaded
 
 
-def load_settings(path: Path | None = None) -> Settings:
+def settings_path(path: Path | None = None) -> Path:
+    """The file ``load_settings`` reads: explicit path, else OMNIBRAIN_CONFIG, else settings.yaml, else the example."""
     cfg_path = path or (Path(os.environ["OMNIBRAIN_CONFIG"]) if os.environ.get("OMNIBRAIN_CONFIG") else CONFIG_DIR / "settings.yaml")
     if not cfg_path.exists():
         cfg_path = CONFIG_DIR / "settings.example.yaml"
+    return cfg_path
+
+
+def read_raw_settings(path: Path | None = None) -> dict[str, Any]:
+    """The file as written (env overrides not applied); used to spot mistyped keys."""
+    return _read_yaml(settings_path(path))
+
+
+def _friendly(err: ValidationError) -> list[str]:
+    out = []
+    for e in err.errors():
+        where = ".".join(str(x) for x in e.get("loc", ())) or "(top level)"
+        shown = e.get("input")
+        got = "" if shown is None or isinstance(shown, (dict, list)) else f" (got {str(shown)[:60]!r})"
+        out.append(f"{where}: {e.get('msg', 'invalid value')}{got}")
+    return out
+
+
+def load_settings(path: Path | None = None) -> Settings:
+    cfg_path = settings_path(path)
     raw = _read_yaml(cfg_path)
-    raw = _apply_env(raw)
-    return Settings.model_validate(raw)
+    try:
+        raw = _apply_env(raw)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(cfg_path, [f"an OMNIBRAIN_* environment override is not valid: {exc}"]) from exc
+    try:
+        return Settings.model_validate(raw)
+    except ValidationError as exc:
+        raise ConfigError(cfg_path, _friendly(exc)) from exc
 
 
 def _apply_env(raw: dict[str, Any]) -> dict[str, Any]:
