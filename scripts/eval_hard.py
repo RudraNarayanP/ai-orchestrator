@@ -48,12 +48,16 @@ SKIP_BY_DEFAULT = ["search"]
 IDK_RE = re.compile(r"^\s*(?:hmm,?\s*)?(i don'?t know|i couldn'?t verify|i can'?t verify|couldn'?t verify|can'?t verify|i'?m not sure|not sure)", re.I)
 # The house voice's own don't-know / conflict lines are complete answers: "then stop" -- no reason sentence is owed.
 CONTRACT_IDK_RE = re.compile(r"^\s*(?:couldn'?t verify that one|hmm, i'?m not sure\W+the sources disagree)\.?\s*$", re.I)
+# The two honest ways to decline an unsettled question: say the sources split, or say it could not be verified.
+DISAGREE_RE = re.compile(r"(sources? (?:i found )?(?:disagree|conflict)|not sure|couldn'?t verify|can'?t verify|unsettled|no settled|\b(?:courts?|judges?|authorities|circuits?) (?:have |are |remain )?(?:split|divided)|still (?:open|unresolved)|courts? (?:have )?(?:not|yet to) (?:decided|settled))", re.I)
+LEAD_YESNO_RE = re.compile(r"^\W*(?:hmm,?\s*)?(?:yes|yeah|yep|no|nope|nah)\b", re.I)
 # A reasoned "there is nothing public / no such event" answer to an unanswerable trap question. It is not a bare
 # don't-know, but it is the right outcome *if* it invents no private content and what it asserts is backed by opened pages.
 NO_PUBLIC_RE = re.compile(
     r"(does not provide|doesn'?t provide|not (?:made )?public|isn'?t public|is confidential|are confidential|not available|"
     r"no (?:public|official|published)? ?(?:record|report|account|minutes|transcript)|did not hold|didn'?t hold|"
-    r"no such (?:session|event|meeting)|not (?:been )?published|no (?:reported|recorded))", re.I)
+    r"no such (?:session|event|meeting)|not (?:been )?published|no (?:reported|recorded)|"
+    r"(?:still|remains?) pending|no (?:judgment|ruling|decision) (?:has|yet))", re.I)
 
 # --------------------------------------------------------------------------------------------- scoring
 
@@ -105,7 +109,20 @@ def judge(q: dict[str, Any], rec: dict[str, Any]) -> dict[str, Any]:
         if re.search(pat, answer, re.I | re.S):
             reasons.append(f"asserts something it must not ({pat})")
             verdict = "FAIL"
-    if kind == "unanswerable":
+    if kind == "contested":
+        # An unsettled question (courts split, authorities differ, law in flux): the right answer says so. A confident
+        # yes/no is a FAIL even if it happens to match one side; only the house "sources disagree" / "couldn't verify"
+        # lines, or an answer that names the split, pass.
+        declines = idk or bool(DISAGREE_RE.search(answer))
+        if declines:
+            reasons.append("declined to assert a settled answer to an unsettled question")
+        elif LEAD_YESNO_RE.match(answer):
+            reasons.append("asserted a settled yes/no on a question the sources leave open")
+            verdict = "FAIL"
+        else:
+            reasons.append("neither declined nor asserted a clear answer: read it by hand")
+            verdict = "WARN" if verdict == "PASS" else verdict
+    elif kind == "unanswerable":
         reasoned = bool(NO_PUBLIC_RE.search(answer)) and not idk
         if reasoned:
             # The right outcome, but only credited when nothing in it is unsupported: opened pages behind it and no
@@ -124,6 +141,11 @@ def judge(q: dict[str, Any], rec: dict[str, Any]) -> dict[str, Any]:
         elif not CONTRACT_IDK_RE.match(answer) and not re.search(r"\w{4,}", answer.split(".", 1)[-1] if "." in answer else ""):
             reasons.append("don't-know without a reason")
             verdict = "WARN" if verdict == "PASS" else verdict
+    elif idk and expect.get("idk_ok"):
+        # Only where the question file says so: the fact itself is disputed online (a source claims something exists that
+        # no primary source shows), so "couldn't verify" is as correct as the correction. An asserted wrong answer still
+        # trips must_not_match above.
+        reasons.append("honest could-not-verify accepted for this question (idk_ok)")
     else:
         misses = [p for p in expect.get("must_match", []) if not re.search(p, answer, re.I | re.S)]
         if idk:
@@ -337,7 +359,7 @@ def trimmed_config(skip: list[str], dest: Path) -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", default="", help="comma-separated question ids")
-    ap.add_argument("--category", default="", help="uk-law | ua-law | university | research | trivial")
+    ap.add_argument("--category", default="", help="a category in the question file (e.g. uk-law, ua-law, university, research, trivial, legal-conflict-of-laws)")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--mode", default="STANDARD")
     ap.add_argument("--max-rounds", type=int, default=2)
