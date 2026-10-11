@@ -411,3 +411,19 @@ def test_the_curator_asks_a_cooling_model_last_and_never_waits_out_a_rate_limit_
     curator._deadline = time.monotonic() + 30
     asyncio.run(curator._curate([{"role": "user", "content": "x"}]))
     assert seen == [("second", True)], "the cooling primary is behind the healthy fallback, and a non-last model fails fast"
+
+
+# ---- 13. a long reason is cut at a clause, never inside a statute's name (live run C: "...2020 by the Data Protection. \u274c")
+def test_a_reason_is_never_cut_inside_a_title_with_a_comma():
+    from backend.research.style import fit_fact, render_truth
+
+    fact = (
+        "Section 9 of the Data Protection Act 2018 is no longer in force as the provision setting the UK's age of consent for online "
+        "services; it was omitted with effect from 31 December 2020 by the Data Protection, Privacy and Electronic Communications "
+        "(Amendments etc) (EU Exit) Regulations 2019."
+    )
+    cut = fit_fact(fact, 230)
+    assert cut.endswith("31 December 2020.") and "Data Protection." not in cut
+    shown = render_truth("FALSE", question="Is section 9 of the Data Protection Act 2018 still in force?", answer=fact)
+    assert "Data Protection." not in shown and "31 December 2020" in shown
+    assert fit_fact("It is a rule, and it applies.", 200) == "It is a rule, and it applies."

@@ -652,7 +652,11 @@ def fit_fact(fact: str, budget: int) -> str:
     if not fact or len(fact) <= budget:
         return fact
     window = fact[: max(budget - 1, 20)]
-    cut = max(window.rfind("; "), window.rfind(": "), window.rfind(" \u2014 "), window.rfind(", "))
+    # A comma inside a name ("the Data Protection, Privacy and Electronic Communications Regulations") is not a clause boundary:
+    # only a comma followed by a lower-case word is. "by the / under the / pursuant to" start the authority for a fact, not the fact.
+    commas = [m.start() for m in re.finditer(r", (?=[a-z])", window)]
+    authority = [m.start() for m in re.finditer(r" (?:by|under|pursuant to|via) the ", window)]
+    cut = max([window.rfind("; "), window.rfind(": "), window.rfind(" \u2014 ")] + commas + authority)
     if cut >= int(len(window) * 0.45):
         return window[:cut].rstrip(" ,;:\u2014-") + "."
     return window.rsplit(" ", 1)[0].rstrip(" ,;:\u2014-") + "\u2026"
