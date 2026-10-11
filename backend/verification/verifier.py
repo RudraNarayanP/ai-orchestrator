@@ -1210,13 +1210,25 @@ def _asked_figures(text: str) -> set[str]:
     return {a.strip(".,") for a in re.findall(r"\d[\d,.]*", text or "") if a.strip(".,")}
 
 
+_PAGE_CLAIM_RE = re.compile(r"^\s*the (?:url|link|page|pdf|document at|website at)\b|https?://", re.I)
+
+
+def _is_page_claim(claim: str) -> bool:
+    return bool(_PAGE_CLAIM_RE.search(claim or ""))
+
+
 def truth_state(report: VerifierReport, question: str = "") -> str:
     """TRUE / PARTLY / FALSE / CONFLICT / UNVERIFIED, read off the evidence ledger's verdicts -- never off tone.
 
     Anything short of settled evidence is UNVERIFIED or CONFLICT; this never rounds uncertainty up.
     """
     S = ClaimStatus
-    verdicts = [v.verdict for v in report.verdicts]
+    # A claim about a web page itself ("the URL ... reproduces the judgment", "the page returned no text") is bookkeeping
+    # about our own sources, not a claim about the question; one refuted URL must not turn a settled answer into "partly".
+    # Only when nothing else was judged do they count (live: a refuted mirror-site URL made a settled "no" read "Yeah, but the date is off").
+    about_question = [v for v in report.verdicts if not _is_page_claim(v.claim)]
+    judged = about_question or list(report.verdicts)
+    verdicts = [v.verdict for v in judged]
     conf = report.confidence
     if report.important_disagreement or S.CONTESTED in verdicts:
         return "CONFLICT"
@@ -1227,7 +1239,7 @@ def truth_state(report: VerifierReport, question: str = "") -> str:
     # established the premise is wrong, so "Couldn't verify that one." would understate
     # it (live: "Is it true the Eiffel Tower was completed in 1887?" -- refuted on the
     # official history pages, reported as unverified because no claim was "supported").
-    refuted_on_evidence = [v for v in report.verdicts if v.verdict == S.REFUTED and v.strong_evidence]
+    refuted_on_evidence = [v for v in judged if v.verdict == S.REFUTED and v.strong_evidence]
     if conf is Confidence.NONE or not (supported or refuted or partial):
         return "UNVERIFIED"
     if refuted_on_evidence and not supported and not partial:
@@ -1255,6 +1267,8 @@ def truth_state(report: VerifierReport, question: str = "") -> str:
 def _aspect(report: VerifierReport) -> str:
     """Which detail is off, in a word, from the first claim that is not fully supported."""
     for v in report.verdicts:
+        if _is_page_claim(v.claim):
+            continue
         if v.verdict in (ClaimStatus.PARTIALLY_SUPPORTED, ClaimStatus.REFUTED):
             problems = " ".join(v.problems).lower()
             text = v.claim.lower()
@@ -1341,7 +1355,8 @@ def _lint_headline_answer(text: str, *, question: str, state: str, unknowns: lis
     """
     from backend.research.style import is_claim_check  # noqa: PLC0415
 
-    if state == "TRUE" and question and not is_claim_check(question):
+    if state in {"TRUE", "FALSE", "PARTLY"} and question:
+        # The ledger settled this answer: claims it never judged are not grounds to rewrite the sentence that states it.
         return lint_answer(text, question=question, unknowns=()).text
     return lint_answer(text, question=question, unknowns=unknowns).text
 
@@ -1402,7 +1417,10 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
     return FinalAnswer(
         answer=text,
         truth_state=state,
-        why=lint_answer(report.why, question=question, unknowns=unknowns).text if report.why else report.why,
+        why=lint_answer(
+            report.why, question=question, unknowns=([] if state in {"TRUE", "FALSE", "PARTLY"} else unknowns),
+            settled=[v.claim for v in report.verdicts if v.verdict in settled],
+        ).text if report.why else report.why,
         important_disagreement=lint_answer(report.important_disagreement, question=question).text if report.important_disagreement else report.important_disagreement,
         confidence=report.confidence,
         confidence_label=confidence_label(report.confidence),

@@ -236,6 +236,25 @@ def pdf_to_text(data: bytes, *, max_chars: int = 12000, max_pages: int = 40) -> 
         return ""
 
 
+def is_bot_challenge(status: int, headers: dict[str, str], text: str) -> bool:
+    """A challenge page, not content: an AWS WAF / Cloudflare-style interstitial or an empty 202/403/429 answer."""
+    low = {str(k).lower(): str(v).lower() for k, v in (headers or {}).items()}
+    if "challenge" in low.get("x-amzn-waf-action", "") or low.get("cf-mitigated", "") == "challenge":
+        return True
+    return status in {202, 403, 429} and not (text or "").strip()
+
+
+_POINT_IN_TIME_RE = re.compile(r"/(\d{4}-\d{2}-\d{2})(?:[/?#]|$)")
+
+
+def point_in_time_date(url: str) -> str | None:
+    """legislation.gov.uk /section/9/2018-05-25 is the law AS IT STOOD on that date, so that is the age of the evidence."""
+    m = _POINT_IN_TIME_RE.search(url or "")
+    if not m:
+        return None
+    return m.group(1) + "T00:00:00+00:00"
+
+
 async def fetch_page(
     url: str,
     *,
@@ -277,6 +296,14 @@ async def fetch_page(
         page.title = _html_to_text(page.title or "")[:220] or None
         if BLOCK_HINT_RE.search(text[:3000]):
             page.notes.append("bot or consent gate")
+        elif is_bot_challenge(status, dict(response.headers), text):
+            # legislation.gov.uk answers every non-browser request "202 Accepted" with an empty body and an AWS WAF
+            # challenge header: that is the site refusing automated readers, not a page that does not exist.
+            page.notes.append("bot or consent gate: the site answered with a bot-check challenge (HTTP %d)" % status)
+        if not page.published:
+            page.published = point_in_time_date(str(response.url)) or point_in_time_date(url)
+            if page.published:
+                page.notes.append("point-in-time version of the text, dated by its own address")
         if PAYWALL_RE.search(text[:4000]):
             page.notes.append("possible paywall")
         if status in {404, 410}:

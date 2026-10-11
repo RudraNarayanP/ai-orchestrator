@@ -404,7 +404,10 @@ def humanize(answer: str, confidence: str = "moderate") -> str:
 
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\u2018\u201c\"'(])")
-_ABBREV_TAIL = re.compile(r"(?:\b(?:No|Nos|Art|Sec|s|ss|cl|Mr|Mrs|Dr|vs|etc|e\.g|i\.e)\.|\b\d\.|\b[A-Z]\.)$")
+# "Erie Railroad Co. v. Tompkins", "Smith & Co. Ltd.", "para. 702": a full stop after these is not the end of a sentence
+_ABBREV_TAIL = re.compile(
+    r"(?:\b(?:No|Nos|Art|Arts|Sec|s|ss|cl|Mr|Mrs|Ms|Dr|Prof|St|Jr|Sr|vs|v|etc|e\.g|i\.e|Co|Corp|Inc|Ltd|Pvt|Bros|Ors|Anr|Ch|para|paras|pp?|Vol|ed|eds|approx|Rev|Ref)\.|\b\d\.|\b[A-Z]\.)$"
+)
 
 
 def split_sentences(text: str) -> list[str]:
@@ -602,9 +605,17 @@ def is_claim_check(question: str) -> bool:
 
 
 _DENIAL_RE = re.compile(
-    r"\b(not|never|no longer|cannot|can'?t|doesn'?t|does not|didn'?t|did not|isn'?t|is not|aren'?t|are not|wasn'?t|weren'?t|myth|false)\b", re.I
+    r"\b(not|never|no longer|cannot|can'?t|doesn'?t|does not|didn'?t|did not|isn'?t|is not|aren'?t|are not|wasn'?t|weren'?t|myth|false"
+    r"|void|unenforceable|invalid|unlawful|illegal|prohibited|impermissible|forbidden|barred|inadmissible|omitted|repealed|revoked)\b", re.I
 )
 _LEAD_NO = re.compile(r"^\s*(?:no|nope|nah)\b", re.I)
+_LEAD_YES = re.compile(r"^\s*(?:yes|yeah|yep|yup)\b", re.I)
+# What follows these words qualifies the answer; it does not decide whether the answer agrees or disagrees with the question.
+_QUALIFIER_RE = re.compile(r"\b(?:although|though|while|whereas|but|however|except|unless|albeit|even if|provided that)\b|;")
+
+
+def _head_clause(sentence: str) -> str:
+    return _QUALIFIER_RE.split(sentence or "", maxsplit=1)[0]
 
 
 def premise_state(state: str, question: str, answer: str) -> str:
@@ -620,7 +631,9 @@ def premise_state(state: str, question: str, answer: str) -> str:
     if _DENIAL_RE.search(question or ""):
         return state
     lead = (answer or "").strip()
-    first = _first_sentence(lead)
+    if _LEAD_YES.match(lead):
+        return state  # the answer itself says yes: a "not yet in force" later in the sentence is a qualification, not a denial
+    first = _head_clause(_first_sentence(lead))
     if _LEAD_NO.match(lead) or (first and _DENIAL_RE.search(first)):
         return "FALSE"
     return state
@@ -629,6 +642,20 @@ def premise_state(state: str, question: str, answer: str) -> str:
 def _first_sentence(text: str) -> str:
     parts = split_sentences(_LEAD_YESNO.sub("", (text or "").strip()))
     return parts[0].strip() if parts else ""
+
+
+def fit_fact(fact: str, budget: int) -> str:
+    """The reason that follows "Yeah/Nah": keep it WHOLE when it fits, otherwise cut it at a clause boundary (or a word)
+    so a long sentence is shortened, never dropped -- a verdict with its reason deleted reads as an answer with nothing in it
+    (live, 2026-10-11: "Nah, that doesn't work like that. \u274c")."""
+    fact = (fact or "").strip()
+    if not fact or len(fact) <= budget:
+        return fact
+    window = fact[: max(budget - 1, 20)]
+    cut = max(window.rfind("; "), window.rfind(": "), window.rfind(" \u2014 "), window.rfind(", "))
+    if cut >= int(len(window) * 0.45):
+        return window[:cut].rstrip(" ,;:\u2014-") + "."
+    return window.rsplit(" ", 1)[0].rstrip(" ,;:\u2014-") + "\u2026"
 
 
 def _ends_clean(sentence: str) -> str:
@@ -660,13 +687,15 @@ def render_truth(state: str, *, question: str = "", answer: str = "", aspect: st
     if state == "TRUE":
         base = TRUTH_TRUE[:-1] + bro + "."
         extra = fact if fact and len(fact) > 12 and fact.lower() not in {"it is.", "that is correct."} else ""
-        return tiny(f"{base} {extra}".strip(), max_sentences=2, max_chars=240)
+        return tiny(f"{base} {fit_fact(extra, 300 - len(base) - 1)}".strip(), max_sentences=2, max_chars=300)
     if state == "FALSE":
         base = TRUTH_FALSE[:-1] + bro + "." if bro else TRUTH_FALSE
-        return tiny(f"{base} {fact}".strip(), max_sentences=2, max_chars=240)
+        return tiny(f"{base} {fit_fact(fact, 300 - len(base) - 1)}".strip(), max_sentences=2, max_chars=300)
     if state == "PARTLY":
         part = f"the {aspect.strip()} part" if aspect.strip() else "one detail"
         fix = fact.rstrip(".") if fact else ""
-        line = f"Yeah, the idea is right, but {part} is a bit off" + (f" \u2014 {fix}." if fix else ".")
-        return tiny(line, max_sentences=3, max_chars=260)
+        head = f"Yeah, the idea is right, but {part} is a bit off"
+        line = head + (f" \u2014 {fit_fact(fix, 300 - len(head) - 4)}." if fix else ".")
+        line = line.replace("\u2026.", "\u2026").replace("..", ".")
+        return tiny(line, max_sentences=3, max_chars=300)
     return tiny(answer, max_sentences=3, max_chars=280)

@@ -150,11 +150,18 @@ def _split(text: str) -> list[str]:
     return split_sentences(text)
 
 
+def _states_settled(sentence: str, shields: list[set[str]]) -> bool:
+    toks = _tokens(sentence)
+    return any(len(st & toks) >= max(2, int(0.6 * len(st))) for st in shields)
+
+
 def _cap(s: str) -> str:
     return s[:1].upper() + s[1:] if s else s
 
 
-def lint_answer(text: str, *, question: str = "", unknowns: list[str] | tuple[str, ...] = ()) -> LintResult:
+def lint_answer(
+    text: str, *, question: str = "", unknowns: list[str] | tuple[str, ...] = (), settled: list[str] | tuple[str, ...] = ()
+) -> LintResult:
     """Remove D/E/F, neutralise C. Returns the cleaned text and what was found. Never returns an empty string for non-empty input."""
     original = text or ""
     if not original.strip():
@@ -162,6 +169,9 @@ def lint_answer(text: str, *, question: str = "", unknowns: list[str] | tuple[st
     advice_ok = asks_for_advice(question)
     inference_ok = asks_for_inference(question)
     unk = [(u, _tokens(u)) for u in unknowns if u and _tokens(u)]
+    # A sentence that states a claim the evidence ledger SETTLED is never rewritten into "I couldn't find that documented",
+    # however many unrelated unjudged claims share its words (live: a supported DPDP answer came back with that line pasted on).
+    shields = [st for st in (_tokens(x) for x in settled) if st]
     findings: list[Finding] = []
     out_lines: list[str] = []
     for line in original.split("\n"):
@@ -196,7 +206,7 @@ def lint_answer(text: str, *, question: str = "", unknowns: list[str] | tuple[st
                 if C_RE.search(s) and (not inference_ok or unk):
                     findings.append(Finding("C_unknown_made_negative", s, "removed"))
                     continue
-                if unk and NEG_RE.search(s):
+                if unk and NEG_RE.search(s) and not _states_settled(s, shields):
                     toks = _tokens(s)
                     hit = next((u for u, ut in unk if len(ut & toks) >= max(2, int(0.6 * len(ut)))), None)
                     if hit:

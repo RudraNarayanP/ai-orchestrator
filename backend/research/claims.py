@@ -12,6 +12,8 @@ split and opinions get dropped rather than quietly averaged in.
 
 from __future__ import annotations
 
+import asyncio
+
 import hashlib
 import re
 from typing import Any, Iterable
@@ -487,9 +489,9 @@ async def extract_claims(
 
     if endpoint and endpoint.enabled:
         client = LLMClient(endpoint)
-        for response in responses:
-            if response.status.value != "completed" or not (response.answer_text or "").strip():
-                continue
+        askable = [r for r in responses if r.status.value == "completed" and (r.answer_text or "").strip()]
+
+        async def one(response: ProviderResponse) -> tuple[ProviderResponse, dict[str, Any] | None]:
             payload = [
                 {"role": "system", "content": EXTRACT_PROMPT},
                 {
@@ -499,9 +501,14 @@ async def extract_claims(
                 },
             ]
             try:
-                parsed, reply = await client.complete_json(payload, temperature=0.0)
+                parsed, _reply = await client.complete_json(payload, temperature=0.0)
             except Exception:  # noqa: BLE001 -- a model hiccup must fall back to the model-free extractor, never kill the job
                 parsed = None
+            return response, parsed
+
+        # One request per answer, all at once: they are independent, and doing them one after another made a round with
+        # three answers wait for three model replies in a row (the biggest single block of a question's wall-clock time).
+        for response, parsed in await asyncio.gather(*(one(r) for r in askable)):
             if parsed and isinstance(parsed.get("claims"), list):
                 model_claims[response.id] = [
                     {

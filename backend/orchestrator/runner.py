@@ -910,7 +910,7 @@ class ResearchRunner:
         dead: set[str] = set()
         for provider, items in by_provider.items():
             if all(
-                r.status in dead_status or (r.status == ProviderStatus.FAILED and (r.error or "").startswith(("readiness=blocked", "off_topic", "answer captured but empty")))
+                r.status in dead_status or (r.status == ProviderStatus.FAILED and (r.error or "").startswith(("readiness=blocked", "off_topic", "answer captured but empty", "submit_failed", "needs_focus", "only the pre-existing message")))
                 for r in items
             ):
                 dead.add(provider)
@@ -919,6 +919,9 @@ class ResearchRunner:
     async def _targeted_round(self, job: Job, follow_ups: list[FollowUp], targets: list[str], *, round_no: int) -> list[ProviderResponse]:
         """Give each unresolved point to a specific agent. One agent, one point."""
         tasks = []
+        # One ask per researcher per round. Five open points over three researchers used to queue a SECOND turn behind
+        # the first on two of them (one conversation per site), doubling the round for points the first answers cover.
+        follow_ups = follow_ups[: max(1, len(targets))] if targets else follow_ups
         for index, follow_up in enumerate(follow_ups):
             # the curator's preferred researcher, if it is one we can actually reach; otherwise whoever is available
             wanted = [p for p in follow_up.target_providers if p in self.adapters and p != "search" and self.health.get(p) not in {"logged_out", "broken", "rate_limited", "failed"}]
