@@ -207,13 +207,34 @@ async def test_a_rate_limited_model_is_skipped_at_once_and_remembered(fake_opena
     assert again.ok and [r["model"] for r in fake_openai.requests] == ["vendor/second:free"], "the cooling model is not asked again"
 
 
-async def test_an_empty_completion_cools_the_model_but_every_cooling_model_is_still_tried_last(fake_openai):
+async def test_an_empty_completion_does_not_cool_a_model_because_it_depends_on_the_token_budget(fake_openai):
     from backend.verification.llm import model_cooling
 
     fake_openai.script({"status": 200, "body": {"choices": [{"finish_reason": "length", "message": {"content": ""}}]}})
     ep = endpoint(fake_openai, fallback_models=("vendor/second:free",))
     reply = await LLMClient(ep).complete(MSG, retries=0)
-    assert not reply.ok and model_cooling(ep.base_url, "vendor/primary:free") and model_cooling(ep.base_url, "vendor/second:free")
+    assert not reply.ok and reply.error == "empty completion"
+    assert not model_cooling(ep.base_url, "vendor/primary:free"), "empty at 2048 tokens says nothing about the 4096-token curator call"
+
+
+# ---- reasoning off: a free reasoning model that thinks through the whole budget returns nothing (live: extraction empty on every model)
+async def test_reasoning_off_is_sent_to_openrouter_and_dropped_when_a_model_rejects_it(fake_openai):
+    fake_openai.script(
+        lambda body: {"status": 400, "body": {"error": {"message": "reasoning is not supported by this model"}}} if "reasoning" in body else "fine"
+    )
+    ep = endpoint(fake_openai, reasoning="off")
+    reply = await LLMClient(ep).complete(MSG, retries=0)
+    assert reply.ok and reply.text == "fine"
+    assert fake_openai.requests[0]["reasoning"] == {"enabled": False}
+    assert "reasoning" not in fake_openai.requests[1], "the retry for a model that rejects the switch carries no reasoning field"
     fake_openai.requests.clear()
-    await LLMClient(ep).complete(MSG, retries=0)
-    assert len(fake_openai.requests) == 2, "when every model is cooling they are all still tried, in order"
+    await LLMClient(endpoint(fake_openai)).complete(MSG, retries=0)
+    assert "reasoning" not in fake_openai.requests[0], "'auto' sends nothing"
+
+
+def test_extraction_and_the_curator_default_to_no_thinking():
+    from backend.settings import AnalysisConfig, VerifierConfig
+    from backend.verification.llm import Endpoint
+
+    assert Endpoint.from_config(AnalysisConfig(provider="openrouter", model="m", base_url="http://x")).reasoning == "off"
+    assert Endpoint.from_config(VerifierConfig(provider="openrouter", model="m", base_url="http://x")).reasoning == "off"

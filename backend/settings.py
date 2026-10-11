@@ -132,6 +132,8 @@ class VerifierConfig(BaseModel):
     temperature: float = 0.1
     max_tokens: int = 4096
     timeout_s: int = 240
+    reasoning: Literal["auto", "off"] = "off"
+    """'auto' lets a reasoning curator think (about 90 s per review on the free tier); 'off' answers the verdicts directly."""
     time_cap_s: int = 75
     """Wall-clock ceiling for ONE curator review across the model and its fallbacks (0 = no ceiling). A model that has not
     answered in its share of this is abandoned for the next one; with none left the evidence ledger judges, and says so."""
@@ -153,6 +155,8 @@ class AnalysisConfig(BaseModel):
     temperature: float = 0.3
     max_tokens: int = 2048
     timeout_s: int = 120
+    reasoning: Literal["auto", "off"] = "off"
+    """Claim extraction and question analysis need no thinking; 'off' stops free reasoning models from burning the token budget."""
 
 
 class VisionConfig(BaseModel):

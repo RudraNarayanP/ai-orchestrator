@@ -60,6 +60,10 @@ class Endpoint:
     fallback_models: tuple[str, ...] = ()
     headers: dict[str, str] | None = None
     """Extra request headers, e.g. OpenRouter's HTTP-Referer / X-Title."""
+    reasoning: str = "auto"
+    """'off' asks OpenRouter models not to think before answering (reasoning: {enabled: false}). Free reasoning models spent the whole
+    2048-token budget thinking and returned nothing (live: claim extraction empty on every fallback, 44-86 s per round); with it
+    off the same call answers in about 5 s."""
 
     @classmethod
     def from_config(cls, cfg: Any) -> "Endpoint":
@@ -77,6 +81,7 @@ class Endpoint:
             temperature=float(cfg.temperature),
             max_tokens=int(cfg.max_tokens),
             timeout_s=int(getattr(cfg, "timeout_s", 180) or 180),
+            reasoning=str(getattr(cfg, "reasoning", "auto") or "auto"),
         )
 
     @property
@@ -145,8 +150,6 @@ class LLMClient:
                 return reply
             if reply.status == 429:
                 cool_model(base, model, COOLDOWN_429_S)
-            elif reply.error == "empty completion":
-                cool_model(base, model, COOLDOWN_EMPTY_S)
             elif (reply.error or "").startswith("timeout"):
                 cool_model(base, model, COOLDOWN_TIMEOUT_S)
         return reply
@@ -165,6 +168,8 @@ class LLMClient:
         if self.endpoint.provider in {"ollama", "lm_studio"}:
             payload["think"] = False
             payload["chat_template_kwargs"] = {"enable_thinking": False}
+        if self.endpoint.provider == "openrouter" and self.endpoint.reasoning == "off":
+            payload["reasoning"] = {"enabled": False}
         last_error = ""
         status = 0
         started = time.time()
@@ -181,6 +186,10 @@ class LLMClient:
                     status = response.status_code
                     if status >= 400:
                         last_error = f"HTTP {status}: {_scrub(response.text)[:300]}"
+                        if status == 400 and "reasoning" in payload and "reasoning" in response.text.lower():
+                            payload.pop("reasoning", None)  # this model does not take the switch: ask again without it
+                            attempts = max(attempts, attempt + 1)
+                            continue
                         if status in {401, 403}:
                             return LLMReply(text="", ok=False, error=last_error, latency_s=round(time.time() - started, 2), model=model, status=status, fatal=True)
                         if status == 404:
