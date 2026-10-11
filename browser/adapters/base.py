@@ -526,6 +526,11 @@ class ChatAdapter:
             started_at=_now(),
             status=ProviderStatus.LAUNCHING,
         )
+        blocked = getattr(self.engine, "send_blocked", None)
+        if blocked is not None and self._focus_withheld() and blocked(self.provider):
+            # The last send here did not go through in the background a moment ago; trying again costs ~30 s for the same result.
+            response.note(ProviderStatus.FAILED, error=f"needs_focus: skipped in silent mode - the last send here did not go through in a background tab ({self._focus_hint()})")
+            return self._finish(response)
         attempts = max(1, (self.cfg.max_retries or 0) + 1)
         for attempt in range(attempts):
             if attempt and getattr(self.engine, "live", False):
@@ -656,11 +661,23 @@ class ChatAdapter:
 
             await emit("provider", f"{self.provider}: prompt sent — waiting for answer", self.provider, round_no)
             if not await self._submit(page, prompt):
-                response.note(
-                    ProviderStatus.FAILED,
-                    error="submit_failed: the prompt stayed in the composer after the send button and Enter",
-                    detail=" ".join(getattr(self, "submit_log", []))[:300],
-                )
+                if self._focus_withheld():
+                    # Seen live (Gemini, 13 of 17 sends): in a background tab the typed text sits in the composer and the
+                    # send button does nothing. Without focus that is not something to retry; say so and remember it.
+                    noter = getattr(self.engine, "note_send_failed", None)
+                    if noter is not None:
+                        noter(self.provider)
+                    response.note(
+                        ProviderStatus.FAILED,
+                        error=f"needs_focus: skipped in silent mode - the send did not go through in a background tab ({self._focus_hint()})",
+                        detail=" ".join(getattr(self, "submit_log", []))[:300],
+                    )
+                else:
+                    response.note(
+                        ProviderStatus.FAILED,
+                        error="submit_failed: the prompt stayed in the composer after the send button and Enter",
+                        detail=" ".join(getattr(self, "submit_log", []))[:300],
+                    )
                 await emit("provider", f"{self.provider}: submit_failed", self.provider, round_no)
                 return False
             if lock is not None:
@@ -740,6 +757,9 @@ class ChatAdapter:
             response.note(ProviderStatus.TIMEOUT, error="timed out with only a fragment")
             return False
         response.status = status if status.terminal else ProviderStatus.COMPLETED
+        sent_ok = getattr(self.engine, "note_send_ok", None)
+        if sent_ok is not None:
+            sent_ok(self.provider)
         await self._remember_thread_when_known(page, response)
         if status == ProviderStatus.TIMEOUT and len(response.answer_text) >= 200:
             response.detail = "answer truncated by timeout but usable"

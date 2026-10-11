@@ -932,6 +932,7 @@ class LiveChromeEngine:
         self._verify_lock = asyncio.Lock()
         self._verified = False
         self._escalated: set[str] = set()
+        self._send_failed: dict[str, float] = {}
         self.keeper = ForegroundKeeper()  # injectable for tests
         self._instants = 0
         self._person_window = 0
@@ -1103,6 +1104,20 @@ class LiveChromeEngine:
             await close_created_tab(page.runner, page.tab_id)
         except LiveChromeError as exc:
             self._note(f"could not close our new tab {page.tab_id}: {exc}")
+
+    SEND_FAIL_TTL_S = 20 * 60
+
+    def note_send_failed(self, provider: str) -> None:
+        """A send that did not go through in a background tab. Remembered for a while so the next question does not spend
+        ~30 s typing into the same tab to find that out again."""
+        self._send_failed[provider] = time.monotonic()
+
+    def note_send_ok(self, provider: str) -> None:
+        self._send_failed.pop(provider, None)
+
+    def send_blocked(self, provider: str) -> bool:
+        at = self._send_failed.get(provider)
+        return at is not None and (time.monotonic() - at) < self.SEND_FAIL_TTL_S
 
     def front_allowed(self, provider: str) -> bool:
         cfg = self.settings.browser

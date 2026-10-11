@@ -213,3 +213,39 @@ def test_a_limit_notice_in_the_chat_is_recognised():
     assert "reset in 6 minutes" in limit_notice(lechat)
     assert limit_notice("The Court reached its decision on the daily rate of interest.") is None
     assert limit_notice("") is None
+
+
+def test_a_send_that_failed_in_the_background_is_not_retried_for_a_while(monkeypatch):
+    from backend.browser import live_chrome
+    from backend.models import ProviderStatus
+    from browser.adapters.base import ChatAdapter
+
+    engine = object.__new__(live_chrome.LiveChromeEngine)
+    engine._send_failed = {}
+    assert not engine.send_blocked("gemini")
+    engine.note_send_failed("gemini")
+    assert engine.send_blocked("gemini") and not engine.send_blocked("qwen")
+    engine.note_send_ok("gemini")
+    assert not engine.send_blocked("gemini")
+    engine.note_send_failed("gemini")
+    clock = {"t": live_chrome.time.monotonic() + engine.SEND_FAIL_TTL_S + 1}
+    monkeypatch.setattr(live_chrome.time, "monotonic", lambda: clock["t"])
+    assert not engine.send_blocked("gemini")  # forgotten after the TTL: access can change
+
+    engine.note_send_failed("gemini")
+    clock["t"] += 5
+    adapter = object.__new__(ChatAdapter)
+    adapter.provider = "gemini"
+    adapter.cfg = SimpleNamespace(max_retries=1)
+    adapter.engine = SimpleNamespace(
+        live=True, send_blocked=engine.send_blocked, front_allowed=lambda p: False,
+        settings=SimpleNamespace(browser=SimpleNamespace(chrome_use_background=True, chrome_use_front_providers=[])),
+    )
+
+    async def emit(*a, **k):
+        return None
+
+    response = asyncio.run(adapter._ask_dom("j", "prompt", 1, emit))
+    assert response.status == ProviderStatus.FAILED
+    assert response.error.startswith("needs_focus: skipped in silent mode")
+    assert response.duration_s is not None and response.duration_s < 1
