@@ -84,7 +84,7 @@ def test_ci_workflow_runs_the_offline_gate_on_push():
     assert "push" in triggers
     offline = wf["jobs"]["offline"]
     runs = [s["run"] for s in offline["steps"] if "run" in s]
-    assert 'python -m pytest -q -m "not browser"' in runs
+    assert any(r.startswith('python -m pytest -q -m "not browser"') for r in runs), runs
     assert any("requirements.txt" in r for r in runs)
     assert not offline.get("continue-on-error"), "the offline gate must be able to fail the build"
     assert wf["jobs"]["browser"].get("continue-on-error") is True, "the browser job is advisory until it has run on a runner"

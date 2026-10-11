@@ -19,7 +19,12 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
       - run: python -m pip install -r requirements.txt
-      - run: python -m pytest -q -m "not browser"
+      - run: python -m pytest -q -m "not browser" --junitxml=pytest-offline.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pytest-offline
+          path: pytest-offline.xml
 
   # Real headless Chromium against local fixtures only (no chat site is contacted).
   # Allowed to fail until it has been seen green on a runner; it never blocks the offline gate.
@@ -36,4 +41,9 @@ jobs:
           cache-dependency-path: requirements.txt
       - run: python -m pip install -r requirements.txt
       - run: python -m playwright install chromium
-      - run: python -m pytest -q -m browser
+      - run: python -m pytest -q -m browser --junitxml=pytest-browser.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pytest-browser
+          path: pytest-browser.xml
