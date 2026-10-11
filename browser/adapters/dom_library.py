@@ -656,7 +656,7 @@ DOM_LIBRARY_JS = r"""
       const cfgd = cfg.dismiss || {};
       // safe_dismiss (the live-Chrome driver, the person's own browser): never click anything that accepts / agrees / allows
       const unsafe = /(accept|agree|allow|consent|\byes\b)/i;
-      const want = /(accept all|accept all cookies|i agree|got it|no thanks|not now|maybe later|close|dismiss|allow all|decline all|reject all|continue without|one ?time|later today|use week)/i;
+      const want = /(accept all|accept all cookies|i agree|got it|no thanks|not now|maybe later|close|dismiss|allow all|decline all|reject all|continue without|one ?time|later today|use week|^\s*later\s*$)/i;
       for (const c of candidates(cfgd, {css: cfgd.css || [], text_regex: cfgd.text_regex, aria: cfgd.aria || [], testids: cfgd.testids}, {kind: 'button'})) {
         const t = c.desc.text + ' ' + (c.desc.aria || '');
         if (!want.test(t)) continue;
