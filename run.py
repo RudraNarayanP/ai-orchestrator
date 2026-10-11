@@ -155,8 +155,8 @@ def provider_login_note(cfg, live_browser: str | None = None) -> str:
     if not cfg.requires_login:
         return ""
     if live_browser:
-        return f"   (answers only after you sign in to it once in {live_browser}; reported as logged out until then)"
-    return "   (answers only after you sign in: run.py login <provider>; skipped as blocked until then)"
+        return f"   (tries as a guest first; if the site insists on a sign-in, sign in once in {live_browser} yourself, otherwise it is reported as logged out and skipped)"
+    return "   (tries as a guest first; if the site insists on a sign-in: run.py login <provider>, otherwise it is reported as blocked and skipped)"
 
 
 def _live_label(settings) -> str:

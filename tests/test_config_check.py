@@ -190,3 +190,8 @@ def test_gitignore_keeps_the_real_settings_file_out_of_git():
 def test_read_raw_settings_is_the_file_as_written(tmp_path, monkeypatch):
     monkeypatch.setenv("OMNIBRAIN_CONFIG", str(write(tmp_path, "research:\n  max_rounds: 2\n")))
     assert read_raw_settings() == {"research": {"max_rounds": 2}}
+
+def test_doctor_does_not_tell_people_they_must_sign_up():
+    cfg = Settings.model_validate({"providers": {"pi": {"url": "https://pi.ai/", "label": "Pi", "requires_login": True}}}).providers["pi"]
+    for note in (run_module.provider_login_note(cfg), run_module.provider_login_note(cfg, live_browser="Google Chrome")):
+        assert "guest" in note and "only after you sign in" not in note
