@@ -84,6 +84,33 @@ class Endpoint:
         return self.provider != "disabled" and bool(self.base_url and self.model)
 
 
+# A hosted free model that just said "rate limited", came back empty or timed out is not asked again for a while: the next call in the
+# same question (claim extraction in round 2, the curator) used to find that out again at 8-20 s a time (live: three fallbacks
+# tried in a row, 44 s, for an extraction that was then done without a model anyway).
+COOLDOWN_429_S = 120.0
+COOLDOWN_EMPTY_S = 300.0
+COOLDOWN_TIMEOUT_S = 120.0
+_COOLING: dict[tuple[str, str], float] = {}
+
+
+def model_cooling(base_url: str, model: str) -> bool:
+    until = _COOLING.get((base_url, model))
+    if until is None:
+        return False
+    if time.monotonic() >= until:
+        _COOLING.pop((base_url, model), None)
+        return False
+    return True
+
+
+def cool_model(base_url: str, model: str, seconds: float) -> None:
+    _COOLING[(base_url, model)] = time.monotonic() + seconds
+
+
+def reset_cooldowns() -> None:
+    _COOLING.clear()
+
+
 class LLMClient:
     def __init__(self, endpoint: Endpoint) -> None:
         self.endpoint = endpoint
@@ -107,13 +134,24 @@ class LLMClient:
         # for failures a different model can fix (limits, upstream errors, unknown model, empty output).
         models = [self.endpoint.model] + [m for m in self.endpoint.fallback_models if m and m != self.endpoint.model]
         reply = LLMReply(text="", ok=False, error="no model tried", model=self.endpoint.model)
-        for model in models:
-            reply = await self._complete_with(model, messages, temperature, max_tokens, retries)
+        base = self.endpoint.base_url
+        # Models that are cooling go last: still tried (a cooled model may have recovered) but only when nothing else answers.
+        order = [m for m in models if not model_cooling(base, m)] + [m for m in models if model_cooling(base, m)]
+        for index, model in enumerate(order):
+            # With another model to turn to, a rate limit is not waited out: the next model is asked at once.
+            reply = await self._complete_with(model, messages, temperature, max_tokens, retries, fail_fast=index < len(order) - 1)
             if reply.ok or reply.fatal:
+                _COOLING.pop((base, model), None)
                 return reply
+            if reply.status == 429:
+                cool_model(base, model, COOLDOWN_429_S)
+            elif reply.error == "empty completion":
+                cool_model(base, model, COOLDOWN_EMPTY_S)
+            elif (reply.error or "").startswith("timeout"):
+                cool_model(base, model, COOLDOWN_TIMEOUT_S)
         return reply
 
-    async def _complete_with(self, model: str, messages: list[dict[str, str]], temperature: float | None, max_tokens: int | None, retries: int) -> LLMReply:
+    async def _complete_with(self, model: str, messages: list[dict[str, str]], temperature: float | None, max_tokens: int | None, retries: int, fail_fast: bool = False) -> LLMReply:
         url = f"{self.endpoint.base_url}/chat/completions"
         payload = {
             "model": model,
@@ -147,6 +185,8 @@ class LLMClient:
                             return LLMReply(text="", ok=False, error=last_error, latency_s=round(time.time() - started, 2), model=model, status=status, fatal=True)
                         if status == 404:
                             break
+                        if status == 429 and fail_fast:
+                            break
                         if status == 429:
                             # A rate limit is not a failed attempt: wait as told (bounded) and ask again.
                             retry_after = _retry_after(response.headers.get("retry-after"))
@@ -166,6 +206,8 @@ class LLMClient:
                         if status in {401, 403}:
                             return LLMReply(text="", ok=False, error=last_error, latency_s=round(time.time() - started, 2), model=model, status=status, fatal=True)
                         if status == 404:
+                            break
+                        if status == 429 and fail_fast:
                             break
                         await _sleep(2.0 if status == 429 else 1.5)
                         continue

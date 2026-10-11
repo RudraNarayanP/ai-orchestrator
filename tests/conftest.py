@@ -223,3 +223,13 @@ def world(monkeypatch):
 
 def adapters_from(world_scripts: dict[str, dict[str, Any]], settings: Settings) -> dict[str, FakeAdapter]:
     return {name: FakeAdapter(name, script, settings) for name, script in world_scripts.items()}
+
+
+@pytest.fixture(autouse=True)
+def _no_model_cooldown_leaks():
+    """A model cooled by one test must not be skipped by the next."""
+    from backend.verification.llm import reset_cooldowns
+
+    reset_cooldowns()
+    yield
+    reset_cooldowns()

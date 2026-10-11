@@ -190,3 +190,30 @@ async def test_complete_json_does_not_retry_when_the_reply_was_not_truncated(fak
     fake_openai.script("not json at all")
     parsed, _reply = await LLMClient(endpoint(fake_openai)).complete_json(MSG)
     assert parsed is None and len(fake_openai.requests) == 1
+
+# ---- a free model that just failed is not asked again straight away (live: extraction spent 44 s walking three dead fallbacks)
+async def test_a_rate_limited_model_is_skipped_at_once_and_remembered(fake_openai, no_sleep):
+    from backend.verification.llm import model_cooling
+
+    fake_openai.script(lambda body: {"status": 429, "body": "limited"} if body["model"] == "vendor/primary:free" else "from the fallback")
+    ep = endpoint(fake_openai, fallback_models=("vendor/second:free",))
+    reply = await LLMClient(ep).complete(MSG, retries=1)
+    assert reply.ok and reply.model == "vendor/second:free"
+    assert [r["model"] for r in fake_openai.requests] == ["vendor/primary:free", "vendor/second:free"], "no wait, no retry on the limited model"
+    assert no_sleep == [], "a rate limit with a fallback available is not waited out"
+    assert model_cooling(ep.base_url, "vendor/primary:free")
+    fake_openai.requests.clear()
+    again = await LLMClient(ep).complete(MSG, retries=1)
+    assert again.ok and [r["model"] for r in fake_openai.requests] == ["vendor/second:free"], "the cooling model is not asked again"
+
+
+async def test_an_empty_completion_cools_the_model_but_every_cooling_model_is_still_tried_last(fake_openai):
+    from backend.verification.llm import model_cooling
+
+    fake_openai.script({"status": 200, "body": {"choices": [{"finish_reason": "length", "message": {"content": ""}}]}})
+    ep = endpoint(fake_openai, fallback_models=("vendor/second:free",))
+    reply = await LLMClient(ep).complete(MSG, retries=0)
+    assert not reply.ok and model_cooling(ep.base_url, "vendor/primary:free") and model_cooling(ep.base_url, "vendor/second:free")
+    fake_openai.requests.clear()
+    await LLMClient(ep).complete(MSG, retries=0)
+    assert len(fake_openai.requests) == 2, "when every model is cooling they are all still tried, in order"

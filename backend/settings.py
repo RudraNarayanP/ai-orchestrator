@@ -202,7 +202,7 @@ class ResearchConfig(BaseModel):
     follow_up_providers: int = 3
     min_independent_sources: int = 2
     claim_batch_size: int = 12
-    time_budget_s: int = 120
+    time_budget_s: int = 180
     """A question that has used this much wall-clock time starts no further research round: it goes to verification with what
     it has, and the answer says it stopped early (0 = no budget)."""
     response_stability_poll_ms: int = 700
