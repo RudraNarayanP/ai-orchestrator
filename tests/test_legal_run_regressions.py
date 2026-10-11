@@ -249,3 +249,33 @@ def test_a_send_that_failed_in_the_background_is_not_retried_for_a_while(monkeyp
     assert response.status == ProviderStatus.FAILED
     assert response.error.startswith("needs_focus: skipped in silent mode")
     assert response.duration_s is not None and response.duration_s < 1
+
+
+# ---- 7. a question about NOW needs a settled claim about now (general rule, live: s9 "still in force" answered "the idea is right")
+NOW_Q = "Is section 9 of the Data Protection Act 2018 still in force as the provision that sets the UK's age of consent for online services?"
+
+
+def test_an_unreviewed_current_status_claim_is_never_the_idea_is_right():
+    verdicts = [
+        v(S.NOT_REVIEWED, "Section 9 of the Data Protection Act 2018 remains in force as of 11 October 2026.", 0),
+        v(S.PARTIALLY_SUPPORTED, "Section 9 of the Data Protection Act 2018 modifies Article 8(1) of the GDPR by substituting 13 for 16.", 1),
+        v(S.PARTIALLY_SUPPORTED, "Section 9 sets the age threshold for children's consent at 13.", 2),
+    ]
+    report = rep("Section 9 of the Data Protection Act 2018 modifies Article 8(1) of the GDPR by substituting 13 for 16.", *verdicts)
+    assert truth_state(report, NOW_Q) == "UNVERIFIED"
+    final = build_final_answer(report, [], 1, NOW_Q)
+    assert final.answer == "Couldn't verify that one."
+    assert "idea is right" not in final.answer
+
+
+def test_a_settled_current_status_claim_keeps_the_answer_and_other_questions_are_untouched():
+    settled = [v(S.SUPPORTED, "Section 9 of the Data Protection Act 2018 remains in force as of 11 October 2026.", 2)]
+    assert truth_state(rep("It is.", *settled), NOW_Q) == "TRUE"
+    # outdated evidence does not settle a present-tense claim
+    old = ClaimVerdict(claim_id="o", claim="Section 9 remains in force today.", verdict=S.PARTIALLY_SUPPORTED, confidence=Confidence.MODERATE, reasoning="r", problems=["outdated"])
+    assert truth_state(rep("It is.", old), NOW_Q) == "UNVERIFIED"
+    # a question that does not ask about the present is judged exactly as before
+    past = [v(S.NOT_REVIEWED, "Section 9 remains in force as of today.", 0), v(S.SUPPORTED, "Section 9 lowered the age to 13.", 2)]
+    assert truth_state(rep("Yes.", *past), "Did section 9 of the Data Protection Act 2018 lower the age of consent to 13?") == "TRUE"
+    # no present-tense claim at all: nothing to be unreviewed, the ledger state stands
+    assert truth_state(rep("Yes.", v(S.SUPPORTED, "Section 9 lowered the age to 13.", 2)), NOW_Q) == "TRUE"

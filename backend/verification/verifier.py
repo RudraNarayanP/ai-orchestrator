@@ -1217,7 +1217,46 @@ def _is_page_claim(claim: str) -> bool:
     return bool(_PAGE_CLAIM_RE.search(claim or ""))
 
 
+_CURRENT_Q_RE = re.compile(r"\b(?:still|currently|now|today|at present|at the moment|as of|in force|remains?|nowadays)\b", re.I)
+_PRESENT_CLAIM_RE = re.compile(
+    r"\b(?:currently|remains?|remained|still|as of|at present|today|is in force|in force|not in force|no longer|now)\b", re.I
+)
+
+
+def current_status_unconfirmed(report: VerifierReport, question: str) -> bool:
+    """A question about how things stand NOW needs a settled claim about how things stand now.
+
+    "Is section 9 still in force?" cannot be answered "yeah, the idea is right" from claims about what section 9 originally did
+    while the claim "section 9 remains in force as of today" was never reviewed (legislation.gov.uk, the only place that says,
+    blocks automated readers). General rule, no question named: when the question asks about the present and the report holds
+    present-tense claims, at least one of them must be settled (supported / refuted / contested, or partly supported on
+    evidence that is not outdated). Otherwise the key claim is unconfirmed and the answer says so.
+    """
+    from backend.research.style import is_claim_check  # noqa: PLC0415
+
+    if not question or not _CURRENT_Q_RE.search(question) or not is_claim_check(question):
+        return False
+    S = ClaimStatus
+    present = [v for v in report.verdicts if not _is_page_claim(v.claim) and _PRESENT_CLAIM_RE.search(v.claim)]
+    if not present:
+        return False
+
+    def settled(v: ClaimVerdict) -> bool:
+        if v.verdict in {S.SUPPORTED, S.REFUTED, S.CONTESTED}:
+            return True
+        return v.verdict == S.PARTIALLY_SUPPORTED and "outdated" not in " ".join(v.problems).lower()
+
+    return not any(settled(v) for v in present)
+
+
 def truth_state(report: VerifierReport, question: str = "") -> str:
+    state = _ledger_state(report, question)
+    if state in {"TRUE", "PARTLY"} and current_status_unconfirmed(report, question):
+        return "UNVERIFIED"
+    return state
+
+
+def _ledger_state(report: VerifierReport, question: str = "") -> str:
     """TRUE / PARTLY / FALSE / CONFLICT / UNVERIFIED, read off the evidence ledger's verdicts -- never off tone.
 
     Anything short of settled evidence is UNVERIFIED or CONFLICT; this never rounds uncertainty up.
