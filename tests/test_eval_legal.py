@@ -101,3 +101,14 @@ def test_a_pending_case_is_a_reasoned_answer_when_pages_back_it_and_a_warning_wh
 def test_the_runner_can_load_the_legal_file_through_questions_flag():
     src = (ROOT / "scripts" / "eval_hard.py").read_text(encoding="utf-8")
     assert '"--questions"' in src
+
+def test_the_house_yes_no_voice_is_read_as_a_direction():
+    q = q_of("lg-lugano-uk")
+    assert judge(q, "Nah, that doesn't work like that.")["verdict"] == "PASS"
+    assert judge(q, "Yeah, you're right.")["verdict"] == "FAIL"
+    yes_q = q_of("lg-rome1-free-choice")
+    assert judge(yes_q, "Yeah, you're right.")["verdict"] == "PASS"
+    assert judge(yes_q, "Nah, that doesn't work like that.")["verdict"] == "FAIL"
+    contested = q_of("lg-ai-training-fair-use")
+    assert judge(contested, "Yeah, you're right.")["verdict"] == "FAIL"
+    assert judge(contested, "Nah, that doesn't work like that.")["verdict"] == "FAIL"

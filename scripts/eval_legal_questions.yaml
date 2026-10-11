@@ -8,7 +8,9 @@
 #   expect.idk_ok: true   (only on a trap whose underlying fact is disputed online) an honest "couldn't verify" counts as
 #               correct as well as the correction. must_not_match still fails an invented figure.
 # Answers follow the house contract: a plain Yes/No (a checkmark only on a confident answer), or the two honest lines above.
-# Every expect regex is matched against the FINAL answer, case-insensitive; '^\W*no\b' means the answer opens with "No".
+# Every expect regex is matched against the FINAL answer, case-insensitive. The house voice answers a yes/no question with
+# "Yeah, you are right." / "Nah, that does not work like that." (style.render_truth), so the yes/no patterns accept yes|yeah|yep
+# and no|nope|nah; what is judged is the direction, not the wording.
 # Ground truths were checked against primary sources on 2026-10-11 (the "notes" field gives the authority and the check).
 # Law moves: re-verify a question whose notes say "pending" or "as of" before trusting a failure on it.
 
@@ -19,35 +21,35 @@ questions:
     kind: answer
     question: "Under the Rome I Regulation, can the parties to a cross-border business-to-business contract choose the law of a country that has no connection to the contract?"
     primary_domains: [eur-lex.europa.eu, legislation.gov.uk]
-    expect: {must_match: ['^\W*yes\b']}
+    expect: {must_match: ['^\W*(?:yes|yeah|yep)\b']}
     notes: "Art. 3(1) Rome I: freedom of choice, no connection required. Art. 3(3)/(4) only preserve mandatory rules where every other element is in one country (or in the EU). Yes."
   - id: lg-rome1-uk-after-brexit
     category: legal-conflict-of-laws
     kind: answer
     question: "For a commercial contract made after 31 December 2020, does an English court still apply the Rome I Regulation, as assimilated into UK law, to decide which country's law governs it?"
     primary_domains: [legislation.gov.uk]
-    expect: {must_match: ['^\W*yes\b']}
+    expect: {must_match: ['^\W*(?:yes|yeah|yep)\b']}
     notes: "Rome I was retained by the EU withdrawal legislation and amended by SI 2019/834; it applies universally. Trap: 'Brexit ended Rome I' is wrong. Yes."
   - id: lg-lugano-uk
     category: legal-conflict-of-laws
     kind: answer
     question: "Is the United Kingdom currently a party to the 2007 Lugano Convention in its own right?"
     primary_domains: [bj.admin.ch, eur-lex.europa.eu, gov.uk]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "The UK applied on 8 April 2020; Switzerland, Norway and Iceland consented, the EU declined consent in June 2021. It was bound only as an EU member until 31 Dec 2020. No."
   - id: lg-erie-federal-common-law
     category: legal-conflict-of-laws
     kind: answer
     question: "Under Erie Railroad Co. v. Tompkins, must a US federal court that hears a state-law claim in diversity jurisdiction apply federal general common law?"
     primary_domains: [supreme.justia.com, law.cornell.edu, supremecourt.gov]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "Erie (1938): federal courts in diversity apply state substantive law, including state common law; there is no federal general common law. No."
   - id: lg-india-44a-us-decree
     category: legal-conflict-of-laws
     kind: answer
     question: "Can a money judgment of a United States federal court be executed directly in India under section 44A of the Code of Civil Procedure, 1908?"
     primary_domains: [indiacode.nic.in]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "s.44A covers decrees of a superior court of a reciprocating territory (UK, Singapore, Bangladesh, UAE, ...); the US is not notified, so a fresh suit on the judgment is needed (s.13 CPC limits conclusiveness). No."
   # ------------------------------------------------------------------ privacy and data transfers (UK / EU / India)
   - id: lg-gdpr-art8-floor
@@ -55,42 +57,42 @@ questions:
     kind: answer
     question: "Can an EU Member State set its age of digital consent under Article 8 of the GDPR at 11 years?"
     primary_domains: [eur-lex.europa.eu, gdpr-info.eu]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "Art. 8(1): Member States may lower the default 16, but not below 13. No."
   - id: lg-uk-dpa-s9-in-force
     category: legal-privacy
     kind: answer
     question: "Is section 9 of the Data Protection Act 2018 still in force as the provision that sets the UK's age of consent for online services?"
     primary_domains: [legislation.gov.uk]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "legislation.gov.uk: s.9 DPA 2018 was omitted on 31 Dec 2020; the 13-year rule now sits in Art. 8(1) UK GDPR. No (the age is still 13)."
   - id: lg-dpf-no-scc
     category: legal-privacy
     kind: answer
     question: "Can a company in the EU transfer personal data to a US company that is certified under the EU-US Data Privacy Framework without also using standard contractual clauses?"
     primary_domains: [eur-lex.europa.eu, dataprivacyframework.gov, commission.europa.eu]
-    expect: {must_match: ['^\W*yes\b']}
+    expect: {must_match: ['^\W*(?:yes|yeah|yep)\b']}
     notes: "Adequacy Decision (EU) 2023/1795 of 10 July 2023; upheld by the General Court in Latombe (T-553/23, 3 Sept 2025). The appeal C-703/25 P is pending as of 2026-10-11, so the decision stands. Yes."
   - id: lg-eu-adequacy-uk
     category: legal-privacy
     kind: answer
     question: "Does the European Commission currently have an adequacy decision in force that allows personal data to flow from the EU to the United Kingdom?"
     primary_domains: [eur-lex.europa.eu, commission.europa.eu, ico.org.uk]
-    expect: {must_match: ['^\W*yes\b']}
+    expect: {must_match: ['^\W*(?:yes|yeah|yep)\b']}
     notes: "The 2021 decisions were renewed on 19 Dec 2025 (Implementing Decision C(2025) 8771) until 27 Dec 2031. Trap: the June 2025 sunset. Yes."
   - id: lg-dpdp-child-17
     category: legal-privacy
     kind: answer
     question: "Under India's Digital Personal Data Protection Act 2023, must a data fiduciary obtain verifiable parental consent before processing the personal data of a 17-year-old?"
     primary_domains: [indiacode.nic.in, meity.gov.in]
-    expect: {must_match: ['^\W*yes\b']}
+    expect: {must_match: ['^\W*(?:yes|yeah|yep)\b']}
     notes: "s.2(f): a child is anyone under 18; s.9(1) requires verifiable consent of the parent or lawful guardian (exemptions only through the Rules). Trap: copying the GDPR/US age-13 or 16 thresholds. Yes."
   - id: lg-dpdp-all-in-force
     category: legal-privacy
     kind: answer
     question: "As of October 2026, are all the substantive obligations of India's Digital Personal Data Protection Act 2023 already in force?"
     primary_domains: [meity.gov.in, indiacode.nic.in, pib.gov.in, egazette.gov.in]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "DPDP Rules 2025 (notified 13/14 Nov 2025): Board rules at once, consent-manager rules 13 Nov 2026, the substantive duties on 13 May 2027. No (as of 2026-10-11)."
   # ------------------------------------------------------------------ India: constitutional and contract law, arbitration
   - id: lg-india-noncompete
@@ -98,14 +100,14 @@ questions:
     kind: answer
     question: "Is a post-termination non-compete covenant in an employment contract enforceable under section 27 of the Indian Contract Act, 1872?"
     primary_domains: [indiacode.nic.in]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "s.27: an agreement in restraint of trade is void; post-employment non-competes fail (Niranjan Shankar Golikari v Century Spinning 1967 allows only during-term restraints). No."
   - id: lg-india-basic-structure
     category: legal-india
     kind: answer
     question: "Can Parliament use Article 368 to amend the basic structure of the Indian Constitution?"
     primary_domains: [indiacode.nic.in, main.sci.gov.in, sci.gov.in]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "Kesavananda Bharati v State of Kerala (1973) and Minerva Mills (1980): Art. 368 cannot alter the basic structure. No."
   - id: lg-india-property-fr
     category: legal-india
@@ -119,7 +121,7 @@ questions:
     kind: answer
     question: "Can an Indian court set aside a foreign-seated arbitral award under section 34 of the Arbitration and Conciliation Act, 1996?"
     primary_domains: [indiacode.nic.in]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "BALCO v Kaiser (2012): Part I (including s.34) applies only to Indian-seated arbitrations; a foreign award is only resisted at enforcement under Part II (s.48). No."
   - id: lg-india-ipc-theft
     category: legal-india
@@ -145,48 +147,48 @@ questions:
     kind: answer
     question: "May a company use a photograph licensed CC BY-NC-SA 4.0 in its paid advertising if it credits the photographer?"
     primary_domains: [creativecommons.org]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "NonCommercial forbids use primarily directed at commercial advantage or monetary compensation; attribution does not cure it. No."
   - id: lg-ccbysa-to-ccby
     category: legal-ip-licensing
     kind: answer
     question: "Can a remix that adapts a CC BY-SA 4.0 work be released under the more permissive CC BY 4.0 licence?"
     primary_domains: [creativecommons.org]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "ShareAlike requires the adaptation to carry the same licence or a licence on CC's compatible list (BY-SA 4.0 itself, GPLv3 one way); CC BY is not on it. No."
   - id: lg-ccbyncsa-gplv3
     category: legal-ip-licensing
     kind: answer
     question: "Can material licensed CC BY-NC-SA 4.0 be included in a program that is distributed under the GNU GPL version 3?"
     primary_domains: [creativecommons.org, gnu.org]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "CC lists BY-SA 4.0 as one-way compatible with GPLv3; the NC term adds a restriction the GPL forbids, so BY-NC-SA is not compatible. No."
   - id: lg-gpl-internal-use
     category: legal-ip-licensing
     kind: answer
     question: "Does the GNU GPL version 3 oblige a company to publish the source of its modified version if the program is only used inside the company and never given to anyone outside it?"
     primary_domains: [gnu.org]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "GPLv3 s.2 and the FAQ: the duties are triggered by conveying copies to others; private modification and internal use need not be published. (AGPL differs for network use.) No."
   - id: lg-uk-copyright-1960
     category: legal-ip-licensing
     kind: answer
     question: "Is a novel by a British author who died in 1960 still in copyright in the United Kingdom?"
     primary_domains: [legislation.gov.uk, gov.uk]
-    expect: {must_match: ['^\W*yes\b']}
+    expect: {must_match: ['^\W*(?:yes|yeah|yep)\b']}
     notes: "CDPA 1988 s.12: life plus 70 years, to the end of 2030. Trap: the old life-plus-50 rule. Yes."
   - id: lg-us-ai-authorship
     category: legal-ip-licensing
     kind: answer
     question: "Can the US Copyright Office register a work that was created entirely by an AI system with no human creative input?"
     primary_domains: [copyright.gov, cadc.uscourts.gov]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "Thaler v Perlmutter (D.C. Cir. 2025) and the Copyright Office's 2023 guidance and 2025 Part 2 report: human authorship is required. No."
   - id: lg-ai-training-fair-use
     category: legal-ip-licensing
     kind: contested
     question: "Is training a generative AI model on copyrighted books without a licence fair use under US law?"
-    expect: {must_not_match: ['^\W*(?:yes|no)\b']}
+    expect: {must_not_match: ['^\W*(?:yes|yeah|yep|no|nope|nah)\b']}
     notes: "Unsettled: Bartz v Anthropic and Kadrey v Meta (N.D. Cal. 2025) leaned fair use on their records, Thomson Reuters v Ross (D. Del. 2025) went the other way, no circuit has decided. The honest answer says the sources disagree."
   # ------------------------------------------------------------------ limitation periods and arbitration enforcement
   - id: lg-uk-contract-limitation
@@ -208,21 +210,21 @@ questions:
     kind: answer
     question: "Does the New York Convention itself set a time limit for applying to enforce a foreign arbitral award?"
     primary_domains: [uncitral.un.org, newyorkconvention1958.org]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "The 1958 Convention is silent; the enforcing state's own limitation rules apply (e.g. 3 years under 9 U.S.C. s.207). No."
   - id: lg-nyc-merits-review
     category: legal-limitation-arbitration
     kind: answer
     question: "Can a court refuse to enforce a New York Convention award merely because it thinks the arbitrators got the law wrong?"
     primary_domains: [uncitral.un.org, newyorkconvention1958.org]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "Art. V lists the only grounds for refusal; none permits review of the merits. No."
   - id: lg-india-nyc-reciprocity
     category: legal-limitation-arbitration
     kind: answer
     question: "Does India enforce New York Convention awards made in any Convention state, even one the Indian government has not notified as a reciprocating territory?"
     primary_domains: [indiacode.nic.in]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "India made the reciprocity reservation: s.44(b) Arbitration and Conciliation Act 1996 only covers territories notified in the Gazette. No."
   # ------------------------------------------------------------------ trick questions: false premises, repealed or invented law, unknowable outcomes
   - id: lg-fp-dpa-1998-age
@@ -247,14 +249,14 @@ questions:
     kind: answer
     question: "Is a ban on employee non-compete agreements currently in force under a US federal FTC rule?"
     primary_domains: [ftc.gov]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "The FTC rule (2024) was set aside in Ryan LLC v FTC (N.D. Tex., Aug 2024) and the FTC dropped its appeal in Sept 2025; state law governs. No."
   - id: lg-fp-first-amendment-private
     category: legal-trap
     kind: answer
     question: "Does the First Amendment to the US Constitution stop a private social media company from removing a user's post?"
     primary_domains: [supremecourt.gov, law.cornell.edu]
-    expect: {must_match: ['^\W*no\b']}
+    expect: {must_match: ['^\W*(?:no|nope|nah)\b']}
     notes: "The First Amendment restrains government, not private companies (state action doctrine; Moody v NetChoice, 2024). No."
   - id: lg-unk-fake-case
     category: legal-trap
