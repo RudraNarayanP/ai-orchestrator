@@ -872,6 +872,40 @@ def _unwrap(data: dict[str, Any]) -> Any:
 # ------------------------------------------------------------------ engine
 
 
+class ForegroundKeeper:
+    """Remembers which window the person was using and gives it back (Windows; a no-op elsewhere).
+
+    A provider that is allowed to take the front for an instant (``browser.chrome_use_front_providers``) must hand the
+    foreground back to the window the person was in. ``current()`` is read before the tab is raised, ``restore()`` after.
+    Windows may refuse SetForegroundWindow from a process that is not the foreground one; the result is reported, never assumed.
+    """
+
+    def __init__(self) -> None:
+        self._u = None
+        if os.name == "nt":
+            try:
+                import ctypes  # noqa: PLC0415
+
+                self._u = ctypes.windll.user32
+            except Exception:  # noqa: BLE001
+                self._u = None
+
+    def current(self) -> int:
+        return int(self._u.GetForegroundWindow() or 0) if self._u else 0
+
+    def restore(self, hwnd: int) -> bool:
+        """True when ``hwnd`` is the foreground window afterwards (or there was nothing to restore)."""
+        u = self._u
+        if not u or not hwnd or not u.IsWindow(hwnd):
+            return True
+        if int(u.GetForegroundWindow() or 0) == hwnd:
+            return True
+        if u.IsIconic(hwnd):
+            u.ShowWindow(hwnd, 9)  # SW_RESTORE: it was on screen before, not minimised
+        u.SetForegroundWindow(hwnd)  # no synthetic key taps: they pop Windows' task switcher (seen live)
+        return int(u.GetForegroundWindow() or 0) == hwnd
+
+
 class LiveChromeEngine:
     """Drop-in for ``BrowserEngine``: one new tab per provider in your own Chrome."""
 
@@ -898,6 +932,9 @@ class LiveChromeEngine:
         self._verify_lock = asyncio.Lock()
         self._verified = False
         self._escalated: set[str] = set()
+        self.keeper = ForegroundKeeper()  # injectable for tests
+        self._instants = 0
+        self._person_window = 0
         self.log: list[str] = []
         self._product_of = relay_ancestry  # injectable for tests
         self._browser_lock = asyncio.Lock()
@@ -1079,6 +1116,42 @@ class LiveChromeEngine:
         self._escalated.add(provider)
         self._note(f"{provider} did not work in a background tab; bringing only that tab to the front from now on")
         return True
+
+    def foreground_instant(self, provider: str):
+        """Async context manager around the few seconds a provider may need the front (typing, sending, a repaint nudge).
+
+        Background mode only, and only for a provider that is allowed to the front: the person's foreground window is
+        remembered on the way in and handed back on the way out, however many providers overlap. Everyone else gets a
+        no-op, so nothing changes for a provider that works in the background.
+        """
+        import contextlib  # noqa: PLC0415
+
+        cfg = self.settings.browser
+        if not cfg.chrome_use_background or not self.front_allowed(provider):
+            return contextlib.nullcontext()
+
+        @contextlib.asynccontextmanager
+        async def _instant():
+            if self._instants == 0:
+                self._person_window = self.keeper.current()
+            self._instants += 1
+            try:
+                yield
+            finally:
+                self._instants -= 1
+                if self._instants == 0:
+                    mine, self._person_window = self._person_window, 0
+                    await asyncio.sleep(0.15)  # let Chrome finish taking focus before it is given back
+                    try:
+                        ok = await asyncio.to_thread(self.keeper.restore, mine)
+                    except Exception as exc:  # noqa: BLE001
+                        ok = False
+                        self._note(f"{provider}: could not hand the foreground back ({exc})")
+                    else:
+                        if not ok:
+                            self._note(f"{provider}: the foreground could not be handed back to your window")
+
+        return _instant()
 
     async def focus_tab(self, page: LivePage) -> None:
         if True:  # no engine-wide lock: tabs are independent

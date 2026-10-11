@@ -112,3 +112,31 @@ def test_the_house_yes_no_voice_is_read_as_a_direction():
     contested = q_of("lg-ai-training-fair-use")
     assert judge(contested, "Yeah, you're right.")["verdict"] == "FAIL"
     assert judge(contested, "Nah, that doesn't work like that.")["verdict"] == "FAIL"
+
+
+
+def test_a_live_eval_run_is_gated_on_the_focus_check(monkeypatch):
+    """No live run starts unless scripts/live_focus_check.py shows the foreground window untouched."""
+    import importlib.util
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location("eval_hard_gate", root / "scripts" / "eval_hard.py")
+    mod = importlib.util.module_from_spec(spec)
+    import sys
+    sys.path.insert(0, str(root))
+    spec.loader.exec_module(mod)
+    monkeypatch.setattr(mod.os, "name", "nt")
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen["cmd"], seen["flags"] = cmd, kw.get("creationflags")
+        return subprocess.CompletedProcess(cmd, 1, "foreground_changes", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert mod.focus_gate() is False
+    assert any(str(c).endswith("live_focus_check.py") for c in seen["cmd"])
+    assert seen["flags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0), "the gate itself runs without a console window"
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "{}", ""))
+    assert mod.focus_gate() is True

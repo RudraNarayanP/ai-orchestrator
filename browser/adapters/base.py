@@ -16,6 +16,8 @@ Adapters subclass this and override only what differs.
 
 from __future__ import annotations
 
+import contextlib
+
 import asyncio
 import hashlib
 import json
@@ -581,7 +583,7 @@ class ChatAdapter:
             }
             if state == "unknown" and not (ready.get("bodyHead") or "").strip() and self._focus_withheld():
                 # seen live (meta.ai, 2026-10-08): a hidden tab never renders its UI; we do not raise it unasked
-                response.note(ProviderStatus.FAILED, error=f"needs_focus: the page does not render in a background tab ({self._focus_hint()})")
+                response.note(ProviderStatus.FAILED, error=f"needs_focus: skipped in silent mode - the page does not render in a background tab ({self._focus_hint()})")
                 await emit("provider", f"{self.provider}: needs focus", self.provider, round_no)
                 return False
             response.note(
@@ -599,6 +601,12 @@ class ChatAdapter:
         lock = getattr(self.engine, "_focus_lock", None)
         if lock is not None:
             await lock.acquire()
+        # A provider allowed to the front (Gemini, Meta AI) holds it only until the prompt is sent, then the person's own
+        # window gets the foreground back (live Chrome, background mode; a no-op for every other provider and engine).
+        front_stack = contextlib.AsyncExitStack()
+        instant = getattr(self.engine, "foreground_instant", None)
+        if instant is not None:
+            await front_stack.enter_async_context(instant(self.provider))
         try:
             if lock is not None or getattr(self.engine, "live", False):
                 # live Chrome: no shared lock (tabs are driven in parallel); just show this tab if foreground mode
@@ -616,7 +624,7 @@ class ChatAdapter:
                 typed = await self._type_with_fallback(page, prompt)  # live Chrome: retry once with this tab in front
             if not typed:
                 if self._focus_withheld():
-                    response.note(ProviderStatus.FAILED, error=f"needs_focus: could not place text in the composer of a background tab ({self._focus_hint()})")
+                    response.note(ProviderStatus.FAILED, error=f"needs_focus: skipped in silent mode - could not place text in the composer of a background tab ({self._focus_hint()})")
                     return False
                 response.note(ProviderStatus.BROKEN, error="could not place text in the composer")
                 return False
@@ -640,6 +648,7 @@ class ChatAdapter:
             if lock is not None:
                 await asyncio.sleep(1.5)  # let the site take the message before the next tab comes forward
         finally:
+            await front_stack.aclose()
             if lock is not None and lock.locked():
                 lock.release()
         if getattr(self, "quick_answer_allowed", False):
@@ -1079,13 +1088,15 @@ class ChatAdapter:
             stalled = (now - last_change) > self.settings.browser.focus_nudge_after_s
             if hidden and stalled and now - last_nudge > self.settings.browser.focus_nudge_after_s:
                 last_nudge = now
-                await self.engine.focus_tab(page)
-                await self._sleep(0.25)
-                try:
-                    await page.mouse.wheel(0, 1)
-                    await page.mouse.wheel(0, -1)
-                except Exception:  # noqa: BLE001
-                    pass
+                instant = getattr(self.engine, "foreground_instant", None)
+                async with (instant(self.provider) if instant is not None else contextlib.nullcontext()):
+                    await self.engine.focus_tab(page)
+                    await self._sleep(0.25)
+                    try:
+                        await page.mouse.wheel(0, 1)
+                        await page.mouse.wheel(0, -1)
+                    except Exception:  # noqa: BLE001
+                        pass
 
             await self._sleep(poll_ms / 1000)
 

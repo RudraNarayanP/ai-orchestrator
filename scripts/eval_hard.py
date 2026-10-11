@@ -356,6 +356,22 @@ def trimmed_config(skip: list[str], dest: Path) -> list[str]:
     return [n for n, p in (raw.get("providers") or {}).items() if p.get("enabled")]
 
 
+def focus_gate() -> bool:
+    """Live runs on Windows start only if a short silent run first leaves the foreground window exactly as it was
+    (``scripts/live_focus_check.py``). Hidden: no console window."""
+    import subprocess
+
+    if os.name != "nt":
+        return True
+    proc = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "live_focus_check.py"), "--providers", "chatgpt,deepseek"],
+        capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), timeout=300,
+    )
+    if proc.returncode != 0:
+        print("FOCUS GATE FAILED: OmniBrain changed the foreground window; no live run started.\n" + proc.stdout[-1500:])
+    return proc.returncode == 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", default="", help="comma-separated question ids")
@@ -367,7 +383,10 @@ def main() -> int:
     ap.add_argument("--all-providers", action="store_true", help="also keep the 'search' transport enabled")
     ap.add_argument("--skip", default="", help="comma-separated providers to switch off on purpose")
     ap.add_argument("--questions", default=str(QUESTIONS))
+    ap.add_argument("--skip-focus-gate", action="store_true", help="do not run scripts/live_focus_check.py before the live run")
     args = ap.parse_args()
+    if not args.skip_focus_gate and not focus_gate():
+        return 3
 
     questions = yaml.safe_load(Path(args.questions).read_text(encoding="utf-8"))["questions"]
     if args.only:

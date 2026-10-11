@@ -239,7 +239,7 @@ def test_doctor_does_not_ask_anonymous_providers_to_sign_in():
         assert loaded.providers[name].requires_login is False, name
         assert module.provider_login_note(loaded.providers[name]) == ""
     for name in ("pi", "qwen", "deepseek"):
-        assert "sign in" in module.provider_login_note(loaded.providers[name])
+        assert "sign-in" in module.provider_login_note(loaded.providers[name])
 
 
 def test_run_py_doctor_only_nags_about_sign_in_for_providers_that_need_one():

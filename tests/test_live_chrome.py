@@ -555,6 +555,7 @@ async def test_a_background_failure_is_reported_as_needs_focus_not_fixed_by_stea
     assert await adapter._attempt(page_setup=False, response=response, prompt="q", round_no=1, emit=emit) is False
     assert (response.error or "").startswith("needs_focus"), response.error
     assert "chrome_use_front_providers" in response.error
+    assert "skipped in silent mode" in response.error
     assert _activations(fake) == []
 
 
@@ -1127,7 +1128,7 @@ async def test_doctor_reports_the_live_driver_and_the_missing_edge_extension(fak
     text = "\n".join(await run.live_driver_report(eng.settings, engine=eng))
     assert "Microsoft Edge -> chrome-use profile edge-profile" in text
     note = run.provider_login_note(type("C", (), {"requires_login": True})(), live_browser="Microsoft Edge")
-    assert "sign in to it once in Microsoft Edge" in note and "run.py login" not in note
+    assert "sign in once in Microsoft Edge" in note and "run.py login" not in note
 
 
 # ------------------------------------------------------------------ closing tabs (live 2026-10-08)
@@ -1179,3 +1180,121 @@ async def test_other_tab_new_errors_are_not_retried(fake, engine):
         await engine.open_research_page("pi", "https://pi.ai/")
     assert len([a for a in fake.verbs() if a[:2] == ["tab", "new"]]) == 1
 
+
+
+
+# ---- the foreground belongs to the person: an allowed provider takes it for an instant and hands it back
+class FakeKeeper:
+    def __init__(self, person: int = 4242, ok: bool = True):
+        self.person, self.ok, self.reads, self.restored = person, ok, 0, []
+
+    def current(self) -> int:
+        self.reads += 1
+        return self.person
+
+    def restore(self, hwnd: int) -> bool:
+        self.restored.append(hwnd)
+        return self.ok
+
+
+async def test_an_allowed_provider_hands_the_foreground_back_once_when_the_instant_ends(fake, tmp_path):
+    eng = _bg(fake, tmp_path, chrome_use_front_providers=["gemini", "meta_ai"])
+    eng.keeper = FakeKeeper()
+    gem = await eng.open_research_page("gemini", "https://gemini.google.com/app")
+    async with eng.foreground_instant("gemini"):
+        await gem.bring_to_front()
+        assert eng.keeper.restored == [], "still in front while the provider needs it"
+    assert eng.keeper.restored == [4242] and eng.keeper.reads == 1
+
+
+async def test_overlapping_instants_remember_the_person_once_and_restore_after_the_last(fake, tmp_path):
+    eng = _bg(fake, tmp_path, chrome_use_front_providers=["gemini", "meta_ai"])
+    eng.keeper = FakeKeeper()
+    async with eng.foreground_instant("gemini"):
+        async with eng.foreground_instant("meta_ai"):
+            pass
+        assert eng.keeper.restored == [], "gemini still needs the front"
+    assert eng.keeper.restored == [4242] and eng.keeper.reads == 1
+
+
+async def test_a_provider_that_may_not_come_to_the_front_never_touches_the_foreground(fake, tmp_path):
+    eng = _bg(fake, tmp_path, chrome_use_front_providers=["gemini"])
+    eng.keeper = FakeKeeper()
+    async with eng.foreground_instant("chatgpt"):
+        pass
+    assert eng.keeper.reads == 0 and eng.keeper.restored == []
+    fg = LiveChromeEngine(live_settings(str(tmp_path / "fg"), chrome_use_background=False), runner=fake.runner)
+    fg.keeper = FakeKeeper()
+    async with fg.foreground_instant("chatgpt"):
+        pass
+    assert fg.keeper.restored == [], "foreground mode is the user watching on purpose: nothing is taken back"
+
+
+async def test_a_failed_hand_back_is_noted_never_raised_and_a_failed_body_still_restores(fake, tmp_path):
+    eng = _bg(fake, tmp_path, chrome_use_front_providers=["gemini"])
+    eng.keeper = FakeKeeper(ok=False)
+    with pytest.raises(RuntimeError):
+        async with eng.foreground_instant("gemini"):
+            raise RuntimeError("typing failed")
+    assert eng.keeper.restored == [4242]
+    assert any("could not be handed back" in line for line in eng.log)
+
+
+def test_the_keeper_restores_only_a_real_window_and_is_inert_off_windows(monkeypatch):
+    k = lc.ForegroundKeeper()
+    assert k.restore(0) is True
+    monkeypatch.setattr(k, "_u", None)
+    assert k.current() == 0 and k.restore(123) is True
+
+
+async def test_the_adapter_sends_while_in_front_and_hands_the_foreground_back_before_waiting_for_the_answer(fake, tmp_path, monkeypatch):
+    from browser.adapters import build_adapter
+    from backend.models import ProviderResponse
+
+    eng = _bg(fake, tmp_path, chrome_use_front_providers=["chatgpt"])
+    eng.keeper = FakeKeeper()
+    adapter = build_adapter("chatgpt", eng, eng.settings, eng.settings.providers["chatgpt"])
+    page = await eng.open_research_page("chatgpt", "https://chatgpt.com/")
+    seen: dict = {}
+
+    async def ready(*a, **k):
+        return {"ok": True, "state": "ready"}
+
+    async def yes(*a, **k):
+        seen["restored_when_typing"] = list(eng.keeper.restored)
+        return True
+
+    async def fake_call(p, fn, *args):
+        return {"count": 0, "lastText": ""} if fn == "baseline" else None
+
+    async def wait(*a, **k):
+        seen["restored_when_waiting"] = list(eng.keeper.restored)
+        return None, ProviderStatus.FAILED, "stub"
+
+    monkeypatch.setattr(adapter, "prepare", ready)
+    monkeypatch.setattr(adapter, "_type_with_fallback", lambda p, t: yes())
+    monkeypatch.setattr(adapter, "_submit", lambda p, t: yes())
+    monkeypatch.setattr(adapter, "_call", fake_call)
+    monkeypatch.setattr(adapter, "_await_completion", wait)
+    response = ProviderResponse(id="r", job_id="j", round=1, provider="chatgpt", prompt="q", status=ProviderStatus.LAUNCHING)
+
+    async def emit(*a, **k):
+        return None
+
+    await adapter._attempt(page_setup=False, response=response, prompt="q", round_no=1, emit=emit)
+    assert seen["restored_when_typing"] == [], "typing happens while the provider holds the front"
+    assert seen["restored_when_waiting"] == [4242], "the person's window is back before the long wait for the answer"
+    assert ["tab", "select", "t2", "--activate"] in fake.verbs()
+
+
+def test_no_provider_is_allowed_to_the_front_by_default():
+    """User (2026-10-11): Gemini/Meta AI raising Chrome switched them away from their window. Opt-in only."""
+    assert Settings().browser.chrome_use_front_providers == []
+    assert Settings().browser.chrome_use_background is True
+
+
+def test_the_hand_back_never_taps_keys():
+    """A synthetic Alt tap popped Windows' task switcher on the person's screen (seen live)."""
+    import inspect
+
+    assert "keybd_event" not in inspect.getsource(lc.ForegroundKeeper)
