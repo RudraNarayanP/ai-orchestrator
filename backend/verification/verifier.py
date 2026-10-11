@@ -1311,6 +1311,13 @@ def _ledger_state(report: VerifierReport, question: str = "") -> str:
     supported = verdicts.count(S.SUPPORTED)
     refuted = verdicts.count(S.REFUTED)
     partial = verdicts.count(S.PARTIALLY_SUPPORTED)
+    # "Partly supported" because only one site backs it is under-sourced, not partly wrong. Beside a claim that IS supported it must not
+    # turn the answer into "yeah, but one detail is off" (live: Act No. 22 of 2023, single source, became "the date part is a bit off").
+    from backend.research.style import is_claim_check as _claim_check  # noqa: PLC0415
+
+    if supported and _claim_check(question):
+        thin = [v for v in judged if v.verdict == S.PARTIALLY_SUPPORTED and set(p.lower() for p in v.problems) <= {"single_source"}]
+        partial -= len(thin)
     # A refutation that cites a page we opened is a finding, not a gap: the ledger
     # established the premise is wrong, so "Couldn't verify that one." would understate
     # it (live: "Is it true the Eiffel Tower was completed in 1887?" -- refuted on the

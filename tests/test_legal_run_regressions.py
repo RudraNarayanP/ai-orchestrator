@@ -427,3 +427,19 @@ def test_a_reason_is_never_cut_inside_a_title_with_a_comma():
     shown = render_truth("FALSE", question="Is section 9 of the Data Protection Act 2018 still in force?", answer=fact)
     assert "Data Protection." not in shown and "31 December 2020" in shown
     assert fit_fact("It is a rule, and it applies.", 200) == "It is a rule, and it applies."
+
+
+# ---- 14. under-sourced is not partly wrong (live run C: "Yeah, the idea is right, but the date part is a bit off" over a supported answer)
+def test_a_single_source_claim_beside_a_supported_one_does_not_make_the_answer_partly_wrong():
+    ok = v(S.SUPPORTED, "Section 9(1) of the DPDP Act, 2023 requires a Data Fiduciary to obtain verifiable parental consent before processing a child's personal data.", 2)
+    thin = v(S.PARTIALLY_SUPPORTED, "The Digital Personal Data Protection Act, 2023 is Act No. 22 of 2023.", 1)
+    thin.problems = ["single_source"]
+    wrong = v(S.PARTIALLY_SUPPORTED, "Rule 10 of the DPDP Rules, 2025 was notified in 2024.", 1)
+    wrong.problems = ["outdated"]
+    assert truth_state(rep("Yes.", ok, thin), DPDP_Q) == "TRUE"
+    assert truth_state(rep("Yes.", ok, thin, wrong), DPDP_Q) == "PARTLY", "a claim that is partly WRONG still makes it partly"
+    only_thin = v(S.PARTIALLY_SUPPORTED, "Act No. 22 of 2023 is the DPDP Act.", 1)
+    only_thin.problems = ["single_source"]
+    assert truth_state(rep("Yes.", only_thin), DPDP_Q) == "PARTLY", "with nothing supported, thin evidence alone is still not a flat yes"
+    final = build_final_answer(rep("Section 9(1) requires verifiable parental consent for a child's data.", ok, thin), [], 1, DPDP_Q)
+    assert final.answer.startswith("Yeah, you're right.") and "date part" not in final.answer
