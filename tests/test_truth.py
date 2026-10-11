@@ -51,6 +51,34 @@ def test_truth_state_is_read_from_verdicts_not_tone(rep, expected):
     assert truth_state(rep) == expected
 
 
+def test_open_claims_do_not_rewrite_a_supported_informational_answer():
+    q = "Under the Data Protection Act 2018, what is the minimum age at which a child can consent to information society services in the UK?"
+    rep = report(
+        verdict(ClaimStatus.SUPPORTED, "The minimum age is 13 years."),
+        verdict(ClaimStatus.NOT_REVIEWED, "Section 9 was omitted from the Data Protection Act 2018 after Brexit."),
+        answer=(
+            "Under the UK Data Protection Act 2018, a child can consent to information society services at age 13; "
+            "the UK does not apply the GDPR default age of 16. The operative provision is section 9 of the "
+            "Data Protection Act 2018, which substitutes 13 years for 16 years in Article 8(1) of the GDPR."
+        ),
+    )
+    final = build_final_answer(rep, [], 3, q)
+    assert "13" in final.answer
+    assert "couldn't find that documented" not in final.answer.lower()
+
+
+def test_refuting_a_hypothetical_figure_in_a_what_question_is_not_false_premise():
+    q = (
+        "What is the UK minimum age for ISS consent, and does the UK apply the GDPR default age of 16 "
+        "or a different age?"
+    )
+    rep = report(
+        verdict(ClaimStatus.SUPPORTED, "The minimum age is 13 years."),
+        verdict(ClaimStatus.REFUTED, "The UK applies the GDPR default age of 16 for ISS consent."),
+    )
+    assert truth_state(rep, q) == "PARTLY"
+
+
 def test_a_cheerful_answer_text_cannot_turn_a_refuted_ledger_into_agreement():
     rep = report(verdict(ClaimStatus.REFUTED), answer="Yes, absolutely, you're totally right!")
     final = build_final_answer(rep, [], 1, CHECK)
@@ -162,6 +190,90 @@ def test_appended_fact_starts_with_a_capital():
     out = render_truth("FALSE", question=TEN, answer="the claim that humans use only 10% of their brains is a myth.")
     assert out.startswith("Nah, that doesn't work like that. The claim")
     assert render_truth("TRUE", question=CHECK, answer="it is 13 under section 9.").endswith("It is 13 under section 9.")
+
+
+HIPAA_LIABILITY_Q = (
+    "A proprietary foundation model (Company A) is fine-tuned by Company B on patient records under a HIPAA BAA. "
+    "Synthetic inference output leaks PHI to a third party via an API. "
+    "Under a standard US commercial supply chain framework, who holds primary legal and regulatory liability "
+    "for the PHI breach: (1) Company A, (2) Company B, or (3) does liability fracture into an unallocated "
+    "black-box gap because the data was emergent?"
+)
+
+
+def test_a_long_scenario_with_who_holds_primary_liability_is_not_a_claim_check():
+    """Live (job_261011002248): headline was only 'Yeah, you're right.'"""
+    assert not is_claim_check(HIPAA_LIABILITY_Q)
+
+
+def test_supported_allocation_answer_is_not_replaced_by_yeah_youre_right():
+    q = HIPAA_LIABILITY_Q
+    body = (
+        "Company B, as covered entity and business associate, bears primary HIPAA breach-notification and "
+        "safeguard duties for PHI it put into the fine-tuned system; Company A's role depends on its BAA and "
+        "subcontractor status, and emergent synthetic output does not create an unallocated regulatory gap."
+    )
+    rep = report(verdict(ClaimStatus.SUPPORTED, "Company B bears primary HIPAA duties for the disclosed PHI."), answer=body)
+    final = build_final_answer(rep, [], 1, q)
+    assert final.truth_state == "TRUE"
+    assert "you're right" not in final.answer.lower()
+    assert "company b" in final.answer.lower()
+
+
+def test_does_company_b_hold_liability_stays_a_claim_check():
+    assert is_claim_check("Does Company B hold primary liability for this HIPAA breach?")
+
+
+def test_replay_stored_hipaa_job_headline_is_not_agreement_only():
+    """Assembly replay of job_261011002248 when the local audit DB is present."""
+    from pathlib import Path
+
+    import json
+    import sqlite3
+
+    from backend.models import ProviderResponse, ProviderStatus, VerifierReport
+
+    db = Path(__file__).resolve().parents[1] / "data" / "omnibrain.db"
+    if not db.exists():
+        pytest.skip("no local omnibrain.db")
+    jid = "job_261011002248_b5871cb3"
+    c = sqlite3.connect(db)
+    c.row_factory = sqlite3.Row
+    row = c.execute("SELECT question, rounds_run FROM jobs WHERE id=?", (jid,)).fetchone()
+    if not row:
+        pytest.skip("HIPAA smoke job not stored")
+    rep = VerifierReport.model_validate(
+        json.loads(c.execute("SELECT report_json FROM reports WHERE job_id=? ORDER BY round DESC LIMIT 1", (jid,)).fetchone()["report_json"])
+    )
+    responses = [
+        ProviderResponse(
+            job_id=jid,
+            provider="chatgpt",
+            round=1,
+            role="primary",
+            status=ProviderStatus.COMPLETED,
+            prompt="",
+            answer_text="",
+        )
+    ]
+    final = build_final_answer(rep, responses, row["rounds_run"], row["question"])
+    assert "you're right" not in final.answer.lower()
+    assert len(final.answer.strip()) > 40
+
+
+def test_a_mixed_premise_check_and_wh_question_stays_a_claim_check():
+    q = "Is it true that UK law uses 16 as the minimum age for ISS consent, and what provision establishes the age?"
+    assert is_claim_check(q)
+
+
+def test_a_multi_part_what_and_yesno_question_is_not_a_claim_check():
+    """Live (job_261010234454): wh + 'does the UK apply 16…' was misread as a premise check -> 'Nah, …'."""
+    q = (
+        "Under the Data Protection Act 2018, what is the minimum age at which a child can consent to "
+        "information society services in the UK, and does the UK apply the GDPR default age of 16 for "
+        "that purpose or a different age? Name the operative statutory provision."
+    )
+    assert not is_claim_check(q)
 
 
 def test_a_wh_question_after_a_leading_phrase_is_not_a_claim_check():

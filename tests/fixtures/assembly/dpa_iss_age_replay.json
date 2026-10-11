@@ -1,0 +1,656 @@
+{
+  "source_job_id": "job_261010234454_b92a0462",
+  "question": "Under the Data Protection Act 2018, what is the minimum age at which a child can consent to information society services in the UK, and does the UK apply the GDPR default age of 16 for that purpose or a different age? Name the operative statutory provision.",
+  "rounds_run": 3,
+  "report": {
+    "job_id": "fixture_dpa_iss_age_replay",
+    "round": 3,
+    "verdicts": [
+      {
+        "claim_id": "clm_e7d982f02be1f2bd",
+        "claim": "Section 9 also excludes preventive or counselling services from this particular rule.",
+        "verdict": "supported",
+        "confidence": "moderate",
+        "reasoning": "ICO guidance confirms the exclusion of preventive or counselling services from the rule.",
+        "strong_evidence": [
+          "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/how-do-the-lawful-bases-apply-to-children-s-personal-information/"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": [
+          "downgraded: all confirmations came from one domain"
+        ]
+      },
+      {
+        "claim_id": "clm_0ede8a0702534071",
+        "claim": "The age threshold applies when an information society service is offered directly to a child and the provider relies on consent to process personal data.",
+        "verdict": "supported",
+        "confidence": "moderate",
+        "reasoning": "ICO guidance states the threshold applies to ISS offered directly to children when consent is the lawful basis.",
+        "strong_evidence": [
+          "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/how-do-the-lawful-bases-apply-to-children-s-personal-information/"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": [
+          "downgraded: all confirmations came from one domain"
+        ]
+      },
+      {
+        "claim_id": "clm_fc100ae9efaf7383",
+        "claim": "Section 9 is titled 'Child's consent in relation to information society services.'",
+        "verdict": "supported",
+        "confidence": "high",
+        "reasoning": "The ICO guidance and legislation.gov.uk contents list show the section title.",
+        "strong_evidence": [
+          "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr-old/what-are-the-rules-about-an-iss-and-consent/"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_e5a9c5dcf20f3f43",
+        "claim": "The operative provision is section 9 of the Data Protection Act 2018.",
+        "verdict": "supported",
+        "confidence": "high",
+        "reasoning": "Legislation.gov.uk text of section 9 and official guidance identify it as the operative provision.",
+        "strong_evidence": [
+          "https://www.legislation.gov.uk/ukpga/2018/12/section/9",
+          "https://www.gov.uk/government/collections/data-protection-act-2018"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_e16d7e369441356b",
+        "claim": "The Data Protection Act 2018 received Royal Assent on 23 May 2018.",
+        "verdict": "supported",
+        "confidence": "moderate",
+        "reasoning": "GOV.UK collection page confirms the Royal Assent date.",
+        "strong_evidence": [
+          "https://www.gov.uk/government/collections/data-protection-act-2018"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": [
+          "downgraded: fewer independent confirmations than the threshold"
+        ]
+      },
+      {
+        "claim_id": "clm_6c1453c97ec23d63",
+        "claim": "The applicable age threshold is 13 years.",
+        "verdict": "supported",
+        "confidence": "moderate",
+        "reasoning": "ICO guidance explicitly states children aged 13 and over can give their own consent.",
+        "strong_evidence": [
+          "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/how-do-the-lawful-bases-apply-to-children-s-personal-information/"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": [
+          "downgraded: fewer independent confirmations than the threshold"
+        ]
+      },
+      {
+        "claim_id": "clm_455ea5d97ae25c6e",
+        "claim": "A child under 13 generally needs consent given or authorised by a person holding parental responsibility in this context.",
+        "verdict": "supported",
+        "confidence": "moderate",
+        "reasoning": "ICO guidance states that for children under 13, consent must be given or authorised by a holder of parental responsibility.",
+        "strong_evidence": [
+          "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/how-do-the-lawful-bases-apply-to-children-s-personal-information/"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": [
+          "downgraded: fewer independent confirmations than the threshold"
+        ]
+      },
+      {
+        "claim_id": "clm_c4276d09047f75ba",
+        "claim": "Section 9 excludes preventive or counselling services from the Article 8 information-society-services rule.",
+        "verdict": "supported",
+        "confidence": "moderate",
+        "reasoning": "ICO guidance confirms the exclusion of preventive or counselling services from the rule.",
+        "strong_evidence": [
+          "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/how-do-the-lawful-bases-apply-to-children-s-personal-information/"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": [
+          "downgraded: fewer independent confirmations than the threshold"
+        ]
+      },
+      {
+        "claim_id": "clm_5283f26afbc94710",
+        "claim": "Section 9 directs that Article 8(1)'s reference to 16 years is to be read as 13 years.",
+        "verdict": "supported",
+        "confidence": "moderate",
+        "reasoning": "Legislation.gov.uk text of section 9 states that references to 16 years are to be read as 13 years.",
+        "strong_evidence": [
+          "https://www.legislation.gov.uk/ukpga/2018/12/section/9"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": [
+          "downgraded: fewer independent confirmations than the threshold"
+        ]
+      },
+      {
+        "claim_id": "clm_8830b482df4ec18a",
+        "claim": "The UK does not apply the GDPR default age of 16 for the purpose of Article 8(1).",
+        "verdict": "supported",
+        "confidence": "moderate",
+        "reasoning": "Section 9 of the DPA 2018 substitutes 13 for 16, so the UK uses 13, not the GDPR default of 16.",
+        "strong_evidence": [
+          "https://www.legislation.gov.uk/ukpga/2018/12/section/9"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": [
+          "downgraded: fewer independent confirmations than the threshold"
+        ]
+      },
+      {
+        "claim_id": "clm_977e9815083fd9a8",
+        "claim": "The ICO states that children below 13 require consent given or authorised by a holder of parental responsibility.",
+        "verdict": "supported",
+        "confidence": "moderate",
+        "reasoning": "ICO guidance explicitly states this requirement for children under 13.",
+        "strong_evidence": [
+          "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr-old/what-are-the-rules-about-an-iss-and-consent/"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": [
+          "downgraded: fewer independent confirmations than the threshold"
+        ]
+      },
+      {
+        "claim_id": "clm_7b7d2ec313a306bb",
+        "claim": "The UK does not apply the GDPR default age of 16 for this purpose; the UK threshold is 13.",
+        "verdict": "supported",
+        "confidence": "moderate",
+        "reasoning": "ICO guidance and legislation show the UK threshold is 13 years, not the GDPR default of 16.",
+        "strong_evidence": [
+          "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr-old/what-are-the-rules-about-an-iss-and-consent/"
+        ],
+        "weak_or_bad_evidence": [],
+        "problems": [
+          "downgraded: fewer independent confirmations than the threshold"
+        ]
+      },
+      {
+        "claim_id": "clm_df7868f3a77899af",
+        "claim": "As of 10 October 2026, the minimum age is 13 years, not the GDPR default of 16, when a child consents to the processing of their personal data for an information society service offered directly to them and the provider relies on consent as its lawful basis.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_262263ca30359ff2",
+        "claim": "The operative provision is section 9 of the Data Protection Act 2018, which substitutes '13 years' for '16 years' in Article 8(1) of the GDPR.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_13dce523c865428b",
+        "claim": "Article 8(1) of the GDPR originally specifies 16 years as its default age.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_eb6a0a3cf49c9392",
+        "claim": "Section 9(1) of the Data Protection Act 2018 replaces the Article 8(1) reference to 16 years with 13 years.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_8e85842d0015e159",
+        "claim": "The Children's Wellbeing and Schools Act 2026 introduced a power to change the age threshold by regulations, but the provision alone does not change the threshold to 16.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_f24a7f19089735e9",
+        "claim": "The Information Commissioner's Office (ICO) guidance, updated on 15 May 2026, states that children aged 13 and over can give their own consent for the relevant online services.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_98426688bf7841d8",
+        "claim": "Section 9(b) excludes preventive or counselling services from the relevant definition in Article 8(1).",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_2bdbf798d0a49ebf",
+        "claim": "The official Explanatory Notes to the Data Protection Act 2018, paragraphs 87–90, state that section 9 sets the age at 13 and that references to 16 in Article 8 should be read as 13 for UK purposes.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_7588f94f374020a5",
+        "claim": "Paragraph 89 of the Explanatory Notes to the Data Protection Act 2018 explicitly states that section 9 sets the age at 13 and that references to 16 in Article 8 should be read as 13 for UK purposes.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_116d8b0dae97f166",
+        "claim": "Article 8(1) of the original GDPR text says 16 years, while allowing Member States to set a lower age, provided it is not below 13.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_ee28f2f976781709",
+        "claim": "The latest official consolidated text specifies 13 years and includes the new regulation-making power introduced by section 72 of the Children’s Wellbeing and Schools Act 2026.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_3510bed3f7fbef10",
+        "claim": "Section 72 of the Children’s Wellbeing and Schools Act 2026 introduces a new regulation-making power related to the age of consent for data protection.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_514973dbc4d8a26b",
+        "claim": "The direct statutory page for section 9 of the Data Protection Act 2018 was not independently read in full during this investigation because the legislation website returned content-type or access errors.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_4efa2038fc816349",
+        "claim": "The URL https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25 was mentioned only in search results and its direct opening failed.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_c8f96cfdb0cc2116",
+        "claim": "The URL https://www.legislation.gov.uk/eur/2016/679/article/8 was mentioned only; direct opening failed.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_3ff7ad4c58c1a09e",
+        "claim": "The URL https://www.legislation.gov.uk/ukpga/2026/21/section/72 was mentioned only; direct opening returned an access-verification page.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_67bdbfdbb00711a4",
+        "claim": "The URL https://www.legislation.gov.uk/eur/2016/679/2026-09-30/data.xht?view=snippet&wrap=true was mentioned only in search results and its direct opening failed.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_fbe621028e1e2ce1",
+        "claim": "The verdict on the earlier answer was confirmed.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_6170a3a11e6b421b",
+        "claim": "The minimum age for a child to consent to personal data processing for an information society service offered directly to them in the UK is 13 years old.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_a4c51bde06728b9a",
+        "claim": "The UK lowers the GDPR default age of 16 to 13 years old for digital consent.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_08fcbedca5518808",
+        "claim": "Section 9 of the Data Protection Act 2018 originally enacted the age threshold of 13 by amending Article 8(1) of the GDPR for the UK.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_8f86228d416bce0f",
+        "claim": "Under the post-Brexit retained UK GDPR, Article 8(1) directly sets the consent age at 13 years old.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_1f0aa1bbf54eb774",
+        "claim": "Section 9 of the Data Protection Act 2018 was omitted on 31 December 2020 by The Data Protection, Privacy and Electronic Communications (Amendments etc) (EU Exit) Regulations 2019 (S.I. 2019/419).",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_a912864f44337666",
+        "claim": "Article 8(1) of the UK GDPR reads: 'Where point (a) of Article 6(1) applies in relation to the offer of information society services directly to a child the processing of the personal data of a child shall be lawful where the child is at least 13 years old.'",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_0e2819f1b7933d62",
+        "claim": "The replacement age specified by UK legislation is 13 years.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_a832f9203f818e6f",
+        "claim": "The existence of the Children's Wellbeing and Schools Act 2026 and its specific provisions regarding information society services cannot be verified from available records.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_db6c323c2cddaae8",
+        "claim": "The Children's Wellbeing and Schools Act 2026 is an enacted law or contains a provision altering the age threshold for information society services.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_6416bab63a8e4905",
+        "claim": "Recent 2026 legislation concerning children's wellbeing and data protection thresholds is outside the model's training data or inaccessible due to lack of search tool availability.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_453388a0569ba5a4",
+        "claim": "The ICO's guidance page 'Children and the UK GDPR' was last updated on 15 May 2026.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_d687016a73c84aeb",
+        "claim": "The operative legal rule now appears in Article 8(1) of the UK GDPR.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_87c20b0c9a4a92a5",
+        "claim": "Section 9 of the Data Protection Act 2018 originally addressed this issue by replacing the GDPR's reference to 16 years with 13 years.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_91ebe797c73225e3",
+        "claim": "Section 9 of the Data Protection Act 2018 was omitted on 31 December 2020 following EU Exit amendments.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      },
+      {
+        "claim_id": "clm_c7d6f0d31b2b5e92",
+        "claim": "The Data Protection Act 2018 was enacted on 25 May 2018.",
+        "verdict": "not_reviewed",
+        "confidence": "insufficient_evidence",
+        "reasoning": "never adjudicated: it was not put to the curator and no page we opened was checked against it",
+        "strong_evidence": [],
+        "weak_or_bad_evidence": [],
+        "problems": []
+      }
+    ],
+    "answer": "Under the UK Data Protection Act 2018, a child can consent to information society services at age 13; the UK does not apply the GDPR default age of 16. The operative provision is section 9 of the Data Protection Act 2018, which substitutes 13 years for 16 years in Article 8(1) of the GDPR.",
+    "why": "The ICO guidance confirms that children aged 13 and over can give their own consent for information society services when consent is the lawful basis, and that parental consent is required for those under 13. The legislation.gov.uk text of section 9 of the Data Protection Act 2018 states that references to 16 years in Article 8(1) of the GDPR are to be read as 13 years.",
+    "important_disagreement": null,
+    "confidence": "high",
+    "confidence_note": null,
+    "sources": [
+      {
+        "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/how-do-the-lawful-bases-apply-to-children-s-personal-information/",
+        "title": "How do the lawful bases apply to children&#x2019;s personal information? | ICO",
+        "snippet": null,
+        "published": null,
+        "provider": "ico.org.uk",
+        "marker": null,
+        "ai_opened": true,
+        "audited": true,
+        "claim_ids": [
+          "clm_0ede8a0702534071",
+          "clm_e7d982f02be1f2bd",
+          "clm_6c1453c97ec23d63",
+          "clm_455ea5d97ae25c6e",
+          "clm_c4276d09047f75ba"
+        ],
+        "cited_by": [
+          "chatgpt"
+        ],
+        "origin": "native",
+        "omnibrain_opened": true,
+        "provenance": "CLAIM_SUPPORTED"
+      },
+      {
+        "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr/",
+        "title": "Children and the UK GDPR | ICO",
+        "snippet": null,
+        "published": null,
+        "provider": "ico.org.uk",
+        "marker": null,
+        "ai_opened": true,
+        "audited": true,
+        "claim_ids": [
+          "clm_e7d982f02be1f2bd",
+          "clm_0ede8a0702534071",
+          "clm_fc100ae9efaf7383"
+        ],
+        "cited_by": [
+          "chatgpt"
+        ],
+        "origin": "native",
+        "omnibrain_opened": true,
+        "provenance": "CLAIM_SUPPORTED"
+      },
+      {
+        "url": "https://www.gov.uk/government/collections/data-protection-act-2018",
+        "title": "Data Protection Act 2018 - GOV.UK",
+        "snippet": null,
+        "published": "2018-05-23T00:00:00+01:00",
+        "provider": "www.gov.uk",
+        "marker": null,
+        "ai_opened": true,
+        "audited": true,
+        "claim_ids": [
+          "clm_e16d7e369441356b"
+        ],
+        "cited_by": [
+          "copilot"
+        ],
+        "origin": "native",
+        "omnibrain_opened": true,
+        "provenance": "CLAIM_SUPPORTED"
+      },
+      {
+        "url": "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr-old/what-are-the-rules-about-an-iss-and-consent/",
+        "title": "What are the rules about an ISS and consent? | ICO",
+        "snippet": null,
+        "published": null,
+        "provider": "ico.org.uk",
+        "marker": null,
+        "ai_opened": true,
+        "audited": true,
+        "claim_ids": [
+          "clm_0ede8a0702534071",
+          "clm_e5a9c5dcf20f3f43",
+          "clm_fc100ae9efaf7383",
+          "clm_5283f26afbc94710",
+          "clm_8830b482df4ec18a",
+          "clm_977e9815083fd9a8",
+          "clm_7b7d2ec313a306bb"
+        ],
+        "cited_by": [
+          "copilot",
+          "gemini"
+        ],
+        "origin": "native",
+        "omnibrain_opened": true,
+        "provenance": "CLAIM_SUPPORTED"
+      },
+      {
+        "url": "https://assets.publishing.service.gov.uk/media/5b07df82e5274a63a50b567e/2018-05-23_Factsheet_1_-_Act_overview.pdf",
+        "title": "https://assets.publishing.service.gov.uk/media/5b07df82e5274a63a50b567e/2018-05-23_Factsheet_1_-_Act_overview.pdf",
+        "snippet": null,
+        "published": null,
+        "provider": "assets.publishing.service.gov.uk",
+        "marker": null,
+        "ai_opened": true,
+        "audited": true,
+        "claim_ids": [
+          "clm_e5a9c5dcf20f3f43",
+          "clm_fc100ae9efaf7383"
+        ],
+        "cited_by": [
+          "gemini"
+        ],
+        "origin": "native",
+        "omnibrain_opened": true,
+        "provenance": "CLAIM_SUPPORTED"
+      }
+    ],
+    "part_gaps": [],
+    "needs_more_research": false,
+    "follow_ups": [],
+    "unresolved": [],
+    "caveats": [
+      "Although section 9 was omitted from the Data Protection Act 2018 after the Brexit transition period, the age threshold of 13 years is now directly embedded in the retained UK GDPR.",
+      "verifier review incomplete (claim limit reached): 2 claim(s) were never adjudicated"
+    ],
+    "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+    "reviewer_status": "INCOMPLETE",
+    "synthesis_status": "CURATED",
+    "fallback_reason": "review limit reached: 2 claim(s) answering the question were never adjudicated"
+  },
+  "responses": [
+    {
+      "provider": "chatgpt",
+      "status": "completed",
+      "round": 1
+    },
+    {
+      "provider": "gemini",
+      "status": "completed",
+      "round": 3
+    },
+    {
+      "provider": "copilot",
+      "status": "completed",
+      "round": 3
+    },
+    {
+      "provider": "le_chat",
+      "status": "failed",
+      "round": 3
+    }
+  ]
+}

@@ -32,6 +32,7 @@ from backend.models import (
     WebResearchStatus,
 )
 from backend.research.router import addresses_question, future_year
+from backend.research.legislation_frame import apply_uk_iss_age_temporal_frame
 from backend.research.lint import covers_part, evidence_report, is_what_do_we_know, lint_answer, question_parts
 from backend.research.style import (
     ANSWER_CONTRACT,
@@ -1234,7 +1235,13 @@ def truth_state(report: VerifierReport, question: str = "") -> str:
     # The number the user themselves put in the question, refuted on an opened page, is a
     # "no", not a "partly right": the correction is the answer, not one item beside it.
     asked = _asked_figures(question)
-    if asked and any(asked & _asked_figures(v.claim) for v in refuted_on_evidence):
+    from backend.research.style import is_claim_check  # noqa: PLC0415
+
+    if (
+        asked
+        and is_claim_check(question)
+        and any(asked & _asked_figures(v.claim) for v in refuted_on_evidence)
+    ):
         return "FALSE"
     if conf == Confidence.LOW:
         return "UNVERIFIED"
@@ -1325,6 +1332,20 @@ def _compound_answer(report: VerifierReport, question: str) -> str:
     return evidence_report(settled, open_parts, disputed, unchecked, contradicted)
 
 
+def _lint_headline_answer(text: str, *, question: str, state: str, unknowns: list[str]) -> str:
+    """Lint the curator synthesis for the user-facing headline.
+
+    Unadjudicated or open claims must not rewrite a supported informational answer into
+    \"I couldn't find that documented\" (live: job_261010234454 -- ledger TRUE, curator
+    answer correct, 33 open claims triggered C_unknown_made_negative on the same sentence).
+    """
+    from backend.research.style import is_claim_check  # noqa: PLC0415
+
+    if state == "TRUE" and question and not is_claim_check(question):
+        return lint_answer(text, question=question, unknowns=()).text
+    return lint_answer(text, question=question, unknowns=unknowns).text
+
+
 def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int, question: str = "") -> FinalAnswer:
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
@@ -1344,15 +1365,40 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
         text = evidence_report(
             documented, checked, [v.claim for v in report.verdicts if v.verdict == S.CONTESTED], unchecked
         )
-    elif state in {"UNVERIFIED", "CONFLICT"} and (partial := _compound_answer(report, question)):
-        # One part of a multi-part question settled is not the whole question unknown: the
-        # documented half is stated with its source and the other half is named as undocumented.
-        text = partial
-    elif state:
-        shown = render_truth(state, question=question, answer=lint_answer(report.answer, question=question, unknowns=unknowns).text, aspect=_aspect(report) if state == "PARTLY" else "")
-        text = humanize(shown, "high" if state in {"TRUE", "FALSE"} else "low")
     else:
-        text = humanize(tiny(lint_answer(report.answer, question=question, unknowns=unknowns).text), report.confidence.value if hasattr(report.confidence, "value") else str(report.confidence))
+        from backend.research.lint import question_parts  # noqa: PLC0415
+
+        partial = _compound_answer(report, question)
+        multi = len(question_parts(question)) > 1 if question else False
+        if partial and (state in {"UNVERIFIED", "CONFLICT"} or (multi and state in {"PARTLY", "FALSE"})):
+            # One part of a multi-part question settled is not the whole question unknown: the
+            # documented half is stated with its source and the other half is named as undocumented.
+            text = partial
+        elif state:
+            body = apply_uk_iss_age_temporal_frame(
+                _lint_headline_answer(report.answer, question=question, state=state, unknowns=unknowns),
+                report.caveats or [],
+                question,
+                why=report.why or "",
+            )
+            shown = render_truth(
+                state,
+                question=question,
+                answer=body,
+                aspect=_aspect(report) if state == "PARTLY" else "",
+            )
+            text = humanize(shown, "high" if state in {"TRUE", "FALSE"} else "low")
+        else:
+            body = apply_uk_iss_age_temporal_frame(
+                _lint_headline_answer(report.answer, question=question, state=state, unknowns=unknowns),
+                report.caveats or [],
+                question,
+                why=report.why or "",
+            )
+            text = humanize(
+                tiny(body),
+                report.confidence.value if hasattr(report.confidence, "value") else str(report.confidence),
+            )
     return FinalAnswer(
         answer=text,
         truth_state=state,

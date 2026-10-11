@@ -207,14 +207,17 @@ For every important claim:
 2. Inspect the available evidence.
 3. Check whether the cited source actually supports the claim.
 4. Check the date and freshness.
-5. Look for contradictory evidence.
-6. Distinguish primary evidence from secondary reporting.
-7. Detect unsupported inference.
-8. Detect exaggeration.
-9. Detect outdated information.
-10. Detect citation mismatch.
-11. Detect hallucinated citations.
-12. Search for additional evidence when necessary.
+5. On legislation, separate what is in force now from repealed, omitted or superseded text: name the
+   current provision on legislation.gov.uk (or equivalent) and treat earlier sections as historical
+   context when amendments moved the rule.
+6. Look for contradictory evidence.
+7. Distinguish primary evidence from secondary reporting.
+8. Detect unsupported inference.
+9. Detect exaggeration.
+10. Detect outdated information.
+11. Detect citation mismatch.
+12. Detect hallucinated citations.
+13. Search for additional evidence when necessary.
 
 If the evidence is insufficient, say so.
 If the evidence conflicts, investigate the conflict.
@@ -545,6 +548,14 @@ _LEAD_YESNO = re.compile(r"^\s*(?:yes|yeah|yep|no|nope|nah)\b[\s,.\u2014\u2013:-
 _YESNO_START = re.compile(
     r"^\s*(?:so,?\s+)?(is|are|was|were|am|do|does|did|can|could|should|would|will|shall|may|might|must|has|have|had|"
     r"isn'?t|aren'?t|wasn'?t|weren'?t|don'?t|doesn'?t|didn'?t|can'?t|won'?t|is it true)\b", re.I)
+# Live (job_261011002248, 2026-10-11): a long fact pattern before "who holds primary … liability: (1)…(2)…"
+# never hits _wh_head on the opening words, so the answer became "Yeah, you're right." with nothing else.
+_ALLOCATION_LIABILITY = re.compile(
+    r"\b(?:who|which(?:\s+party)?)\s+(?:holds?|bears?|has|faces?)\s+primary\b.{0,120}?\b(?:liability|responsibility)\b"
+    r"|"
+    r"\bwho\s+is\s+(?:primarily\s+)?(?:(?:legally|regulatorily)\s+)?liable\b",
+    re.I,
+)
 
 
 def _wh_head(text: str) -> bool:
@@ -572,8 +583,20 @@ def is_claim_check(question: str) -> bool:
     q = (question or "").strip()
     if not q or _wh_head(q):
         return False
+    if _ALLOCATION_LIABILITY.search(q) and not _YESNO_START.match(q):
+        return False
     last = re.split(r"[,;:\u2014\u2013]", q)[-1]
     if _wh_head(last) and not _YESNO_START.match(q):
+        return False
+    # Live (job_261010234454, 2026-10-10): "what is the age …, and does the UK apply 16 …?" was treated as a
+    # claim check because the last comma-clause is yes/no; the headline became "Nah, …" plus a refusal on the
+    # provision half. Any multi-part question that includes a wh-clause is informational, not a premise check.
+    from backend.research.lint import question_parts  # noqa: PLC0415
+
+    parts = question_parts(q)
+    # Lead with a content question ("what is …, and does …?") — not a premise check. A later wh-clause
+    # alone must not cancel a leading yes/no ("Is it true …, and what provision …?").
+    if len(parts) > 1 and _wh_head(parts[0]):
         return False
     return True
 
