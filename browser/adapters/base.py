@@ -61,6 +61,7 @@ def limit_notice(text: str) -> str | None:
     return " ".join((text or "")[start : m.end() + 90].split())[:160]
 
 
+TRAILING_TIMESTAMP_RE = re.compile(r"(?:\n\s*)+\d{1,2}:\d{2}\s?(?:[ap]m)?\s*$", re.I)
 LOGIN_RE = re.compile(
     r"(sign in|log in|create (a |an )?account|continue with (google|facebook|apple|microsoft|github)|"
     r"get started for free|must (log in|sign in)|please (log|sign) ?in)",
@@ -1165,6 +1166,8 @@ class ChatAdapter:
                 continue
             lines.append(line.rstrip())
         out = "\n".join(lines).strip()
+        # a chat's own message time stamp on the last line (Le Chat: "...Paris.\n\n10:56pm") is not part of the answer
+        out = TRAILING_TIMESTAMP_RE.sub("", out).rstrip()
         # Live Gemini output glued the next heading onto the previous line ("...984 feet).EVIDENCE").
         out = GLUED_HEADING_RE.sub(r"\1\n\2", out)
         out = re.sub(r"\n{3,}", "\n\n", out)

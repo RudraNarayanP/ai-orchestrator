@@ -279,3 +279,15 @@ def test_a_settled_current_status_claim_keeps_the_answer_and_other_questions_are
     assert truth_state(rep("Yes.", *past), "Did section 9 of the Data Protection Act 2018 lower the age of consent to 13?") == "TRUE"
     # no present-tense claim at all: nothing to be unreviewed, the ledger state stands
     assert truth_state(rep("Yes.", v(S.SUPPORTED, "Section 9 lowered the age to 13.", 2)), NOW_Q) == "TRUE"
+
+
+# ---- 8. Le Chat's Work (Vibe) UI: the reply lives in div[data-message-author-role="assistant"]; its time stamp is not the answer
+def test_le_chat_selectors_find_the_work_ui_reply_and_the_time_stamp_is_stripped():
+    from browser.adapters.base import ChatAdapter
+    from browser.adapters.selectors import selectors_for
+
+    roots = selectors_for("le_chat").assistant_message
+    assert '[data-message-author-role="assistant"]' in roots and '[data-message-part-type="answer"]' in roots
+    adapter = object.__new__(ChatAdapter)
+    assert adapter._clean("The capital of France is Paris.\n\n10:56pm") == "The capital of France is Paris."
+    assert adapter._clean("It ended at 10:56pm sharp.\nSee 3:45 for the cut.") == "It ended at 10:56pm sharp.\nSee 3:45 for the cut."

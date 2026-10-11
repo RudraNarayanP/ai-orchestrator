@@ -333,7 +333,10 @@ SELECTORS: dict[str, SelectorSet] = {
         ),
         stop=FieldSet(aria=["Stop", "Stop generating"], css=["[data-testid='chat-composer-stop']"], verified="prior"),
         response_root=["[role='log']", "main"],
-        assistant_message=['[data-testid*="message"][data-role="assistant"]', ".Message_assistant", "[data-role='assistant']"],
+        # chat.mistral.ai now opens in its "Work" (Vibe) UI: the reply is a div[data-message-author-role="assistant"]
+        # holding div[data-message-part-type="answer"] (probed live 2026-10-11); the old selectors matched nothing there.
+        assistant_message=['[data-message-author-role="assistant"]', '[data-testid="text-message-part"]', '[data-message-part-type="answer"]',
+                           '[data-testid*="message"][data-role="assistant"]', ".Message_assistant", "[data-role='assistant']"],
         streaming=["[data-streaming='true']", ".MarkdownRenderer_streaming"],
         sources=["a[href^='http']", '.Message_citation', '[data-testid*="citation"]'],
         login_wall=['a[href*="auth"]', 'button:has-text("Login")'],
