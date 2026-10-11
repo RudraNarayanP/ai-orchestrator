@@ -11,8 +11,11 @@ not a reason to quietly fall back to "the most confident-sounding answer won".
 
 from __future__ import annotations
 
+import asyncio
+import dataclasses
 import json
 import re
+import time
 from typing import Any
 
 from backend.evidence.sources import TIER_WEIGHT, freshness
@@ -128,11 +131,47 @@ has one). Emit it only for a claim that a targeted question could actually resol
 
 
 class Verifier:
-    def __init__(self, endpoint: Endpoint, *, min_independent_sources: int = 2, deep: bool = True) -> None:
+    def __init__(self, endpoint: Endpoint, *, min_independent_sources: int = 2, deep: bool = True, time_cap_s: float = 0) -> None:
         self.endpoint = endpoint
         self.client = LLMClient(endpoint)
+        self.time_cap_s = float(time_cap_s or 0)
+        self._deadline = 0.0
         self.min_independent_sources = min_independent_sources
         self.deep = deep
+
+    # ------------------------------------------------------------- curator calls
+
+    FIRST_SHARE_MIN_S = 25.0
+    MIN_LEFT_S = 8.0
+
+    async def _curate(self, messages: list[dict[str, str]]):
+        """One curator call under the time cap. With no cap this is exactly ``client.complete_json``.
+
+        Each model gets a share of what is left (the first, preferred one just over half), so a reasoning model that is still
+        thinking at 40 s is dropped for the next, faster one instead of holding the whole question for minutes (live: 90 s).
+        Nothing is invented when time runs out: no parsed reply means the evidence ledger decides, as it always has.
+        """
+        from backend.verification.llm import LLMReply  # noqa: PLC0415
+
+        if not self.time_cap_s:
+            return await self.client.complete_json(messages, temperature=self.endpoint.temperature)
+        models = [self.endpoint.model] + [m for m in self.endpoint.fallback_models if m and m != self.endpoint.model]
+        last = LLMReply(text="", ok=False, error="curator not tried", model=self.endpoint.model)
+        for index, model in enumerate(models):
+            left = self._deadline - time.monotonic()
+            if left < self.MIN_LEFT_S:
+                break
+            share = left if index == len(models) - 1 else min(left, max(self.FIRST_SHARE_MIN_S, self.time_cap_s * 0.55))
+            client = LLMClient(dataclasses.replace(self.endpoint, model=model, fallback_models=()))
+            try:
+                parsed, reply = await asyncio.wait_for(client.complete_json(messages, temperature=self.endpoint.temperature), timeout=share)
+            except asyncio.TimeoutError:
+                last = LLMReply(text="", ok=False, error=f"curator {model} gave no answer in {share:.0f}s", model=model)
+                continue
+            if parsed is not None or reply.fatal:
+                return parsed, reply
+            last = reply
+        return None, last
 
     # ------------------------------------------------------------- main entry
 
@@ -153,7 +192,8 @@ class Verifier:
             {"role": "system", "content": self._system()},
             {"role": "user", "content": payload},
         ]
-        parsed, reply = await self.client.complete_json(messages, temperature=self.endpoint.temperature)
+        self._deadline = time.monotonic() + self.time_cap_s
+        parsed, reply = await self._curate(messages)
         report = self._from_model(parsed, job_id=job_id, round_no=round_no, claims=claims, evidence=evidence) if parsed else None
         if report is None:
             report = self.deterministic(
@@ -331,10 +371,7 @@ class Verifier:
         unjudged: list[Claim] = list(missing[self.RECOVERY_BATCH * self.RECOVERY_CALLS :])
         for batch in batches[: self.RECOVERY_CALLS]:
             payload = self._material(question, batch, evidence, responses, disagreements, round_no, corrections)
-            parsed, reply = await self.client.complete_json(
-                [{"role": "system", "content": self._system()}, {"role": "user", "content": payload}],
-                temperature=self.endpoint.temperature,
-            )
+            parsed, reply = await self._curate([{"role": "system", "content": self._system()}, {"role": "user", "content": payload}])
             part = self._from_model(parsed, job_id=report.job_id, round_no=round_no, claims=batch, evidence=evidence) if parsed else None
             if part is None or reply.truncated or reply.repaired:
                 unjudged.extend(batch)

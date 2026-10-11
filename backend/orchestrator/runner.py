@@ -136,6 +136,7 @@ class ResearchRunner:
     # ------------------------------------------------------------------ entry
 
     async def run(self, job: Job) -> Job:
+        self._started = time.monotonic()
         try:
             finished = await self._run(job)
             await self._learn(finished)
@@ -324,7 +325,8 @@ class ResearchRunner:
 
         # Level 2 -- expansion, earned by failure, never assumed.
         job.level = EscalationLevel.PARALLEL
-        partial = bool(assessment.established) and bool(assessment.unresolved)
+        out_of_time = self._over_budget(job)
+        partial = bool(assessment.established) and bool(assessment.unresolved) and not out_of_time
         if partial:
             # Most of it is settled. Investigate only what is not -- re-running
             # every provider on the whole question wastes sessions and re-asks
@@ -349,7 +351,7 @@ class ResearchRunner:
         # After a targeted expansion, what remains is a conflict for the verifier,
         # not a gap more researchers would fill.
         # Sufficient but high-stakes goes to the curator, not to a swarm: parallel research is for an unresolved claim.
-        if secondaries and not partial and not assessment.sufficient:
+        if secondaries and not partial and not assessment.sufficient and not out_of_time:
             context = self._failure_context(responses, claims, evidence, disagreements, assessment)
             job.escalation_log.append(
                 EscalationStep(
@@ -441,6 +443,8 @@ class ResearchRunner:
                     # saying only the first part would hide the second from whoever reads the record.
                     gap = open_parts[0]
                     job.stop_note += f" -- this part of the question is still open: {gap.part[:80]} ({GAP_WORDING[gap.reason]})"
+                break
+            if self._over_budget(job):
                 break
             if stalled >= 2:
                 job.stop_note = "the last two targeted rounds added no new confirmed claim or source; stopped instead of asking again"
@@ -916,6 +920,19 @@ class ResearchRunner:
                 dead.add(provider)
         return dead
 
+    def _over_budget(self, job: Job) -> bool:
+        """True once this question has used its wall-clock research budget: no further round is started, the verifier judges
+        what is already in hand and the stop note says the search ended early (never that the question was settled)."""
+        budget = float(getattr(self.settings.research, "time_budget_s", 0) or 0)
+        started = getattr(self, "_started", None)
+        if not budget or started is None:
+            return False
+        spent = time.monotonic() - started
+        if spent < budget:
+            return False
+        job.stop_note = f"stopped researching early: {spent:.0f}s used of the {budget:.0f}s budget; what was found is judged as it stands"
+        return True
+
     async def _targeted_round(self, job: Job, follow_ups: list[FollowUp], targets: list[str], *, round_no: int) -> list[ProviderResponse]:
         """Give each unresolved point to a specific agent. One agent, one point."""
         tasks = []
@@ -1380,7 +1397,7 @@ class ResearchRunner:
         self.cancel.raise_if_cancelled()
         if self.verifier is None:
             endpoint = Endpoint.from_config(self.settings.verifier)
-            self.verifier = Verifier(endpoint, min_independent_sources=self.settings.research.min_independent_sources, deep=self.settings.verifier.deep_verification)
+            self.verifier = Verifier(endpoint, min_independent_sources=self.settings.research.min_independent_sources, deep=self.settings.verifier.deep_verification, time_cap_s=self.settings.verifier.time_cap_s)
         job.status = JobStatus.VERIFYING
         await self._emit("status", "adversarial verification (evidence, not votes)", round_no=round_no, job=job)
         report = await self.verifier.verify(

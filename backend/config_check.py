@@ -109,6 +109,10 @@ def check_settings(settings: Settings, raw: dict[str, Any] | None = None) -> lis
             out.append(Finding("error", f"providers.{name}.url", f"'{p.url}' is not an http(s) address."))
     if settings.research.max_rounds < 1:
         out.append(Finding("error", "research.max_rounds", "must be at least 1."))
+    if settings.research.time_budget_s < 0:
+        out.append(Finding("error", "research.time_budget_s", "must be 0 (no budget) or a number of seconds."))
+    if settings.verifier.time_cap_s < 0:
+        out.append(Finding("error", "verifier.time_cap_s", "must be 0 (no cap) or a number of seconds."))
     if settings.research.max_workers < 1:
         out.append(Finding("error", "research.max_workers", "must be at least 1."))
     if settings.research.swarm_providers < 1:

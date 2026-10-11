@@ -291,3 +291,68 @@ def test_le_chat_selectors_find_the_work_ui_reply_and_the_time_stamp_is_stripped
     adapter = object.__new__(ChatAdapter)
     assert adapter._clean("The capital of France is Paris.\n\n10:56pm") == "The capital of France is Paris."
     assert adapter._clean("It ended at 10:56pm sharp.\nSee 3:45 for the cut.") == "It ended at 10:56pm sharp.\nSee 3:45 for the cut."
+
+
+# ---- 9. the curator and the whole question have a clock (live: curator 90 s, three rounds 410 s)
+def test_a_curator_that_is_too_slow_is_dropped_for_the_next_model(monkeypatch):
+    from backend.verification import verifier as vmod
+    from backend.verification.llm import Endpoint, LLMReply
+
+    calls: list[str] = []
+
+    class FakeClient:
+        def __init__(self, endpoint):
+            self.endpoint = endpoint
+
+        async def complete_json(self, messages, temperature=None):
+            calls.append(self.endpoint.model)
+            if self.endpoint.model == "slow-reasoner":
+                await asyncio.sleep(5)
+            return {"verdicts": []}, LLMReply(text="{}", ok=True, model=self.endpoint.model)
+
+    monkeypatch.setattr(vmod, "LLMClient", FakeClient)
+    endpoint = Endpoint(provider="openrouter", model="slow-reasoner", base_url="http://x", fallback_models=("fast-model",))
+    curator = vmod.Verifier(endpoint, time_cap_s=1.6)
+    curator.FIRST_SHARE_MIN_S, curator.MIN_LEFT_S = 0.3, 0.1
+    curator._deadline = time.monotonic() + 1.6
+    started = time.perf_counter()
+    parsed, reply = asyncio.run(curator._curate([{"role": "user", "content": "x"}]))
+    assert calls == ["slow-reasoner", "fast-model"] and reply.model == "fast-model" and parsed == {"verdicts": []}
+    assert time.perf_counter() - started < 2.5
+
+    # nothing answers in time: no parsed reply (the evidence ledger then judges), never an invented one
+    calls.clear()
+    only = vmod.Verifier(Endpoint(provider="openrouter", model="slow-reasoner", base_url="http://x"), time_cap_s=0.5)
+    only.MIN_LEFT_S = 0.1
+    only._deadline = time.monotonic() + 0.5
+    parsed, reply = asyncio.run(only._curate([{"role": "user", "content": "x"}]))
+    assert parsed is None and not reply.ok and "no answer in" in reply.error
+
+
+def test_no_cap_means_the_plain_client(monkeypatch):
+    from backend.verification import verifier as vmod
+    from backend.verification.llm import Endpoint, LLMReply
+
+    class FakeClient:
+        def __init__(self, endpoint):
+            pass
+
+        async def complete_json(self, messages, temperature=None):
+            return {"ok": 1}, LLMReply(text="{}", ok=True)
+
+    monkeypatch.setattr(vmod, "LLMClient", FakeClient)
+    curator = vmod.Verifier(Endpoint(provider="openrouter", model="m", base_url="http://x"))
+    assert asyncio.run(curator._curate([]))[0] == {"ok": 1}
+
+
+def test_a_question_out_of_time_starts_no_further_round():
+    runner = object.__new__(ResearchRunner)
+    runner.settings = SimpleNamespace(research=SimpleNamespace(time_budget_s=120))
+    job = SimpleNamespace(stop_note="")
+    runner._started = time.monotonic() - 30
+    assert runner._over_budget(job) is False and job.stop_note == ""
+    runner._started = time.monotonic() - 130
+    assert runner._over_budget(job) is True
+    assert "stopped researching early" in job.stop_note and "settled" not in job.stop_note
+    runner.settings.research.time_budget_s = 0
+    assert runner._over_budget(SimpleNamespace(stop_note="")) is False
