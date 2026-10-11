@@ -341,7 +341,8 @@ async def test_sign_in_consent_and_challenge_pages_are_the_users(fake, engine, u
     assert [v[0] for v in fake.verbs() if v[0] != "get"] == []
 
 
-async def test_a_login_redirect_while_opening_is_reported_and_the_tab_is_left_for_the_user(fake, engine):
+async def test_a_login_redirect_while_opening_is_reported_and_the_tab_is_left_for_the_user(fake, engine, monkeypatch):
+    monkeypatch.setattr(lc, "NEW_TAB_SETTLE_S", 0.4)
     fake.update(redirects={"https://chat.mistral.ai/chat": "https://v2.auth.mistral.ai/login"})
     with pytest.raises(LiveChromeNeedsUser) as ei:
         await engine.open_research_page("le_chat", "https://chat.mistral.ai/chat")
@@ -824,7 +825,8 @@ def test_example_config_documents_the_driver_and_keeps_the_default():
 # ------------------------------------------------------------------ adapters keep working, and stop at gates
 
 
-async def test_adapter_reports_a_login_redirect_as_logged_out_without_touching_the_page(fake, engine):
+async def test_adapter_reports_a_login_redirect_as_logged_out_without_touching_the_page(fake, engine, monkeypatch):
+    monkeypatch.setattr(lc, "NEW_TAB_SETTLE_S", 0.4)
     from browser.adapters import build_adapter
 
     s = live_settings()
@@ -836,7 +838,8 @@ async def test_adapter_reports_a_login_redirect_as_logged_out_without_touching_t
     assert not any(v[0] in ("keyboard", "press", "click", "mouse") for v in fake.verbs())
 
 
-async def test_adapter_reports_a_page_that_moves_to_a_captcha_as_blocked(fake, engine):
+async def test_adapter_reports_a_page_that_moves_to_a_captcha_as_blocked(fake, engine, monkeypatch):
+    monkeypatch.setattr(lc, "NEW_TAB_SETTLE_S", 0.4)
     from browser.adapters import build_adapter
 
     s = live_settings()
@@ -946,6 +949,48 @@ async def test_a_dialog_over_the_page_is_the_users_to_answer_but_escape_still_wo
     fake.update(rules=[])
     fake.rule("captchaFrame", value={"captchaFrame": False, "cf": False, "human": False, "age": False, "title": "Pi", "modal": ""})
     await page.check_gate()
+
+
+async def test_a_sign_in_hop_that_returns_to_the_provider_is_waited_out(fake, engine):
+    """Live (copilot.microsoft.com, 2026-10-10): a new tab passed through login.live.com and then
+    landed on the signed-in chat. The first URL was treated as a login wall and the tab was abandoned."""
+    fake.update(
+        redirects={"https://copilot.microsoft.com/": "https://login.live.com/oauth20_authorize.srf?client_id=abc"},
+        gate_gets=2,
+        settle_to="https://copilot.microsoft.com/chat",
+    )
+    page = await engine.open_research_page("copilot", "https://copilot.microsoft.com/")
+    assert page.url == "https://copilot.microsoft.com/chat"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs node to run the page script")
+def test_chat_history_that_mentions_an_age_check_is_not_an_age_gate():
+    """Live (chat.qwen.ai, 2026-10-10): the sidebar listed old chats whose titles say 'age verification'
+    while the composer was on screen. That page is ready to type. A wall with the same words and no
+    composer is still the user's."""
+    import subprocess
+
+    script = lc._CHALLENGE_JS
+    probe = (
+        "const script = " + json.dumps(script) + ";"
+        "function run(text, composer) {"
+        "  globalThis.innerWidth = 800; globalThis.innerHeight = 600;"
+        "  globalThis.document = {"
+        "    title: 'Qwen',"
+        "    body: { innerText: text },"
+        "    querySelectorAll: () => [],"
+        "    querySelector: () => (composer ? {} : null),"
+        "    elementFromPoint: () => null,"
+        "  };"
+        "  return eval(script);"
+        "}"
+        "const ready = run('UK GDPR Article 8 age verification\\nUK Child Consent Age\\nHow can I help you?', true);"
+        "const wall = run('Confirm you are over 18. Date of birth.', false);"
+        "console.log(JSON.stringify({ready: ready.age, wall: wall.age}));"
+    )
+    done = subprocess.run(["node", "-e", probe], capture_output=True, text=True, timeout=30)
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == {"ready": False, "wall": True}
 
 
 async def test_copilot_redirect_to_copilot_com_is_followed_but_a_microsoft_login_is_not(fake, engine):

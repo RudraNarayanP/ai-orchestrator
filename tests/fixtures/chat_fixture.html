@@ -38,11 +38,17 @@
  * stop button that only exists mid-generation, a SEPARATE assistant turn for
  * sources, UI chrome ("Copied!") inside the answer node, a consent overlay, and
  * the user's own prompt echoed into the transcript.
+ *
+ * ?stall_reply=1 makes the SECOND turn behave like Gemini did live
+ * (job_261010170703_e3fa8deb, 2026-10-10): no new assistant node exists yet, while the
+ * previous answer's node grows a "Searching the web" status line. A capture taken then is
+ * the old answer plus a status fragment -- which must not be recorded as the new reply.
  */
 const thread = document.getElementById('thread');
 const input = document.getElementById('composer-input');
 const send = document.getElementById('send');
 const stop = document.getElementById('stop');
+const STALL_REPLY = new URLSearchParams(location.search).has('stall_reply');
 document.getElementById('cookie').onclick = () => document.getElementById('overlay').remove();
 
 const ANSWERS = [
@@ -70,10 +76,31 @@ function el(tag, cls, text) {
 
 function respond(promptText) {
   const answer = ANSWERS[Math.min(turn, ANSWERS.length - 1)];
+  const turnIndex = turn;
   turn += 1;
   send.hidden = true;
   stop.hidden = false;
 
+  if (STALL_REPLY && turnIndex === 1) {
+    // no new assistant node for a long time; the previous answer's node grows a status line
+    setTimeout(() => {
+      const prev = thread.querySelectorAll('[data-message-author-role="assistant"]');
+      const node = prev[prev.length - 1];
+      if (node) node.append(el('div', 'status', 'Searching the web'));
+      stop.hidden = true;
+      send.hidden = false;
+    }, 1200);
+    setTimeout(() => stream(answer), 30000);
+    return;
+  }
+  if (STALL_REPLY && turnIndex === 0) {
+    // the conversation gets its own address, so the follow-up stays in this thread
+    history.replaceState(null, '', '?stall_reply=1&thread=1');
+  }
+  stream(answer);
+}
+
+function stream(answer) {
   const holder = el('article', 'assistant');
   holder.setAttribute('data-message-author-role', 'assistant');
   const body = el('div', 'markdown');

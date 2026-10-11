@@ -54,6 +54,23 @@ async def test_a_page_we_can_type_into_is_never_downgraded_by_the_same_words():
     assert (await adapter.readiness(object()))["state"] == "ready"
 
 
+async def test_a_composer_page_that_mentions_a_limit_is_not_rate_limited():
+    """Live (chat.mistral.ai/work, 2026-10-10): the Vibe page was usable and the probe still
+    set rateLimited from text elsewhere on the page. That overrode the composer."""
+    adapter = chat_adapter()
+    adapter._call = probe_returns({**CF_STATE, "inputHere": True, "rateLimited": True,
+                                   "bodyHead": "Vibe Work Code New Chat", "title": "Le Chat", "state": "ready"})
+    assert (await adapter.readiness(object()))["state"] == "ready"
+
+
+async def test_a_page_with_no_composer_and_a_limit_stays_rate_limited():
+    adapter = chat_adapter()
+    adapter._call = probe_returns({**CF_STATE, "inputHere": False, "rateLimited": True,
+                                   "bodyHead": "You've reached your daily limit", "title": "Le Chat",
+                                   "state": "rate_limited"})
+    assert (await adapter.readiness(object()))["state"] == "rate_limited"
+
+
 async def test_an_age_gate_still_reads_as_blocked():
     """The pre-existing title path (BROKEN_RE) must survive the new rule -- the gate wording comes
     from the page probe, which never saw a gate here."""

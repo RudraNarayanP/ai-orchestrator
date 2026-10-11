@@ -279,6 +279,44 @@ class ChatAdapter:
         self.mode_log = done
         return done
 
+    def _speed_choice(self) -> str:
+        """Fast unless this run is deep research or the provider was told to think.
+
+        A Thinking setting on Qwen holds the reply open until the wait gives up and the
+        capture is empty (live, 2026-10-10). Deep research is the case that is worth that wait.
+        """
+        configured = list((self.settings.research.provider_modes or {}).get(self.provider) or [])
+        if "thinking" in configured or self.settings.research.mode == "DEEP_RESEARCH":
+            return "thinking"
+        return "fast"
+
+    async def _choose_speed(self, page, emit: EventHook, round_no: int) -> None:
+        """Open a Fast / Thinking menu beside the composer and pick one, when that menu exists."""
+        want = self._speed_choice()
+        try:
+            res = await self._call(page, "chooseSpeed", self._sel_dict, want)
+        except DOMUnavailable:
+            return
+        if not isinstance(res, dict) or res.get("reason") == "unavailable":
+            return
+        if res.get("opened"):
+            await page.wait_for_timeout(400)
+            try:
+                res = await self._call(page, "chooseSpeed", self._sel_dict, want)
+            except DOMUnavailable:
+                return
+        if not isinstance(res, dict):
+            return
+        status = "already" if res.get("already") else ("on" if res.get("clicked") else (res.get("reason") or "unavailable"))
+        if status == "unavailable":
+            return
+        self.speed_choice = want
+        await self._safe_emit(
+            emit, "provider",
+            f"{self.provider}: speed {want} -> {status}",
+            self.provider, round_no,
+        )
+
     def _threshold(self, name: str, hidden: bool) -> int:
         base = int(getattr(self.sel, name, 3000) or 3000)
         return base * 2 if hidden else base
@@ -299,7 +337,9 @@ class ChatAdapter:
             # phrase must not be downgraded, and a bot check must not be reported as selector drift.
             state["state"] = "blocked"
             state["gate"] = state.get("gate") or "cloudflare browser check"
-        elif state.get("rateLimited"):
+        elif state.get("rateLimited") and not state.get("inputHere"):
+            # A composer you can type into is not a limit, even if an old chat mentions one
+            # (live: Le Chat's Vibe page, chat.mistral.ai/work, 2026-10-10).
             state["state"] = "rate_limited"
         elif not state.get("inputHere") and (state.get("loginWall") or LOGIN_RE.search(body_head)):
             state["state"] = "login_wall"
@@ -568,6 +608,7 @@ class ChatAdapter:
                     pass
             if (self.settings.research.provider_modes or {}).get(self.provider):
                 await self._apply_modes(page, emit, round_no)
+            await self._choose_speed(page, emit, round_no)
             baseline = await self._call(page, "baseline", self._sel_dict) or {"count": 0, "lastText": ""}
             await emit("provider", f"{self.provider}: composing prompt", self.provider, round_no)
             typed = await self._type_with_fallback(page, prompt)
@@ -589,11 +630,9 @@ class ChatAdapter:
 
             await emit("provider", f"{self.provider}: prompt sent — waiting for answer", self.provider, round_no)
             if not await self._submit(page, prompt):
-                withheld = self._focus_withheld()
                 response.note(
                     ProviderStatus.FAILED,
-                    error=(f"needs_focus: submit_failed in a background tab ({self._focus_hint()})" if withheld else
-                           "submit_failed: the prompt stayed in the composer after the send button and Enter (tried twice)"),
+                    error="submit_failed: the prompt stayed in the composer after the send button and Enter",
                     detail=" ".join(getattr(self, "submit_log", []))[:300],
                 )
                 await emit("provider", f"{self.provider}: submit_failed", self.provider, round_no)
@@ -894,10 +933,10 @@ class ChatAdapter:
         """
         self._prompt_sent = True
         self.submit_log: list[str] = []
-        # Each route is tried once and verified before the next: the send button by script, then the second try --
-        # the same button as a pointer-event sequence, a real Enter on the focused composer, and a DOM Enter (a
-        # BACKGROUND tab gets no real input from Chrome, so the DOM-level routes are what work there).
-        for route in ("click", "pointer", "enter", "dom-enter"):
+        # Click and a DOM Enter do not need the window in front. A real Enter key does, so it is only
+        # tried when this tab is allowed to take focus.
+        routes = ("click", "pointer", "dom-enter") if self._focus_withheld() else ("click", "pointer", "enter", "dom-enter")
+        for route in routes:
             if route == "enter":
                 await self._press_enter(page)
                 ok = True
@@ -967,7 +1006,14 @@ class ChatAdapter:
                 busy = list(busy) + [f"progress line: {text[:40]}"]
                 working = True
 
-            if text and not progress and text != (baseline.get("lastText") or "")[: len(text)]:
+            # No new assistant block, and there was already one on screen: whatever this text is, it
+            # was there before the question was asked. ``capture`` falls back to scanning the last few
+            # blocks when the answer has not appeared yet, and a status line appended under the
+            # previous message makes that scan differ from the baseline by just enough to look new --
+            # live, two different unresolved points were each closed with round one's answer plus
+            # "Searching the web" (job_261010170703_e3fa8deb, Gemini, 2026-10-10).
+            no_new_block = bool(baseline.get("count")) and capture.get("newBlock") is False
+            if text and not progress and not no_new_block and text != (baseline.get("lastText") or "")[: len(text)]:
                 if plain_len > 0 and (not best or plain_len > int(best.get("plainLength") or 0)):
                     best = capture
                     saw_growth = True

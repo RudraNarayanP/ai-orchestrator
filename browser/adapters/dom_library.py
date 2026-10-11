@@ -9,12 +9,12 @@ about as often as we can test.
 from __future__ import annotations
 
 # Bumped whenever the page-side API changes, so a page holding an older copy gets the new one.
-DOM_LIBRARY_VERSION = 5
+DOM_LIBRARY_VERSION = 8
 
 # Installed with page.evaluate(DOM_LIBRARY_JS) before any interaction.
 DOM_LIBRARY_JS = r"""
 (() => {
-  if (window.__omnibrain && window.__omnibrain.version === 5) return 'already';
+  if (window.__omnibrain && window.__omnibrain.version === 8) return 'already';
   const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
   const lower = (s) => (s || '').toLowerCase();
 
@@ -236,6 +236,21 @@ DOM_LIBRARY_JS = r"""
     const pop = lower(el.getAttribute('aria-haspopup') || '');
     return !!pop && pop !== 'false';
   }
+  // A background tab often reports a 0x0 box for a button that is on the page. el.click() still
+  // presses it; bringing the window forward is not required (Gemini send arrow, 2026-10-10).
+  function shown(el) {
+    if (!el || !el.isConnected) return false;
+    let st;
+    try { st = getComputedStyle(el); } catch (e) { return true; }
+    return st.display !== 'none' && st.visibility !== 'hidden' && parseFloat(st.opacity) !== 0;
+  }
+  function inComposer(comp, el) {
+    let box = comp && comp.parentElement;
+    for (let i = 0; i < 5 && box; i++, box = box.parentElement) {
+      if (box.contains(el)) return true;
+    }
+    return false;
+  }
   function sendCandidates(cfg) {
     const send = cfg.send || {};
     const comp = (candidates(cfg.input || {}, cfg.input || {}, {kind: 'input'})[0] || {}).el || null;
@@ -246,9 +261,11 @@ DOM_LIBRARY_JS = r"""
     els = els.concat(queryAll('button, [role="button"], input[type="submit"]'));
     const seen = new Set();
     const out = [];
+    let order = 0;
     for (const el of els) {
-      if (!el || seen.has(el) || !visible(el)) continue;
+      if (!el || seen.has(el) || !shown(el)) continue;
       seen.add(el);
+      order += 1;
       if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
       if (comp && (el === comp || el.contains(comp))) continue;
       const label = norm([el.getAttribute('aria-label'), el.getAttribute('title'), el.getAttribute('data-testid'), textOf(el)].filter(Boolean).join(' '));
@@ -262,14 +279,18 @@ DOM_LIBRARY_JS = r"""
       const cfgScore = matchesConfig(el, send);
       const r = rectOf(el);
       let near = false;
+      const laidOut = r && r.width > 2 && r.height > 2;
       if (form && form.contains(el)) near = true;
-      else if (cr && r) {
+      else if (laidOut && cr) {
         near = r.top < cr.bottom + 90 && r.bottom > cr.top - 90 && r.left > cr.left + cr.width * 0.4 && r.left < cr.right + 140;
+      } else if (comp) {
+        near = inComposer(comp, el);
       }
       const textless = !textOf(el) || textOf(el).length <= 2;
       if (!(cfgScore >= 25 || named || (near && textless))) continue;
       let score = cfgScore + (named ? 60 : 0) + (near ? 30 : 0);
-      if (near && textless && r) score += 10 + Math.round((r.right / Math.max(1, innerWidth)) * 10);
+      if (near && textless && laidOut) score += 10 + Math.round((r.right / Math.max(1, innerWidth)) * 10);
+      else if (near && textless) score += order;
       out.push({el, score, why: [cfgScore >= 25 ? 'config' : '', named ? 'named' : '', near ? 'near-composer' : ''].filter(Boolean).join('+')});
     }
     out.sort((a, b) => b.score - a.score);
@@ -501,6 +522,44 @@ DOM_LIBRARY_JS = r"""
     });
     return out;
   }
+  // Qwen (live 2026-10-10): a menu on the composer offers Auto / Thinking / Fast. Thinking
+  // holds the turn open until the hard timeout and the capture comes back empty. The closed
+  // control shows the current word; clicking it reveals the others. Only those three words,
+  // and only next to the composer -- "Thinking completed" in an old answer is not this menu.
+  const SPEED_WORD = /^(auto|fast|thinking)$/i;
+  function speedControls(cfg) {
+    const comp = (candidates(cfg.input || {}, cfg.input || {}, {kind: 'input'})[0] || {}).el || null;
+    const cr = comp ? rectOf(comp) : null;
+    const out = [];
+    for (const el of queryAll('button, [role="button"], [role="menuitem"], [role="option"]')) {
+      if (!visible(el) || el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+      const label = norm(textOf(el) || el.getAttribute('aria-label') || '');
+      if (!SPEED_WORD.test(label) || MODE_GATE_RE.test(label)) continue;
+      const r = rectOf(el);
+      if (cr && r) {
+        // The menu opens above the chip, which sits at the right end of the composer (Qwen, 2026-10-10).
+        const near = Math.abs(r.bottom - cr.bottom) < 380 && r.left < cr.right + 420 && r.right > cr.left;
+        if (!near) continue;
+      }
+      out.push({el, label: label.toLowerCase(), top: r ? r.top : 0});
+    }
+    return out;
+  }
+  function pickSpeed(cfg, want) {
+    const word = want === 'thinking' ? 'thinking' : 'fast';
+    const items = speedControls(cfg);
+    if (!items.length) return {ok: false, reason: 'unavailable'};
+    const chip = items.slice().sort((a, b) => b.top - a.top)[0];
+    const option = items.find(i => i.label === word && i.el !== chip.el) || (items.length > 1 ? items.find(i => i.label === word) : null);
+    if (chip.label === word && !option) return {ok: true, already: true, label: word};
+    if (option) {
+      option.el.click();
+      return {ok: true, clicked: true, label: word};
+    }
+    chip.el.click();
+    return {ok: true, opened: true, label: chip.label};
+  }
+
   function modeElement(cfg, mode) {
     const found = modeControls(cfg).filter(c => c.mode === mode);
     if (!found.length) return [null, null];
@@ -509,7 +568,8 @@ DOM_LIBRARY_JS = r"""
   }
 
   const api = {
-    version: 5,
+    version: 8,
+    chooseSpeed(cfg, want) { return pickSpeed(cfg, want); },
     guestDismiss(cfg) { return guestDismiss(cfg); },
     modeControls(cfg) { return modeControls(cfg); },
     modeMenus(cfg) { return modeMenus(cfg); },
@@ -531,7 +591,21 @@ DOM_LIBRARY_JS = r"""
       const url = location.href;
       const loginCfg = (cfg.login_wall || []).some(s => queryAll(s).some(visible));
       const loginWords = /sign in|log in|create (a |an )?account|continue with (google|facebook|apple|microsoft)|get started/i.test(body.slice(0, 2500));
-      const rateWords = /(rate limit|too many requests|slow down|you'?ve reached .{0,30}(limit|cap)|try again in|upgrade to|daily (limit|cap)|out of (free )?credits|please wait)/i.test(body);
+      // Whole-page text includes the sidebar. Live (chat.mistral.ai/work, 2026-10-10): Vibe was open,
+      // the saved head was "Vibe Work Code New Chat...", and an upgrade/limit phrase further down the
+      // page was recorded as a rate limit. A real limit is a banner or a dialog, not an old chat.
+      const rateRe = /(rate limit|too many requests|slow down|you'?ve reached .{0,30}(limit|cap)|try again in|upgrade to|daily (limit|cap)|out of (free )?credits|please wait)/i;
+      let column = body;
+      try {
+        const copy = document.body.cloneNode(true);
+        copy.querySelectorAll('aside, nav, [role="complementary"], [role="navigation"]').forEach(n => n.remove());
+        column = norm(copy.innerText || '');
+      } catch (e) {}
+      let dialogText = '';
+      document.querySelectorAll('[role="dialog"], [role="alertdialog"], [aria-modal="true"]').forEach(d => {
+        if (visible(d)) dialogText += ' ' + norm(d.innerText || '');
+      });
+      const rateWords = rateRe.test(dialogText) || rateRe.test(column.slice(0, 400));
       const blockedWords = /(access denied|are you a robot|unusual traffic|verify you are a human|enable javascript|are you a human|confirm your age|what year were you born|date of birth|verify your age|what should i call you|preferred name)/i.test(body);
       const inputHere = candidates(cfg.input || {}, cfg.input || {}, {kind: 'input'}).length > 0;
       const termsGate = termsGateText();
@@ -549,7 +623,7 @@ DOM_LIBRARY_JS = r"""
         credentialForm,
         hasComposer: inputHere,
         loginWall: loginCfg || loginWords,
-        rateLimited: rateWords,
+        rateLimited: rateWords && !inputHere,
         blocked: blockedWords || !!termsGate,
         gate: termsGate ? 'terms-of-service acceptance required' : (blockedWords ? 'age/identity check or bot check' : ''),
         bodyLength: body.length,

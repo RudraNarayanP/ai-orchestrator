@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Unlabeled send</title>
+<style>body{font-family:system-ui} .c{position:fixed;bottom:12px;left:12px;right:12px;display:flex;gap:8px} textarea{flex:1;height:40px}</style>
+</head><body>
+<main id="t"></main>
+<div class="c">
+  <textarea id="prompt-textarea" placeholder="Ask anything"></textarea>
+  <button type="button" id="mic" aria-label="Microphone"></button>
+  <!-- A background tab reports this arrow as 0x0. It is still the send control. -->
+  <button type="button" id="send" style="width:0;height:0;padding:0;border:0"></button>
+</div>
+<script>
+window.clicked = [];
+const input = document.getElementById('prompt-textarea');
+const t = document.getElementById('t');
+document.getElementById('mic').addEventListener('click', () => window.clicked.push('mic'));
+document.getElementById('send').addEventListener('click', () => {
+  window.clicked.push('send');
+  const text = input.value.trim(); if (!text) return; input.value = '';
+  const a = document.createElement('div');
+  a.setAttribute('data-message-author-role', 'assistant');
+  a.textContent = 'The Eiffel Tower was completed on March 31, 1889.';
+  t.appendChild(a);
+});
+</script>
+</body></html>

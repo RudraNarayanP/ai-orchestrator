@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from backend.browser.engine import BrowserEngine, profile_dir
-from backend.models import ResearchMode
+from backend.models import ProviderStatus, ResearchMode
 from backend.settings import ProviderConfig, Settings
 from browser.adapters import build_adapter
 
@@ -171,6 +171,35 @@ async def test_second_turn_does_not_reread_the_previous_answer(adapter):
     assert "549" in second.answer_text
     assert "announced on 14 May 2026 at a price" not in second.answer_text, "captured the previous turn"
     assert second.fingerprint != first.fingerprint
+
+
+async def test_a_follow_up_still_waiting_for_its_reply_is_not_recorded_as_answered(browser_settings, fixture_server):
+    """Live (job_261010170703_e3fa8deb, headless Playwright, Gemini, 2026-10-10): two *different*
+    unresolved points were each closed by the same 2601 characters -- round one's answer plus the
+    "Searching the web" status line the site had appended under it while the new message had not yet
+    rendered. The page had grown a status, not an answer, so that capture had to be refused: text that
+    was already on screen before the question cannot settle a question asked after it.
+    """
+    engine = BrowserEngine(browser_settings)
+    cfg = ProviderConfig(enabled=True, label="Fixture", url=f"{fixture_server}?stall_reply=1",
+                         adapter="generic_chat", max_retries=0)
+    built = build_adapter("fixture", engine, browser_settings, cfg)
+    built.sel.stable_ms = 700
+    built.sel.never_started_ms = 6000
+    built.sel.force_capture_ms = 20000
+    built.sel.hard_timeout_ms = 30000
+    try:
+        first = await built.ask("job-stall", "question one", 1)
+        assert "announced on 14 May 2026" in first.answer_text, first.answer_text[:200]
+
+        second = await built.ask("job-stall", "question two", 2, continue_thread=True)
+        assert "announced on 14 May 2026" not in second.answer_text, (
+            f"the follow-up was 'answered' with the previous turn: {second.answer_text[:200]}")
+        assert "Searching the web" not in second.answer_text, "a status line is not an answer"
+        assert second.status != ProviderStatus.COMPLETED, second.status
+        assert "only the pre-existing message was visible" in (second.error or ""), second.error
+    finally:
+        await engine.stop(keep_windows=False)
 
 
 async def test_consensus_extract_claims_from_the_captured_text(adapter):
@@ -442,6 +471,30 @@ async def test_an_answer_inside_nested_wrappers_is_captured_once(browser_setting
     finally:
         await engine.stop(keep_windows=False)
 
+async def test_ai_mode_answer_outside_the_selector_is_still_read(browser_settings, fixture_server):
+    """Live (job_261010221023_1edcb248): the TUM answer was visible and the run stored
+    'no answer block' because it was not inside the answer-block selector."""
+    url = fixture_server.rsplit("/", 1)[0] + "/ai_mode_visible.html"
+    settings = Settings.model_validate({
+        **browser_settings.model_dump(mode="json"),
+        "providers": {"google_ai": {"enabled": True, "label": "Google AI", "url": url, "max_retries": 0}},
+    })
+    engine = BrowserEngine(settings)
+    try:
+        adapter = build_adapter("google_ai", engine, settings, settings.providers["google_ai"])
+        adapter.sel.stable_ms = 600
+        adapter.sel.never_started_ms = 15000
+        adapter.sel.hard_timeout_ms = 20000
+        response = await adapter.ask("job-aimode", "Would TUM admit me directly?", 1)
+        assert response.status.value == "completed", (response.status, response.error, response.detail)
+        assert "studiumMINT" in response.answer_text, response.answer_text
+        assert "first-stage admission is not possible" in response.answer_text
+        assert "AI Mode response is ready" not in (response.answer_text or "")
+        assert "visible page" in (response.detail or ""), response.detail
+    finally:
+        await engine.stop(keep_windows=False)
+
+
 async def test_ai_mode_that_never_answers_gives_up_early_and_is_not_retried(browser_settings, fixture_server):
     """Live logged-out run: AI Mode produced nothing and the adapter waited 404 s (two 200 s attempts)."""
     import time
@@ -521,6 +574,23 @@ async def test_a_long_multi_line_prompt_is_sent_once_and_whole(browser_settings,
         turns = await page.evaluate("() => window.userTurns")
         assert len(turns) == 1, turns
         assert "Eiffel Tower" in turns[0] and "If unsure, say so." in turns[0], turns
+    finally:
+        await engine.stop(keep_windows=False)
+
+
+async def test_an_unlabeled_send_arrow_is_clicked_without_a_painted_box(browser_settings, fixture_server):
+    """The send control is the icon at the end of the composer. A background tab gives it no box,
+    and the click still has to land on it. Enter from a focused window is not required."""
+    engine, adapter = _fixture_adapter(browser_settings, fixture_server, "send_unlabeled.html")
+    adapter.sel.stable_ms = 700
+    adapter.sel.never_started_ms = 8000
+    adapter.sel.hard_timeout_ms = 20000
+    try:
+        response = await adapter.ask("jobsend", "When was the Eiffel Tower completed?", 1)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        assert "needs_focus" not in (response.error or "")
+        page = await engine.open_research_page("chatgpt", adapter.cfg.url)
+        assert await page.evaluate("() => window.clicked") == ["send"]
     finally:
         await engine.stop(keep_windows=False)
 
@@ -615,6 +685,44 @@ async def test_mode_toggles_are_found_switched_and_verified_and_gated_ones_are_n
         assert (await adapter.set_mode(page, "thinking", on=False))["status"] == "unverified", "a click that did nothing is not reported as done"
         clicked = await page.evaluate("() => window.clicked")
         assert "deep" not in clicked and "side-search" not in clicked, clicked
+    finally:
+        await engine.stop(keep_windows=False)
+
+
+async def test_a_fast_thinking_menu_is_set_before_the_question(browser_settings, fixture_server):
+    """Live (Qwen, 2026-10-10): Auto / Thinking / Fast sits on the composer. Thinking runs until the
+    wait expires and the capture is empty. Standard picks Fast; deep research picks Thinking."""
+    engine, adapter = _fixture_adapter(browser_settings, fixture_server, "speed_menu.html")
+    adapter.sel.stable_ms = 700
+    adapter.sel.never_started_ms = 8000
+    adapter.sel.force_capture_ms = 12000
+    adapter.sel.hard_timeout_ms = 20000
+    events = []
+
+    async def emit(kind, message, *a, **k):
+        events.append(message)
+
+    try:
+        adapter.settings.research.mode = "STANDARD"
+        response = await adapter.ask("jobspeed", "When was the Eiffel Tower completed and how tall is it?", 1, emit=emit)
+        assert response.status.value == "completed", f"{response.status.value}: {response.error}"
+        page = await engine.open_research_page("chatgpt", adapter.cfg.url)
+        clicked = await page.evaluate("() => window.clicked")
+        assert clicked[0] == "open" and "fast" in clicked and "thinking" not in clicked, clicked
+        assert any("speed fast -> on" in e for e in events), events
+
+        await page.evaluate("() => { window.clicked = []; document.getElementById('speed').textContent = 'Fast'; }")
+        events.clear()
+        again = await adapter._choose_speed(page, emit, 2)
+        assert await page.evaluate("() => window.clicked") == [], "Fast is already selected"
+        assert any("speed fast -> already" in e for e in events), events
+
+        adapter.settings.research.mode = "DEEP_RESEARCH"
+        events.clear()
+        await adapter._choose_speed(page, emit, 3)
+        picked = await page.evaluate("() => window.clicked")
+        assert picked[0] == "open" and "thinking" in picked, picked
+        assert any("speed thinking -> on" in e for e in events), events
     finally:
         await engine.stop(keep_windows=False)
 

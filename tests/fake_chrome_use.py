@@ -141,7 +141,11 @@ def main() -> None:
         if sub == "new":
             state["next"] = state.get("next", 1) + 1
             tid = f"t{state['next']}"
-            tabs[tid] = {"url": redirect(args[2]), "title": "New tab", "blank": state.get("blank_gets", 0), "session": sess}
+            tabs[tid] = {
+                "url": redirect(args[2]), "title": "New tab", "blank": state.get("blank_gets", 0),
+                "gate_left": int(state.get("gate_gets") or 0), "settle_to": state.get("settle_to") or "",
+                "session": sess,
+            }
             set_active(tid)
             save(state)
             reply({"tabId": tid, "targetId": f"T{tid}", "label": None, "url": tabs[tid]["url"], "total": len(tabs)})
@@ -169,6 +173,12 @@ def main() -> None:
             tabs[active]["blank"] -= 1  # a fresh real-Chrome tab reads about:blank until its navigation commits
             save(state)
             reply({"url": "about:blank"})
+        if args[1] == "url" and tabs[active].get("gate_left", 0) > 0:
+            tabs[active]["gate_left"] -= 1
+            if tabs[active]["gate_left"] == 0 and tabs[active].get("settle_to"):
+                tabs[active]["url"] = tabs[active]["settle_to"]
+            save(state)
+            reply({"url": tabs[active]["url"]})
         reply({"url": tabs[active]["url"]} if args[1] == "url" else {"title": tabs[active].get("title", "")})
     if verb == "open":
         tabs[active]["url"] = redirect(args[1])

@@ -601,7 +601,12 @@ _CHALLENGE_JS = r"""(() => {
   const captchaFrame = frames.some(s => /recaptcha|hcaptcha|turnstile|challenges\.cloudflare|arkoselabs|funcaptcha|geetest/i.test(s));
   const cf = /just a moment|attention required|performing security verification|checking your browser/i.test(title + ' ' + text.slice(0, 600));
   const human = /verify (that )?you are (a )?human|are you a robot|press and hold|i'?m not a robot/i.test(text);
-  const age = /(confirm|verify) (that )?you('| a)re (over |at least )?(18|eighteen)|age verification|date of birth/i.test(text.slice(0, 1500));
+  // Chat history and sidebar titles mention "age verification" on a page that is already signed in and
+  // ready to type (live: chat.qwen.ai, 2026-10-10, old UK-consent chats). That is not a gate. A real
+  // age wall has the wording and no composer.
+  const composer = !!document.querySelector('textarea,[contenteditable="true"],[role="textbox"]');
+  const ageTalk = /(confirm|verify) (that )?you('| a)re (over |at least )?(18|eighteen)|age verification|date of birth/i.test(text.slice(0, 1500));
+  const age = ageTalk && !composer;
   // a modal sitting over the middle of the page that does not hold the composer: an announcement / consent /
   // terms notice the person has to answer themselves (seen live: pi.ai "Memory just got better ... Continue")
   let modal = '';
@@ -1014,7 +1019,11 @@ class LiveChromeEngine:
                             raise
                         now = ""
                     if now and not now.startswith("about:blank"):
-                        break
+                        # An already-signed-in site often passes through login.* and comes back. Wait that hop
+                        # out. A URL that stays on the sign-in page is still the user's to finish; we never type
+                        # into it. Anything else off the allowlist is refused at once.
+                        if url_allowed(now) or classify_gate(now) is None or time.monotonic() >= deadline:
+                            break
                     if time.monotonic() >= deadline:
                         await self._discard_new_tab(page)
                         raise LiveChromeError(f"the new {provider} tab never left about:blank within {NEW_TAB_SETTLE_S:g}s")

@@ -86,3 +86,24 @@ def test_the_page_library_version_check_matches_the_library():
     assert f"window.__omnibrain.version === {DOM_LIBRARY_VERSION}) return 'already'" in DOM_LIBRARY_JS
     assert f"    version: {DOM_LIBRARY_VERSION},\n" in DOM_LIBRARY_JS
     assert "DOM_LIBRARY_VERSION" in inspect.getsource(base.ChatAdapter._install)
+
+
+def test_ai_mode_page_text_drops_the_echoed_question_and_source_chips():
+    """Live Google AI Mode (2026-10-10): the visible page text began with the question and glued
+    source chips into the sentences ('required. Instagram +1 However')."""
+    from browser.adapters.google_ai import drop_prompt_echo, strip_inline_chips
+
+    prompt = "I have 90 percent marks in the CBSE board exam, and I hold a Goethe certificate. Would TUM admit me?"
+    raw = (
+        prompt
+        + " Yes, you are eligible to apply. However, a Studienkolleg is not required. Instagram +1 "
+        + "The programme uses an aptitude assessment. Reddit ·r/tumunich +3 Direct admission still depends on points."
+    )
+    text = strip_inline_chips(drop_prompt_echo(raw, prompt))
+    assert text.startswith("Yes, you are eligible")
+    assert "Instagram" not in text and "+1" not in text and "tumunich" not in text
+    assert "aptitude assessment" in text and "depends on points" in text
+    # the live research prompt is the question plus instructions; the page echoes only the question
+    wrapped = prompt + "\n\nOpen the official page and label every URL OPENED or MENTIONED ONLY."
+    echoed = prompt + " Yes, a 90 percent CBSE score does not by itself decide direct admission."
+    assert drop_prompt_echo(echoed, wrapped).startswith("Yes, a 90 percent")

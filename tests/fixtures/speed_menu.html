@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Speed menu</title>
+<style>body{font-family:system-ui} .c{position:fixed;bottom:12px;left:12px;right:12px} textarea{width:70%;height:40px} #menu{display:none;position:fixed;bottom:70px;right:80px;background:#222;color:#fff} #menu button{display:block}</style>
+</head><body>
+<main id="t"></main>
+<div class="c">
+  <form onsubmit="return false">
+    <textarea id="prompt-textarea" placeholder="Ask Qwen" aria-label="Chat input"></textarea>
+    <button type="button" id="speed">Auto</button>
+    <button type="button" id="send" aria-label="Send">Send</button>
+  </form>
+</div>
+<div id="menu" role="menu">
+  <button type="button" role="menuitem" id="opt-auto">Auto</button>
+  <button type="button" role="menuitem" id="opt-thinking">Thinking</button>
+  <button type="button" role="menuitem" id="opt-fast">Fast</button>
+</div>
+<script>
+window.clicked = [];
+const menu = document.getElementById('menu');
+const speed = document.getElementById('speed');
+const input = document.getElementById('prompt-textarea');
+const t = document.getElementById('t');
+speed.addEventListener('click', () => { window.clicked.push('open'); menu.style.display = 'block'; });
+for (const id of ['opt-auto', 'opt-thinking', 'opt-fast']) {
+  document.getElementById(id).addEventListener('click', () => {
+    const word = id.slice(4);
+    window.clicked.push(word);
+    speed.textContent = word[0].toUpperCase() + word.slice(1);
+    menu.style.display = 'none';
+  });
+}
+document.getElementById('send').addEventListener('click', () => {
+  const text = input.value.trim(); if (!text) return; input.value = ''; window.clicked.push('send');
+  const a = document.createElement('div');
+  a.setAttribute('data-message-author-role', 'assistant');
+  a.textContent = 'The Eiffel Tower was completed on March 31, 1889. It is 330 metres tall.';
+  t.appendChild(a);
+});
+</script>
+</body></html>

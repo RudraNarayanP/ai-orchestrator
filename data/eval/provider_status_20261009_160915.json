@@ -1,0 +1,83 @@
+[
+ {
+  "provider": "chatgpt",
+  "status": "completed",
+  "detail": "",
+  "answer": "Year passed: 2018 (Royal Assent on 23 May 2018).  Legislation.gov.uk  Official legislation.gov.uk page:  [https://www.legislation.gov.uk/ukpga/2018/12](https://",
+  "citations": 1,
+  "conversation_url": "https://chatgpt.com/uc/6ac8c3a8-8af4-83ea-81de-92fe35e591db",
+  "seconds": 10
+ },
+ {
+  "provider": "gemini",
+  "status": "completed",
+  "detail": "",
+  "answer": "The UK Data Protection Act was passed (received Royal Assent) in 2018. Official legislation.gov.uk page:  [https://www.legislation.gov.uk/ukpga/2018/12/contents",
+  "citations": 1,
+  "conversation_url": "https://gemini.google.com/app/e40c8c6dee2118f0",
+  "seconds": 11
+ },
+ {
+  "provider": "google_ai",
+  "status": "broken",
+  "detail": "no-response-element: AI Mode produced no answer block",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 92
+ },
+ {
+  "provider": "copilot",
+  "status": "logged_out",
+  "detail": "readiness=login_wall",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 5
+ },
+ {
+  "provider": "meta_ai",
+  "status": "logged_out",
+  "detail": "readiness=login_wall",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 6
+ },
+ {
+  "provider": "le_chat",
+  "status": "logged_out",
+  "detail": "readiness=login_wall after sending (page moved to: https://v2.auth.mistral.ai/login?flow=b27a12bd-d357-4887-b158-5da3296a11ab)",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 19
+ },
+ {
+  "provider": "pi",
+  "status": "failed",
+  "detail": "readiness=blocked (age/identity check or bot check)",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 6
+ },
+ {
+  "provider": "qwen",
+  "status": "failed",
+  "detail": "submit_failed: the prompt stayed in the composer after the send button and Enter (tried twice)",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 20
+ },
+ {
+  "provider": "deepseek",
+  "status": "logged_out",
+  "detail": "readiness=login_wall",
+  "answer": "",
+  "citations": 0,
+  "conversation_url": null,
+  "seconds": 3
+ }
+]
