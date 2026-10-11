@@ -24,6 +24,45 @@ only at the very end of a confident answer, never on "I don't know", "I'm not su
 
 ---
 
+## Quickstart (fresh clone, Windows)
+
+Needs Python 3.11+ and Google Chrome. Nothing else is installed system-wide.
+
+```bat
+git clone <this repo> omnibrain
+cd omnibrain
+start.bat
+```
+
+`start.bat` creates `.venv`, installs `requirements.txt`, copies `config\settings.example.yaml` to
+`config\settings.yaml` (git-ignored) on first run, checks the setup, starts the app and opens
+http://127.0.0.1:8730. Or by hand:
+
+```bat
+py -3 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe run.py doctor      # setup errors and warnings, models, providers; exit code 1 on an error
+.venv\Scripts\python.exe run.py serve       # http://127.0.0.1:8730
+```
+
+1. **Verifier key (optional but recommended).** Get a free key at https://openrouter.ai/keys and put it in
+   `config\settings.yaml` under `verifier.api_key` (that file is git-ignored) or set `OPENROUTER_API_KEY`.
+   Without it the evidence ledger still decides; no model adjudicates conflicts. The key is never committed,
+   logged or sent to the browser UI.
+2. **Providers.** ChatGPT, Gemini and Google AI Mode answer logged out. The others may ask for a sign-in or hit
+   a wall; OmniBrain reports that provider as blocked/rate-limited with the reason and carries on with the rest.
+   Sign in yourself where you want to (`run.py login copilot le_chat`, or in your own Chrome with
+   `browser.driver: chrome_use`). OmniBrain never types a password, solves a captcha or fills an age gate.
+3. **`run.py doctor`** is the first thing to run when something is off. It checks Python and packages, every key
+   in `settings.yaml` (a mistyped key is named with the likely spelling), that the data folders are writable,
+   that `settings.yaml` is git-ignored, the browser driver, the three model endpoints and each provider.
+
+A broken `settings.yaml` stops with `config error:` and the key, the value and the fix, not a traceback.
+`run.py serve` refuses a port that is already in use and says how to stop the old server.
+
+Other platforms: the code is plain Python; only `start.bat` and the process-cleanup command (`run.py close`) are
+Windows-specific.
+
 ## Run it
 
 ```bash
@@ -33,6 +72,7 @@ cd omnibrain
 # Optional, only for sites that wall off anonymous use (Copilot, Le Chat, Meta AI, Pi, Qwen, DeepSeek):
 #   .venv\Scripts\python.exe run.py login copilot le_chat   # one-time, in its own windows
 .venv\Scripts\python.exe run.py serve       # http://127.0.0.1:8730
+.venv\Scripts\python.exe run.py stop        # stop it cleanly (closes OmniBrain's browser tabs)
 ```
 
 **One click:** double-click `start.bat`. First run it builds `.venv` and installs
@@ -54,8 +94,7 @@ for the audit trail; web text is escaped so it cannot inject markup). Keyboard: 
 sends, Shift+Enter is a new line, `/` focuses the question box, Esc closes a panel,
 arrow keys move through history. The layout was checked at 320 and 375 px wide.
 
-Dependencies are already installed in `.venv` (Playwright 1.63, FastAPI, pydantic,
-httpx). To rebuild: `uv venv .venv --python 3.12 && uv pip install --python .venv/Scripts/python.exe -r requirements.txt`.
+To rebuild the environment: `uv venv .venv --python 3.12 && uv pip install --python .venv/Scripts/python.exe -r requirements.txt`.
 
 ---
 
