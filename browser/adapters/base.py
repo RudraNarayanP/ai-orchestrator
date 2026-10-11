@@ -43,6 +43,24 @@ RATE_LIMIT_RE = re.compile(
     r"please wait a (moment|few)|temporarily unavailable)",
     re.I,
 )
+# A usage-limit notice printed INTO the chat in place of an answer ("You've reached your daily limit ... check back at 5:30 AM").
+# The page keeps its composer, so the readiness check (which needs the composer gone) calls it ready.
+LIMIT_NOTICE_RE = re.compile(
+    r"(you'?ve reached (?:your |the )?(?:daily|free|message|usage|hourly|weekly)[^.\n]{0,30}limit|reached your (?:daily|usage|message|free)[^.\n]{0,20}limit|"
+    r"daily (?:message )?limit|check back (?:at|in|tomorrow|later)|out of (?:free )?(?:messages|credits)|usage limit)",
+    re.I,
+)
+
+
+def limit_notice(text: str) -> str | None:
+    """The usage-limit sentence in the tail of a chat page, or None."""
+    m = LIMIT_NOTICE_RE.search(text or "")
+    if not m:
+        return None
+    start = max(0, m.start() - 20)
+    return " ".join((text or "")[start : m.end() + 90].split())[:160]
+
+
 LOGIN_RE = re.compile(
     r"(sign in|log in|create (a |an )?account|continue with (google|facebook|apple|microsoft|github)|"
     r"get started for free|must (log in|sign in)|please (log|sign) ?in)",
@@ -691,6 +709,15 @@ class ChatAdapter:
                     error=f"readiness={after['state']} after sending (page moved to: {page.url[:80]})",
                     detail=(after.get("bodyHead") or "")[:300],
                 )
+                return False
+            try:
+                tail = await page.evaluate("() => document.body ? document.body.innerText.slice(-1500) : ''")
+            except Exception:  # noqa: BLE001 -- best effort, the empty-answer error below still applies
+                tail = ""
+            notice = limit_notice(tail if isinstance(tail, str) else "")
+            if notice:
+                # The site answered with its own limit notice: this is a rate limit (the runner backs the site off), not an empty reply.
+                response.note(ProviderStatus.RATE_LIMITED, error=f"rate_limited: {notice}", detail=notice)
                 return False
         response.answer_text = self._clean(text, prompt)
         response.raw_text = text

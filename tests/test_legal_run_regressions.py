@@ -201,3 +201,15 @@ def test_a_targeted_round_asks_each_researcher_once():
     points = [FollowUp(job_id="j", question=f"point {i}", reason="open") for i in range(5)]
     asyncio.run(runner._targeted_round(SimpleNamespace(id="j"), points, ["gemini", "qwen", "copilot"], round_no=3))
     assert sorted(asked) == ["copilot", "gemini", "qwen"]
+
+
+# ---- 6. a site's own "limit reached" message is a rate limit, not an empty answer (live: Copilot 11x, Le Chat 7x, ~1900 s of retries)
+def test_a_limit_notice_in_the_chat_is_recognised():
+    from browser.adapters.base import limit_notice
+
+    copilot = "Copilot said:\nYou've reached your daily limit. Get more usage now or check back at 5:30 AM.\nUpgrade\nMessage Copilot"
+    lechat = "Messages limit reached\n\nYou have reached your message limit. Your limit will reset in 6 minutes. Upgrade to Pro right now"
+    assert "daily limit" in limit_notice(copilot)
+    assert "reset in 6 minutes" in limit_notice(lechat)
+    assert limit_notice("The Court reached its decision on the daily rate of interest.") is None
+    assert limit_notice("") is None
