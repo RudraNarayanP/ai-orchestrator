@@ -196,3 +196,19 @@ def test_a_thread_file_from_before_context_was_stored_still_opens(tmp_path):
     assert msgs[0].content == "hello from before" and msgs[0].meta == {} and "context" not in msgs[0].public()
     store.add_message("throld", "user", "and after", meta={"chat": "ChatGPT A"})
     assert store.messages("throld")[-1].public()["context"]["chat"] == "ChatGPT A"
+
+def test_compress_over_http_summarises_and_primes_a_fresh_chat_that_the_next_message_continues(server, adapters):
+    tid = server.post("/api/threads", json={"title": "c"}).json()["thread_id"]
+    for text in ("We decided to use Postgres for the store.", "I prefer short answers.", "What about backups?"):
+        assert chat(server, tid, text).status_code == 200
+    out = server.post(f"/api/threads/{tid}/compress", json={}).json()
+    assert out["providers"]["chatgpt"]["ok"] and out["turns_summarised"] == 6
+    assert out["sources"]["chatgpt"].startswith("log")  # the fake tab cannot be read: the stored log is used
+    opening = adapters["chatgpt"].calls[-1]
+    assert opening["prompt"].startswith("We are continuing") and "Postgres" in opening["prompt"] and not opening["continue"]
+    chat(server, tid, "and restores?")
+    nxt = adapters["chatgpt"].calls[-1]
+    assert nxt == {"key": opening["key"], "prompt": "and restores?", "continue": True}
+    segs = server.get(f"/api/threads/{tid}/segments").json()["segments"]
+    assert [s["reason"] for s in segs][-1] == "compress"
+    assert server.post(f"/api/threads/{tid}/compress", json={"providers": ["nope"]}).status_code == 400

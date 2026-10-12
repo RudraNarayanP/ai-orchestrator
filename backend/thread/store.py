@@ -207,6 +207,17 @@ class ThreadStore:
         s = self.segment(r[0])
         return s if s is not None and s.open else None
 
+    def set_active(self, tid: str, sid: str) -> None:
+        with self._lock:
+            self.db.execute("update threads set active_segment=? where thread_id=?", (sid, tid))
+            self.db.commit()
+
+    def primed_segment(self, tid: str, provider: str) -> Segment | None:
+        """A chat Compress opened for this provider and that has not been used yet (it already holds the thread summary)."""
+        r = self.db.execute("select * from segments where thread_id=? and provider=? and reason='compress' and closed_at is null and first_seq is null "
+                            "order by idx desc limit 1", (tid, provider)).fetchone()
+        return self._seg(r) if r else None
+
     @staticmethod
     def _seg(r: sqlite3.Row) -> Segment:
         return Segment(r["segment_id"], r["thread_id"], r["idx"], r["provider"], r["provider_key"], r["opened_at"], r["closed_at"], r["first_seq"],

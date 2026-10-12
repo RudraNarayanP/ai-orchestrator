@@ -789,6 +789,58 @@ class ChatAdapter:
             pass
         return page
 
+    async def read_transcript(self, key: str = "", *, settle_s: float = 0.6, max_steps: int = 400, max_top_loads: int = 30) -> dict[str, Any] | None:
+        """Every turn of this provider's chat, read from the page (Compress). ``key`` names a conversation this adapter opened;
+        without one the chat already open in the tab is read. Background only: one synchronous page step per call (scroll the
+        chat container, read what is there), the waiting done here, so a background tab's throttled timers do not matter and
+        nothing is activated or focused. None when there is no tab or only a blank new-chat page."""
+        from backend.thread.transcript import merge_windows  # noqa: PLC0415
+
+        pages = getattr(self.engine, "_pages", None)
+        cached = pages.get(self.provider) if isinstance(pages, dict) else None
+        if cached is None or cached.is_closed():
+            return None  # never open a tab just to find it empty
+        page = cached
+        base = (self.cfg.new_chat_url or self.cfg.url or "").rstrip("/")
+        target = self._threads.get(key) if key else None
+        if target and (page.url or "").rstrip("/") != target.rstrip("/"):
+            await page.goto(target, wait_until="domcontentloaded", timeout=self.settings.browser.nav_timeout_ms)
+            await self._settle(page)
+        if (page.url or "").rstrip("/") == base:
+            return None
+        loads, last_h = 0, -1
+        while loads < max_top_loads:  # to the top until the site stops loading older turns
+            top = await self._call(page, "transcriptStep", self._sel_dict, "top")
+            if not isinstance(top, dict) or top.get("empty"):
+                return {"turns": [], "url": page.url, "steps": 0, "loads": loads, "expanded": 0}
+            if top.get("height") == last_h:
+                break
+            last_h = top.get("height")
+            loads += 1
+            await asyncio.sleep(settle_s)
+        windows, expanded, steps = [], 0, 0
+        cmd = "read"
+        while steps < max_steps:
+            got = await self._call(page, "transcriptStep", self._sel_dict, cmd)
+            steps += 1
+            if not isinstance(got, dict):
+                break
+            windows.append(got.get("turns") or [])
+            expanded += int(got.get("expanded") or 0)
+            if got.get("expanded"):  # a "show more" was opened: read this window again once it has grown
+                await asyncio.sleep(settle_s)
+                again = await self._call(page, "transcriptStep", self._sel_dict, "read")
+                windows.append((again or {}).get("turns") or [])
+            if got.get("atBottom") and cmd == "down":
+                break
+            cmd = "down"
+            await asyncio.sleep(settle_s / 2)
+        try:
+            await self._call(page, "transcriptStep", self._sel_dict, "restore")
+        except Exception:  # noqa: BLE001
+            pass
+        return {"turns": merge_windows(windows), "url": page.url, "steps": steps, "loads": loads, "expanded": expanded}
+
     url_wait_s: float = 8.0
 
     async def _conversation_url(self, page) -> str:

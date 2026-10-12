@@ -63,6 +63,7 @@ async function boot() {
   $("#thRecallBtn").addEventListener("click", recallThread);
   $("#thRecall").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); recallThread(); } });
   $("#thDelete").addEventListener("click", deleteThread);
+$("#thCompress").addEventListener("click", compressThread);
   $("#closeMemory").addEventListener("click", () => openPanel(null));
   $("#memSearch").addEventListener("click", memSearch);
   $("#memQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); memSearch(); } });
@@ -370,7 +371,7 @@ function globalKeys(e) {
  * Text-only (no innerHTML): provider replies are untrusted input.
  */
 const thread = { id: null, busy: false };
-const REASONS = { context_limit: "the previous chat was nearly full", provider_switch: "you changed provider", resume: "the thread was resumed" };
+const REASONS = { context_limit: "the previous chat was nearly full", provider_switch: "you changed provider", resume: "the thread was resumed", compress: "you pressed compress" };
 
 function enabledProviders() {
   const all = state.config?.providers || {};
@@ -518,6 +519,30 @@ async function sendThread() {
     thStatus("That didn't go through: " + e.message + " Your message is saved in the thread and marked as not answered.", true);
   } finally {
     thread.busy = false;
+    $("#thSend").disabled = false;
+    await refreshThread().catch(() => {});
+  }
+}
+
+/** Compress: OmniBrain reads every provider chat of this thread in full, summarises it with its own model, and opens a fresh
+ *  chat on each provider holding that summary. Runs in background tabs; this only waits and reports. */
+async function compressThread() {
+  if (thread.busy || !thread.id) return;
+  thread.busy = true;
+  $("#thCompress").disabled = true;
+  $("#thSend").disabled = true;
+  thStatus("Compressing: reading the full chats, summarising, opening fresh chats in the background\u2026");
+  try {
+    const out = await memCall(`/api/threads/${thread.id}/compress`, jsonOpts("POST", {}));
+    const ok = Object.entries(out.providers).filter(([, v]) => v.ok).map(([k]) => k);
+    const bad = Object.entries(out.providers).filter(([, v]) => !v.ok).map(([k, v]) => `${k} (${v.error})`);
+    thStatus(`Compressed ${out.turns_summarised} turns into ~${out.summary_tokens} tokens. Fresh chat: ${ok.join(", ") || "none"}` +
+             (bad.length ? `. Failed: ${bad.join("; ")}` : "") + `. (${out.timings_s.read + out.timings_s.summarise + out.timings_s.new_chats}s)`, bad.length > 0 && !ok.length);
+  } catch (e) {
+    thStatus("Compress didn't go through: " + e.message, true);
+  } finally {
+    thread.busy = false;
+    $("#thCompress").disabled = false;
     $("#thSend").disabled = false;
     await refreshThread().catch(() => {});
   }

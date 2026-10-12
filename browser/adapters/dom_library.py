@@ -9,12 +9,12 @@ about as often as we can test.
 from __future__ import annotations
 
 # Bumped whenever the page-side API changes, so a page holding an older copy gets the new one.
-DOM_LIBRARY_VERSION = 8
+DOM_LIBRARY_VERSION = 9
 
 # Installed with page.evaluate(DOM_LIBRARY_JS) before any interaction.
 DOM_LIBRARY_JS = r"""
 (() => {
-  if (window.__omnibrain && window.__omnibrain.version === 8) return 'already';
+  if (window.__omnibrain && window.__omnibrain.version === 9) return 'already';
   const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
   const lower = (s) => (s || '').toLowerCase();
 
@@ -568,7 +568,7 @@ DOM_LIBRARY_JS = r"""
   }
 
   const api = {
-    version: 8,
+    version: 9,
     chooseSpeed(cfg, want) { return pickSpeed(cfg, want); },
     guestDismiss(cfg) { return guestDismiss(cfg); },
     modeControls(cfg) { return modeControls(cfg); },
@@ -933,6 +933,65 @@ DOM_LIBRARY_JS = r"""
         if (out.length >= (limit || 12)) break;
       }
       return {items: out, pageText: norm(scope.innerText).slice(0, 3000), visibility: document.visibilityState, anchorsSeen: anchors.length};
+    },
+
+    // The whole chat, top to bottom, for Compress. Long chats are lazy-loaded / virtualised (ChatGPT keeps only the turns near
+    // the viewport), so one read is not enough. Python drives it one synchronous step per call (no page timers: a background
+    // tab throttles those to a crawl): 'top' scrolls the chat's own container to the top (scrollTop only: the tab is never
+    // activated or focused) and reports its height, so Python repeats it until nothing older loads; 'down' moves one
+    // overlapping window down and returns the turns visible there, after clicking "show more" inside them; 'restore' puts the
+    // scroll position back. Turns carry their position in the scroll content and the site's message id when it has one.
+    transcriptStep(cfg, cmd) {
+      const TURN = '[data-message-author-role], user-query, model-response, [data-testid="user-message"], [data-testid="bot-message"], ' +
+                   '[data-role="user"], [data-role="assistant"], [data-author="user"], [data-author="assistant"]';
+      const roleOf = el => {
+        const r = (el.getAttribute('data-message-author-role') || el.getAttribute('data-role') || el.getAttribute('data-author') || '').toLowerCase();
+        if (r) return r;
+        const t = el.tagName.toLowerCase(), tid = el.getAttribute('data-testid') || '';
+        if (t === 'user-query' || tid === 'user-message') return 'user';
+        if (t === 'model-response' || tid === 'bot-message') return 'assistant';
+        return isUserNode(el) ? 'user' : 'assistant';
+      };
+      const nodes = () => {
+        const found = Array.from(document.querySelectorAll(TURN)).filter(el => !(el.parentElement && el.parentElement.closest(TURN)));
+        return found.length ? found : assistantBlocks(cfg);
+      };
+      const scrollerOf = el => {
+        for (let n = el && el.parentElement; n; n = n.parentElement) {
+          const st = getComputedStyle(n);
+          if (/(auto|scroll)/.test(st.overflowY) && n.scrollHeight > n.clientHeight + 20) return n;
+        }
+        return document.scrollingElement || document.documentElement;
+      };
+      const tx = this._tx || (this._tx = {marks: 0, run: String(Date.now() % 1e8)});  // marks from an earlier read are not this read's
+      if (cmd === 'top' || !tx.sc || !tx.sc.isConnected) {
+        const first = nodes()[0];
+        if (!first) return {turns: [], height: 0, atBottom: true, empty: true};
+        if (!tx.sc || !tx.sc.isConnected) { tx.sc = scrollerOf(first); tx.origin = tx.sc.scrollTop; }
+      }
+      const sc = tx.sc;
+      if (cmd === 'top') { sc.scrollTop = 0; return {height: sc.scrollHeight, top: sc.scrollTop}; }
+      if (cmd === 'restore') { sc.scrollTop = tx.origin || 0; this._tx = null; return {restored: true}; }
+      if (cmd === 'down') sc.scrollTop = sc.scrollTop + Math.max(200, Math.floor(sc.clientHeight * 0.7));
+      const base = sc === document.scrollingElement || sc === document.documentElement ? 0 : sc.getBoundingClientRect().top;
+      let expanded = 0;
+      const turns = [];
+      for (const el of nodes()) {
+        el.querySelectorAll('button, [role="button"]').forEach(btn => {
+          const t = (btn.innerText || btn.getAttribute('aria-label') || '').trim();
+          if (/^(show more|read more|see more|expand|show full (message|text)|view more)$/i.test(t) && !btn.dataset.omnibrainExpanded) {
+            btn.dataset.omnibrainExpanded = '1';
+            try { btn.click(); expanded++; } catch (e) {}
+          }
+        });
+        const text = norm(el.innerText || el.textContent || '');
+        if (!text) continue;
+        if (!(el.dataset.omnibrainTurn || '').startsWith(tx.run + '-')) el.dataset.omnibrainTurn = tx.run + '-' + (++tx.marks);
+        const id = el.getAttribute('data-message-id') || el.getAttribute('data-turn-id') || el.id || '';
+        turns.push({role: roleOf(el), text, id, mark: el.dataset.omnibrainTurn, top: Math.round(el.getBoundingClientRect().top - base + sc.scrollTop)});
+      }
+      return {turns, expanded, height: sc.scrollHeight, top: sc.scrollTop, atBottom: sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2,
+              visibility: document.visibilityState};
     },
   };
 

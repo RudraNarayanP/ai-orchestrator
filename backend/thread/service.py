@@ -115,10 +115,18 @@ class ThreadService:
         """(segment to use, rotated?, reason). Closes the old segment when rotating."""
         seg = self.store.active_segment(tid)
         if seg is None:
+            primed = self.store.primed_segment(tid, provider)
+            if primed is not None:
+                self.store.set_active(tid, primed.segment_id)
+                return primed, False, ""
             reason = "resume" if self.store.has_segments(tid) else "start"
             return self.store.open_segment(tid, provider, reason), reason != "start" or False, reason
         if seg.provider != provider:
             self.close_segment(seg, "provider_switch")
+            primed = self.store.primed_segment(tid, provider)
+            if primed is not None:  # Compress already gave this provider a fresh chat holding the thread: use it
+                self.store.set_active(tid, primed.segment_id)
+                return primed, False, ""
             return self.store.open_segment(tid, provider, "provider_switch"), True, "provider_switch"
         if self.ctx.should_rotate(seg, incoming, provider):
             self.close_segment(seg, "context_limit")
@@ -135,7 +143,9 @@ class ThreadService:
         incoming = approx_tokens(text)
         seg, rotated, reason = self._segment_for(tid, provider, incoming)
         # a newly opened chat has no memory of the conversation; nor has a chat that never received anything (an earlier send failed)
-        fresh = seg.segment_id != (before.segment_id if before else None) or seg.tokens == 0
+        # (a chat Compress opened already holds the thread summary: it is continued, not given the thread again)
+        primed = seg.reason == "compress" and seg.first_seq is None and seg.tokens > 0
+        fresh = (seg.segment_id != (before.segment_id if before else None) and not primed) or seg.tokens == 0
         tokens_before = seg.tokens
         recent = self.store.messages(tid, last=self.recent_messages) if (fresh and prior) else []
         recall = is_recall_request(text) and prior > 0
@@ -227,6 +237,77 @@ class ThreadService:
     def recall(self, tid: str, query: str, *, k: int | None = None, now: float | None = None) -> tuple[list[Found], list[SummaryFound]]:
         return self.store.search(tid, query, k=k or self.recall_k, window=time_window(query, now))
 
+    # ------------------------------------------------------------------ Compress
+    async def compress(self, tid: str, providers: list[str], ask: "Ask", read: "Read | None" = None, *, chunk_chars: int = 18000,
+                       recent: int = 4) -> dict[str, Any]:
+        """Summarise the WHOLE conversation with OmniBrain's own model and start a fresh chat on each provider with it.
+
+        1. each provider tab's current chat is read completely (``read``: scroll + collect, background only); a page that
+           cannot be read completely is replaced by OmniBrain's stored log of that chat (transcript.merge_sources);
+        2. the curator model (OpenRouter free model, reasoning off, fallback + cooldown) summarises it, chunked and merged;
+        3. the open chat is closed, and each provider gets a NEW chat whose first message is the summary; the next message
+           to that provider continues that chat instead of opening another one."""
+        from backend.thread.transcript import chunked_summary, dedupe_turns, merge_sources, opening_context  # noqa: PLC0415
+
+        if self.store.get_thread(tid) is None:
+            raise KeyError(f"unknown thread {tid}")
+        stored = await asyncio.to_thread(self.store.messages, tid)
+        if not stored:
+            raise ValueError("this thread has nothing to compress yet")
+        t0 = time.monotonic()
+        used = {m.provider for m in stored}
+        pages: dict[str, Any] = {}
+        reads: dict[str, Any] = {}
+
+        async def read_one(p: str) -> None:
+            try:
+                got = await read(p) if read else None
+            except Exception as exc:  # noqa: BLE001 -- an unreadable tab falls back to the log
+                got, reads[p] = None, {"error": _short_error(exc)}
+            pages[p] = dedupe_turns(got.get("turns") or [], p) if got else None
+            if got:
+                reads[p] = {k: got.get(k) for k in ("steps", "loads", "expanded", "url")} | {"turns": len(pages[p] or [])}
+
+        if read is not None:
+            await asyncio.gather(*(read_one(p) for p in providers if p in used))
+        gathered = merge_sources(stored, pages)
+        t_read = time.monotonic()
+        state, methods = await asyncio.to_thread(chunked_summary, gathered.turns, self.curator, max_chars=chunk_chars)
+        t_sum = time.monotonic()
+        th = self.store.get_thread(tid) or {}
+        state["superseded"] = list((th.get("state") or {}).get("superseded") or []) + list(state.get("superseded") or [])
+        await asyncio.to_thread(self.store.set_state, tid, state)
+        seg = self.store.active_segment(tid)
+        if seg is not None:
+            msgs = self.store.messages(tid, segment_id=seg.segment_id)
+            await asyncio.to_thread(self.store.close_segment, seg.segment_id, deterministic_summary(msgs), "deterministic (compress)")
+            self._open_cache.pop((tid, seg.idx), None)
+        packet = build_packet(state=state, recent=self.store.messages(tid, last=recent), task="", budget_tokens=self.packet_budget,
+                              project=th.get("project"), include_task=False)
+        opening = opening_context(packet.text)
+        opened: dict[str, Any] = {}
+
+        async def prime(p: str) -> None:
+            s = await asyncio.to_thread(self.store.open_segment, tid, p, "compress")
+            try:
+                reply = await ask(p, s.provider_key, opening, False)
+                await asyncio.to_thread(self.store.add_segment_tokens, s.segment_id, approx_tokens(opening) + approx_tokens(reply or ""))
+                opened[p] = {"ok": True, "chat": self.label(s), "segment_id": s.segment_id, "reply": (reply or "")[:200]}
+            except BaseException as exc:  # noqa: BLE001 -- one provider failing must not stop the others
+                await asyncio.to_thread(self.store.close_segment, s.segment_id, deterministic_summary([]), "compress failed")
+                opened[p] = {"ok": False, "error": _short_error(exc)}
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
+
+        await asyncio.gather(*(prime(p) for p in providers))
+        first = next((opened[p]["segment_id"] for p in providers if opened.get(p, {}).get("ok")), None)
+        if first:
+            await asyncio.to_thread(self.store.set_active, tid, first)
+        t_end = time.monotonic()
+        return {"messages": len(stored), "turns_summarised": len(gathered.turns), "sources": gathered.sources, "reads": reads, "chunks": len(methods),
+                "methods": methods, "summary_tokens": packet.tokens, "summary": opening, "providers": opened,
+                "timings_s": {"read": round(t_read - t0, 1), "summarise": round(t_sum - t_read, 1), "new_chats": round(t_end - t_sum, 1)}}
+
     # ------------------------------------------------------------------ driving a real provider
     def _mark_unanswered(self, plan: TurnPlan, exc: BaseException) -> None:
         try:
@@ -253,6 +334,7 @@ class ThreadService:
 
 
 Ask = Callable[[str, str, str, bool], Awaitable[str]]
+Read = Callable[[str], Awaitable["dict[str, Any] | None"]]
 
 
 def _short_error(exc: BaseException) -> str:

@@ -180,6 +180,16 @@ class JobManager:
                     store.close()
             setattr(self, name, None)
 
+    async def thread_adapters(self) -> dict[str, Any]:
+        """The thread screen's provider adapters, kept for the life of the engine: an adapter remembers which site chat
+        belongs to which thread chat, so a fresh catalog per request would open a new site chat for every message."""
+        engine = await self.engine_get()
+        cat = getattr(self, "_thread_catalog", None)
+        if cat is None or getattr(self, "_thread_catalog_engine", None) is not engine:
+            cat = self._thread_catalog = ProviderCatalog(self.settings, engine)
+            self._thread_catalog_engine = engine
+        return cat.all()
+
     async def engine_get(self) -> BrowserEngine:
         if self.engine is None:
             self.engine = create_engine(self.settings)
@@ -557,8 +567,7 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="text and provider are required")
         if len(text) > MAX_QUESTION_CHARS:
             raise HTTPException(status_code=400, detail=f"message is too long (max {MAX_QUESTION_CHARS} characters)")
-        engine = await manager.engine_get()
-        adapters = ProviderCatalog(manager.settings, engine).all()
+        adapters = await manager.thread_adapters()
         if provider not in adapters:
             raise HTTPException(status_code=400, detail=f"unknown or disabled provider {provider!r}")
         try:
@@ -569,6 +578,36 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
         return {"reply": turn.reply, "rotated": p.rotated, "reason": p.reason, "chat": p.segment_label, "provider": provider,
                 "context": {"packet_tokens": p.packet.tokens if p.packet else 0, "recalled": len(p.recalled), "memory_used": p.memory_lines,
                             "continued_chat": p.continue_thread}}
+
+    @app.post("/api/threads/{tid}/compress")
+    async def thread_compress(tid: str, request: Request) -> Any:
+        """Compress: read every provider chat of this thread completely (background tabs only), summarise the whole
+        conversation with OmniBrain's own model, and open a NEW chat on each provider with that summary as its opening
+        context. ``providers`` defaults to the providers this thread has used; only enabled (allowlisted) ones are driven."""
+        from backend.thread.service import DISPLAY, VIRTUAL, adapter_ask
+
+        svc = _thread_or_404(tid)
+        body = await _json_object(request)
+        wanted = body.get("providers")
+        if wanted is not None and (not isinstance(wanted, list) or not all(isinstance(p, str) for p in wanted)):
+            raise HTTPException(status_code=400, detail="providers must be a list of provider names")
+        adapters = await manager.thread_adapters()
+        if wanted is None:
+            wanted = list(dict.fromkeys(s.provider for s in svc.store.segments(tid) if s.provider != VIRTUAL and s.provider in DISPLAY))
+        unknown = [p for p in wanted if p not in adapters]
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"unknown or disabled provider(s): {', '.join(unknown)}")
+        if not wanted:
+            raise HTTPException(status_code=400, detail="this thread has not used a provider yet; pass providers")
+
+        async def read(provider: str) -> Any:
+            seg = next((s for s in reversed(svc.store.segments(tid)) if s.provider == provider), None)
+            return await adapters[provider].read_transcript(seg.provider_key if seg else "")
+
+        try:
+            return await svc.compress(tid, wanted, adapter_ask(adapters), read)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
 
     @app.delete("/api/threads/{tid}")
     async def thread_delete(tid: str) -> Any:
