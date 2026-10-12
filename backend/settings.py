@@ -208,6 +208,10 @@ class ResearchConfig(BaseModel):
     follow_up_providers: int = 3
     min_independent_sources: int = 2
     claim_batch_size: int = 12
+    speculative_delay_s: float = 8.0
+    """Start this many seconds after the primary, a few independent researchers on the same question (0 = off). Cancelled unseen if
+    the primary finishes first; used only when the primary did not settle it."""
+    speculative_count: int = 2
     secondary_cap_s: float = 40.0
     """Parallel / targeted rounds: once one researcher has answered, the others get this long from the round's start, then the
     stragglers are dropped from this question (0 = wait for every one). The slowest site never sets the pace (2026-10-12 profile:

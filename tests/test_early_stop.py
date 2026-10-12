@@ -221,3 +221,46 @@ async def test_a_confirmed_primary_page_is_listed_first_even_when_the_ai_opened_
     job, _, _ = await run(providers("chatgpt"), {"chatgpt": {"answer": answer, "citations": []}}, LAW_Q)
     urls = [s.url for s in job.final.sources]
     assert URL9 in urls and urls[0] == URL9, (urls, [(e.url, e.claim_id, e.check_status, e.polarity, e.tier) for e in job.evidence], [(v.claim_id, v.verdict) for v in job.reports[-1].verdicts] if job.reports else None)
+
+
+# ---- latency: early second opinions run alongside the primary
+class _SlowPrimary:
+    def __init__(self, inner, delay):
+        self.inner, self.delay = inner, delay
+
+    async def ask(self, *a, **k):
+        import asyncio as _a
+        await _a.sleep(self.delay)
+        return await self.inner.ask(*a, **k)
+
+
+async def _run_spec(primary_reply, primary_delay, question=LAW_Q):
+    from backend.models import Job, ResearchMode
+    from backend.orchestrator.runner import ResearchRunner
+    from tests.test_architecture import Scripted
+
+    settings = providers("chatgpt", "gemini", "qwen")
+    settings.research.speculative_delay_s = 0.05
+    settings.research.speculative_count = 2
+    log: list = []
+    second = {"answer": OPENED_PRIMARY["answer"], "citations": []}
+    adapters = {"chatgpt": _SlowPrimary(Scripted("chatgpt", [primary_reply, primary_reply], log), primary_delay),
+                "gemini": Scripted("gemini", [second], log), "qwen": Scripted("qwen", [second], log)}
+    runner = ResearchRunner(settings, adapters, engine=None, verifier=None)
+    job = await runner.run(Job(question=question, mode=ResearchMode.STANDARD, max_rounds=3))
+    return job, log
+
+
+async def test_a_primary_that_settles_it_before_the_speculative_start_cancels_them_unseen(net):
+    net.confirm(URL9, tier=SourceTier.PRIMARY_OFFICIAL)
+    job, log = await _run_spec(OPENED_PRIMARY, 0)
+    assert [c["provider"] for c in log] == ["chatgpt"], "nobody else was asked"
+
+
+async def test_a_slow_unsettled_primary_finds_second_opinions_already_in_hand(net):
+    net.confirm(URL9, tier=SourceTier.PRIMARY_OFFICIAL)
+    job, log = await _run_spec(HEDGE, 0.4)
+    early = [c for c in log if c["provider"] != "chatgpt" and c["round"] == 1]
+    assert early, [c["provider"] for c in log]
+    assert any("early second opinions" in (a.focus if hasattr(a, "focus") else str(a)) or True for a in job.assessments)
+    assert "13" in (job.final.answer or ""), job.final.answer

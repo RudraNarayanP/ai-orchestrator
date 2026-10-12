@@ -276,8 +276,18 @@ class ResearchRunner:
             history=job.history if analysis.follow_up else None,
             context=job.memory_context,
         )
-        response = await self._ask(primary, prompt, round_no, role="primary", job_id=job.id)
+        # Speculative second opinions: a few independent researchers start shortly after the primary, so that if the primary
+        # does not settle it their answers are already in hand instead of starting only then (live: +60-120 s per question).
+        # Asks still waiting for their start when the primary finishes are cancelled unseen; nothing speculative is used unless
+        # the primary's own evidence left the question open.
+        speculative = self._speculate(job, analysis, enabled, primary, round_no)
+        try:
+            response = await self._ask(primary, prompt, round_no, role="primary", job_id=job.id)
+        except BaseException:
+            await self._drop_speculation(speculative, keep_started=False)
+            raise
         if self._driver_down:
+            await self._drop_speculation(speculative, keep_started=False)
             job.responses.extend([r for r in [response] if r])
             return await self._driver_down_fail(job)
         responses: list[ProviderResponse] = [r for r in [response] if r]
@@ -301,6 +311,22 @@ class ResearchRunner:
         )
 
         verifier_enabled = self.verifier is not None and self.settings.verifier.provider != "disabled"
+
+        settled_now = self._settled(assessment, disagreements) and not analysis.high_stakes
+        extra = await self._drop_speculation(speculative, keep_started=not settled_now and not assessment.sufficient)
+        if extra:
+            responses.extend(extra)
+            job.responses.extend(extra)
+            record.response_ids.extend(r.id for r in extra)
+            job.browser_sessions_used += len({r.provider for r in extra})
+            claims = await self._extract(responses, job)
+            more_evidence, _ = await self._pool(job, claims, extra, round_no)
+            evidence = _merge_evidence(evidence, more_evidence)
+            disagreements = await self._disagreements(job, claims, round_no)
+            assessment = self._assess(job, analysis, claims, evidence, disagreements, round_no, focus="primary + early second opinions")
+            job.assessments.append(assessment)
+            await self._emit("assessment", f"with early second opinions: {assessment.reason}", round_no=round_no, job=job,
+                             sufficient=assessment.sufficient)
 
         # Enough already? Then stop. Do not spawn a swarm to feel thorough.
         if self._settled(assessment, disagreements) and not analysis.high_stakes:
@@ -936,6 +962,45 @@ class ResearchRunner:
             return False
         job.stop_note = f"stopped researching early: {spent:.0f}s used of the {budget:.0f}s budget; what was found is judged as it stands"
         return True
+
+    def _speculate(self, job: Job, analysis: Any, enabled: list[str], primary: str, round_no: int) -> list[tuple[str, Any, dict[str, bool]]]:
+        settings = getattr(self, "settings", None)
+        research = getattr(settings, "research", None)
+        delay = float(getattr(research, "speculative_delay_s", 0) or 0)
+        count = int(getattr(research, "speculative_count", 0) or 0)
+        if delay <= 0 or count <= 0 or not getattr(analysis, "needs_web_research", False):
+            return []
+        names = router.select_secondaries(analysis, enabled, exclude=[primary], count=count, health=self.health, prior=self.prior_health)
+        out = []
+        for name in [n for n in names if n != "search"][:count]:
+            flag = {"started": False}
+
+            async def one(provider: str = name, flag: dict[str, bool] = flag) -> ProviderResponse | None:
+                await asyncio.sleep(delay)
+                flag["started"] = True
+                prompt = research_prompt(job.question, provider=provider, analysis=analysis, round_no=round_no,
+                                         needs_web=analysis.needs_web_research,
+                                         history=job.history if analysis.follow_up else None, context=job.memory_context)
+                return await self._ask(provider, prompt, round_no, role="secondary", job_id=job.id,
+                                       escalation_reason="early second opinion, started alongside the primary")
+
+            out.append((name, asyncio.ensure_future(one()), flag))
+        return out
+
+    async def _drop_speculation(self, speculative: list[tuple[str, Any, dict[str, bool]]], *, keep_started: bool) -> list[ProviderResponse]:
+        """Cancel speculative asks that have not started; with ``keep_started``, collect the ones that did (capped like any round)."""
+        if not speculative:
+            return []
+        keep = [(n, t) for n, t, f in speculative if keep_started and f["started"]]
+        drop = [t for n, t, f in speculative if (n, t) not in keep]
+        for t in drop:
+            if not t.done():
+                t.cancel()
+        await asyncio.gather(*drop, return_exceptions=True)
+        if not keep:
+            return []
+        done = await self._gather_capped([t for _, t in keep], [n for n, _ in keep], 1)
+        return [r for r in done if isinstance(r, ProviderResponse) and r.status.value == "completed"]
 
     async def _gather_capped(self, coros: list[Any], providers: list[str], round_no: int) -> list[Any]:
         """Run the asks together. After ``secondary_cap_s``, if at least one researcher has answered, drop the stragglers; if none has,
