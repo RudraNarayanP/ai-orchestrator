@@ -404,7 +404,7 @@ def cmd_close(_: argparse.Namespace) -> int:
             capture_output=True,
             text=True,
             timeout=45,
-        ).stdout
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
     except Exception as exc:  # noqa: BLE001
         print(f"could not enumerate processes: {exc}")
         return 1
@@ -417,12 +417,12 @@ def cmd_close(_: argparse.Namespace) -> int:
                 ["powershell", "-NoProfile", "-Command",
                  f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"],
                 capture_output=True, text=True, timeout=20,
-            ).stdout.lower()
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout.lower()
         except Exception:  # noqa: BLE001
             detail = ""
         if profiles not in detail and "omnibrain" not in detail:
             continue
-        subprocess.run(["taskkill", "/PID", pid.strip(), "/T", "/F"], capture_output=True, timeout=20)
+        subprocess.run(["taskkill", "/PID", pid.strip(), "/T", "/F"], capture_output=True, timeout=20, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         killed += 1
     print(f"closed {killed} OmniBrain browser process(es). Your own Chrome was not touched.")
     return 0
@@ -435,7 +435,7 @@ def cmd_probe(args: argparse.Namespace) -> int:
         forwarded.append("--login")
     if args.wait is not None:
         forwarded += ["--wait", str(args.wait)]
-    return subprocess.call([sys.executable, str(script), *args.providers, *forwarded])
+    return subprocess.call([sys.executable, str(script), *args.providers, *forwarded], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
 def cmd_promote_selectors(args: argparse.Namespace) -> int:

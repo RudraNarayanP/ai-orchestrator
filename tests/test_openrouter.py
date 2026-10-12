@@ -142,7 +142,7 @@ def test_the_example_config_has_an_openrouter_block_and_no_secret():
 def test_no_openrouter_key_is_committed_anywhere():
     """The key lives only in gitignored config/settings.yaml (or the environment)."""
     try:
-        files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.splitlines()
+        files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout.splitlines()
     except (OSError, subprocess.CalledProcessError):
         pytest.skip("not a git checkout")
     offenders = []

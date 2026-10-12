@@ -246,7 +246,7 @@ def cmd_scenarios(args):
     blocks = {svc.context_for("what is my cat's name?")[0] for _ in range(5)}
     check("consistency", "identical context block on repeated calls (every provider receives the same text)", len(blocks) == 1)
     # --- memory never evidence: run the isolation tests
-    p = subprocess.run([sys.executable, "-m", "pytest", "-q", "tests/test_memory_isolation.py", "--tb=line"], cwd=ROOT, capture_output=True, text=True)
+    p = subprocess.run([sys.executable, "-m", "pytest", "-q", "tests/test_memory_isolation.py", "--tb=line"], cwd=ROOT, capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     last = [ln for ln in p.stdout.splitlines() if "passed" in ln or "failed" in ln][-1:] or ["?"]
     check("evidence", "memory never reaches claims/evidence/final answer; all providers get the same block", p.returncode == 0, last[0])
     out = {"embedder": emb.name, "passed": sum(r["pass"] for r in results), "total": len(results), "results": results}

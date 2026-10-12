@@ -411,7 +411,7 @@ def main() -> int:
     if SECRET_FOR_CHILD["key"] and not env.get("OPENROUTER_API_KEY"):
         env["OPENROUTER_API_KEY"] = SECRET_FOR_CHILD["key"]
     log = open(OUT_DIR / f"_server_{stamp}.log", "wb")
-    server = subprocess.Popen([sys.executable, str(ROOT / "run.py"), "serve", "--port", str(port)], cwd=ROOT, env=env, stdout=log, stderr=log)
+    server = subprocess.Popen([sys.executable, str(ROOT / "run.py"), "serve", "--port", str(port)], cwd=ROOT, env=env, stdout=log, stderr=log, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     records: list[dict[str, Any]] = []
     try:
         for _ in range(60):
@@ -447,7 +447,7 @@ def main() -> int:
         except Exception:  # noqa: BLE001
             server.kill()
         log.close()
-        subprocess.run([sys.executable, str(ROOT / "run.py"), "close"], cwd=ROOT, capture_output=True)
+        subprocess.run([sys.executable, str(ROOT / "run.py"), "close"], cwd=ROOT, capture_output=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         cfg_file.unlink(missing_ok=True)
     return 0 if all(r["judgement"]["verdict"] != "FAIL" for r in records) else 1
 

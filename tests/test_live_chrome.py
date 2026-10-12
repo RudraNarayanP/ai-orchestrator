@@ -919,7 +919,7 @@ def test_wrapped_script_survives_dom_nodes_and_cycles():
         "out.push(await run(" + json.dumps(lc.wrap_for_cli("(async () => { throw new Error('boom'); })()")) + "));"
         "console.log(JSON.stringify(out)); })();"
     )
-    done = subprocess.run(["node", "-e", probe], capture_output=True, text=True, timeout=30)
+    done = subprocess.run(["node", "-e", probe], capture_output=True, text=True, timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout) == [
         {"ok": True, "v": {}},
@@ -989,7 +989,7 @@ def test_chat_history_that_mentions_an_age_check_is_not_an_age_gate():
         "const wall = run('Confirm you are over 18. Date of birth.', false);"
         "console.log(JSON.stringify({ready: ready.age, wall: wall.age}));"
     )
-    done = subprocess.run(["node", "-e", probe], capture_output=True, text=True, timeout=30)
+    done = subprocess.run(["node", "-e", probe], capture_output=True, text=True, timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout) == {"ready": False, "wall": True}
 
