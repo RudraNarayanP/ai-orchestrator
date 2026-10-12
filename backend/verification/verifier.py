@@ -1463,6 +1463,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
     state = truth_state(report, question) if question and (report.verdicts or report.confidence == Confidence.NONE) else ""
+    ledger_state = state
     state = premise_state(state, question, lint_answer(report.answer, question=question).text) if state else state
     S = ClaimStatus
     settled = {S.SUPPORTED, S.REFUTED, S.PARTIALLY_SUPPORTED, S.CONTESTED}
@@ -1500,7 +1501,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
                 answer=body,
                 aspect=_aspect(report) if state == "PARTLY" else "",
             )
-            text = humanize(shown, "high" if state in {"TRUE", "FALSE"} else "low")
+            text = humanize(shown, "high" if state in {"TRUE", "FALSE"} and ledger_state in {"TRUE", "FALSE"} else "low")
         else:
             body = apply_uk_iss_age_temporal_frame(
                 _lint_headline_answer(report.answer, question=question, state=state, unknowns=unknowns),

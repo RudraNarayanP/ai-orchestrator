@@ -530,7 +530,7 @@ def voice_report(answer: str) -> dict:
 
 # ------------------------------------------------------------------ truth states -> what the user reads
 # The state comes from the evidence ledger (verifier.truth_state). This is presentation only: tone never decides it.
-TRUTH_STATES = ("TRUE", "PARTLY", "FALSE", "CONFLICT", "UNVERIFIED")
+TRUTH_STATES = ("TRUE", "PARTLY", "FALSE", "CONFLICT", "UNVERIFIED", "OPEN")
 TRUTH_TRUE = "Yeah, you're right."
 TRUTH_FALSE = "Nah, that doesn't work like that."
 TRUTH_CONFLICT = "Hmm, I'm not sure \u2014 the sources disagree."
@@ -608,6 +608,7 @@ _DENIAL_RE = re.compile(
     r"\b(not|never|no longer|cannot|can'?t|doesn'?t|does not|didn'?t|did not|isn'?t|is not|aren'?t|are not|wasn'?t|weren'?t|myth|false"
     r"|void|unenforceable|invalid|unlawful|illegal|prohibited|impermissible|forbidden|barred|inadmissible|omitted|repealed|revoked)\b", re.I
 )
+_OPEN_RE = re.compile(r"\b(?:not (?:yet )?settled|unsettled|open question|remains? (?:open|unresolved|undecided)|courts? (?:are|remain) (?:split|divided)|no (?:court|appellate court|binding (?:court|decision|ruling)) has (?:yet )?(?:decided|ruled|established|held|resolved)|has not (?:yet )?been (?:decided|resolved|settled)|depends on the (?:four )?(?:statutory )?factors|case[- ]by[- ]case)\b", re.I)
 _LEAD_NO = re.compile(r"^\s*(?:no|nope|nah)\b", re.I)
 _LEAD_YES = re.compile(r"^\s*(?:yes|yeah|yep|yup)\b", re.I)
 # What follows these words qualifies the answer; it does not decide whether the answer agrees or disagrees with the question.
@@ -626,11 +627,16 @@ def premise_state(state: str, question: str, answer: str) -> str:
     what the answer says. When the question states something without a negation and the answer denies it, the
     user's claim is FALSE. Only TRUE flips; every other state, and every case the polarity is unclear, is untouched.
     """
-    if (state or "").upper() != "TRUE" or not is_claim_check(question):
-        return state
-    if _DENIAL_RE.search(question or ""):
+    if (state or "").upper() not in {"TRUE", "PARTLY"} or not is_claim_check(question):
         return state
     lead = (answer or "").strip()
+    # An open legal question answered "it depends / no court has decided" is neither a yes nor a no (live 2026-10-12, AI-training fair use).
+    if _OPEN_RE.search(_first_sentence(lead)):
+        return "OPEN"
+    # Only the question's own head clause sets its polarity: "Does India enforce awards ..., even one the government has NOT
+    # notified?" asserts enforcement; the later "not" qualifies it (live 2026-10-12: answered "Yeah, you're right. India does not ...").
+    if _DENIAL_RE.search(_head_clause(re.split(r",", question or "", maxsplit=1)[0])):
+        return state
     if _LEAD_YES.match(lead):
         return state  # the answer itself says yes: a "not yet in force" later in the sentence is a qualification, not a denial
     first = _head_clause(_first_sentence(lead))
@@ -686,6 +692,10 @@ def render_truth(state: str, *, question: str = "", answer: str = "", aspect: st
         return TRUTH_UNVERIFIED
     if state == "CONFLICT":
         return TRUTH_CONFLICT
+    if state == "OPEN":
+        # an open question: say it is not settled, then the reason -- never a yes or a no
+        base = "That one isn't settled yet."
+        return tiny(f"{base} {fit_fact(fact, 300 - len(base) - 1)}".strip(), max_sentences=2, max_chars=300)
     if not claim:
         return tiny(answer, max_sentences=3, max_chars=280)
     if state == "TRUE":

@@ -183,7 +183,8 @@ def test_agreement_is_untouched_when_the_answer_affirms_or_the_question_is_negat
 def test_uncertain_states_are_never_flipped_by_the_premise_check():
     from backend.research.style import premise_state
 
-    for state in ("UNVERIFIED", "CONFLICT", "PARTLY", "FALSE"):
+    # PARTLY is no longer in this list: a partly supported answer that DENIES the premise leads with "Nah" (2026-10-12 legal run), see below.
+    for state in ("UNVERIFIED", "CONFLICT", "FALSE"):
         assert premise_state(state, TEN, "Humans do not use only 10%.") == state
 
 def test_appended_fact_starts_with_a_capital():
@@ -310,3 +311,35 @@ def test_a_wh_question_opening_with_a_preposition_is_not_a_claim_check():
     assert render_truth(
         "PARTLY", question="The tower was finished in 1887, right?", answer="It was completed in 1889.", aspect="date"
     ).startswith("Yeah, the idea is right")
+
+
+# ---- 2026-10-12 legal run: the lead follows what the settled answer says about the user's premise
+from backend.research.style import premise_state as _premise
+
+
+def test_a_partly_supported_answer_that_denies_the_premise_leads_with_no():
+    q = "As of October 2026, are all the substantive obligations of the Act already in force?"
+    a = "As of 12 October 2026, the substantive obligations of the Act are not yet in force."
+    assert _premise("PARTLY", q, a) == "FALSE"
+    assert render_truth("FALSE", question=q, answer=a).startswith("Nah")
+
+
+def test_only_the_question_head_clause_sets_its_polarity():
+    q = "Does the country enforce awards made in any Convention state, even one the government has not notified?"
+    assert _premise("TRUE", q, "The country does not enforce awards from states that were not notified.") == "FALSE"
+    assert _premise("TRUE", "Is it true the Act doesn't ban VPNs?", "The Act does not ban VPNs.") == "TRUE"
+
+
+def test_an_open_legal_question_is_neither_yes_nor_no():
+    q = "Is training a model on copyrighted books without a licence fair use under US law?"
+    a = "It is not automatically fair use; it depends on the four statutory factors, and no court has yet established a blanket rule."
+    assert _premise("PARTLY", q, a) == "OPEN"
+    out = render_truth("OPEN", question=q, answer=a)
+    assert out.startswith("That one isn't settled yet") and not out.lower().startswith(("yes", "yeah", "no", "nah"))
+
+
+def test_a_premise_flip_from_partly_keeps_low_confidence():
+    rep = report(verdict(ClaimStatus.PARTIALLY_SUPPORTED, "The obligations are not yet in force."), answer="The obligations are not yet in force.")
+    fa = build_final_answer(rep, [], 1, "Are all the obligations of the Act already in force?")
+    assert fa.answer.startswith("Nah") or fa.truth_state in {"UNVERIFIED", "CONFLICT"}, fa.answer
+    assert "\u2705" not in fa.answer, "a flipped PARTLY never gains the high-confidence mark"
