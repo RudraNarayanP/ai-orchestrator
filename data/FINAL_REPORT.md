@@ -259,3 +259,42 @@ Manual steps: Le Chat needs the user's own sign-in (`run.py login le_chat`). Goo
 **Not done / still open.** Gemini/Meta AI briefly raised in background mode (moot now that the user runs foreground). The Le Chat rate limit and Google AI Mode were not investigated further. Copilot's mode picker was not found. ChatGPT Deep Research and the Gemini tools menu are menu items OmniBrain does not drive. The prior-art items (answer-capture ideas from AmT42/agent-council-browser, MIT; fencing provider output and recalled memory as untrusted data) are still queued.
 
 **User actions.** Qwen: complete the age page yourself in Chrome (OmniBrain will not). Le Chat: wait out or check the account's limit. Google AI Mode: check whether answers appear when you are signed in to Google. Edge (optional): add the chrome-use extension from https://chromewebstore.google.com/detail/knfcmbamhjmaonkfnjhldjedeobeafmk (Edge first asks to "Allow extensions from other stores"), sign in to the providers there, then set `chrome_use_browser: edge`.
+
+## 15. Fixes after the 12 Oct 2026 review, live re-checks and full 37-question legal run
+
+### Fixes (each with a regression test)
+| commit | fix |
+|---|---|
+| 8d63cfb | Verifier, incomplete curator review: merged curator verdicts are reconciled against opened pages and the answer is rebuilt from confirmed claims (s9 "couldn't verify" despite a supported claim); an unbacked "supported" is still overruled. Per-model LLM timing logs. |
+| 35a416e | Slowness: a partly settled primary goes straight to the targeted round; the sequential whole-question re-ask (~70 s) is skipped. |
+| 8f7dcfb | ChatGPT long chats: a new reply is detected by marked baseline blocks, not block count, so virtualised chats (old turns unmount) are captured. DOM library v10. |
+| cce4441 | Headline: a "still in force?" question answered "no longer in force" now leads with "Nah", not "Yeah, the idea is right". |
+| 9c4d57d | (earlier) Tabs closed after every job / Compress; at most one tab per provider. |
+
+Stray "?" at the end of answers: not a bug; it is the intended emoji, mis-rendered by the cp1252 console. Files are correct UTF-8.
+
+### Live re-checks
+- DPDP child-17: 295 s -> 185 s (re-check) and 77 s in the full run. Primary 36 s, sources 36 s, targeted 61 s (Le Chat slowest), curator 18 s.
+- s9: "couldn't verify" -> answers correctly ("Nah ... no longer in force") after cce4441.
+- Long ChatGPT chat (compress_live_check --long): all 7 ChatGPT turns captured, 0 "pre-existing message" failures; both new chats recalled May / TANGERINE-42 / Frankfurt; focus never changed.
+
+### Full run (eval_20261012_184841): PASS 13, WARN 13, FAIL 11
+| # | id | result | time | answer |
+|---|---|---|---|---|
+| 1 | lg-rome1-free-choice | WARN | 233s | Yeah, you're right. Under Article 3(1) of the Rome I Regulation, parties to a cross-border business-to-busines |
+| 2 | lg-rome1-uk-after-brexit | WARN | 204s | Couldn't verify that one. |
+| 3 | lg-lugano-uk | WARN | 199s | Nah, that doesn't work like that. The United Kingdom is not currently a party to the 2007 Lugano Convention in |
+| 4 | lg-erie-federal-common-law | PASS | 200s | Nah, that doesn't work like that. Under Erie Railroad Co. v. Tompkins, a federal court hearing a state-law cla |
+| 5 | lg-india-44a-us-decree | WARN | 145s | Nah, that doesn't work like that. A money judgment of a United States federal court cannot be executed directl |
+| 6 | lg-gdpr-art8-floor | WARN | 218s | Hmm, I'm not sure ù the sources disagree. |
+| 7 | lg-uk-dpa-s9-in-force | FAIL | 188s | Nah, that doesn't work like that. Section 9 of the Data Protection Act 2018 is no longer in force; it was omit |
+
+### Chrome memory
+- Before the earlier cleanup: 53 processes / 9.59 GB. After: 17 / 2.11 GB.
+- During the run: peaks of 5-6.8 GB with 5-7 OmniBrain tabs open mid-question. Between questions it fell to 3.8-4.5 GB, so tabs were not piling up. At the end: 26 processes / 3.15 GB.
+
+### Known issues still open
+- PARTLY headline "Yeah, the idea is right" on questions whose substantive answer is "no" (dpdp-all-in-force, gplv3, first-amendment, ai-training-fair-use): needs a general rule beyond "still in force".
+- "No primary source cited" on many answers although primary pages were opened (the final sources favour other pages).
+- 9 answerable questions ended "couldn't verify" or "sources disagree".
+- Typical time is still 100-230 s, above the 2-minute target.
