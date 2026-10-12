@@ -65,8 +65,8 @@ answer:
   describe an old provision as if it still applied ("prescribed" is not enough).
   If the question asks about something that does not exist, say it does not
   exist; do not supply figures from a different law instead.
-  Open questions: if no court or statute has settled the point, say it is not
-  settled yet and what it turns on -- never a yes or a no.
+  Open questions: if no court or statute has settled the point, say it is
+  not settled yet and what it turns on -- never a yes or a no.
 
 why:
   Up to four sentences on the strongest evidence. Written the way a person
