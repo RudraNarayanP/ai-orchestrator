@@ -351,3 +351,27 @@ def test_a_negation_inside_the_main_clause_still_counts():
     q = "Under the Rome I Regulation, can the parties to a cross-border business-to-business contract choose the law of a country that has no connection to the contract?"
     a = "Parties may choose the law of a country with no connection to the contract, as the regulation does not require an objective connection."
     assert _premise("TRUE", q, a) == "TRUE"
+
+
+# ---- 2026-10-12 re-run: the remaining FAILs, as general rules
+def test_not_automatically_or_it_depends_never_leads_with_yes():
+    q = "Is training a generative AI model on copyrighted books without a licence fair use under US law?"
+    a = "Training a generative AI model on copyrighted books without a licence is not automatically fair use under US law; it depends on a case-specific four-factor analysis."
+    assert _premise("TRUE", q, a) == "OPEN"
+    assert not render_truth("OPEN", question=q, answer=a).lower().startswith(("yeah", "yes", "nah", "no"))
+
+
+def test_a_question_about_the_law_now_leads_with_the_settled_claim_about_now():
+    from backend.verification.verifier import lead_with_the_present
+
+    q = "Which section of the Indian Penal Code, 1860 currently punishes theft?"
+    rep = report(
+        verdict(ClaimStatus.SUPPORTED, "Section 303 of the Bharatiya Nyaya Sanhita addresses theft under the current criminal law."),
+        answer="Section 379 of the Indian Penal Code, 1860 prescribed the punishment for theft.",
+    )
+    out = lead_with_the_present(rep, q)
+    assert out.startswith("Section 303 of the Bharatiya Nyaya Sanhita") and "379" in out, out
+    # nothing unsettled is ever promoted
+    unsettled = report(verdict(ClaimStatus.INSUFFICIENT_EVIDENCE, "Section 303 of the Bharatiya Nyaya Sanhita addresses theft under the current criminal law."),
+                       answer="Section 379 of the Indian Penal Code, 1860 prescribed the punishment for theft.")
+    assert lead_with_the_present(unsettled, q).startswith("Section 379")

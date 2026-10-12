@@ -1477,10 +1477,39 @@ def _lint_headline_answer(text: str, *, question: str, state: str, unknowns: lis
     return lint_answer(text, question=question, unknowns=unknowns).text
 
 
+def lead_with_the_present(report: VerifierReport, question: str) -> str:
+    """The answer to a question about the law NOW leads with the settled claim about now.
+
+    Live (2026-10-12, "Which section of the IPC currently punishes theft?"): the only supported claim was "Section 303 of the
+    Bharatiya Nyaya Sanhita addresses theft under the current criminal law", yet the answer described IPC s.379 -- a claim the
+    ledger had overruled -- in the past tense and never named the law in force. General rule: when the question asks about the
+    present and a SUPPORTED claim answers the present, an answer that does not contain that claim's named provision gets the
+    claim as its first sentence. Nothing unsettled is ever added.
+    """
+    from backend.research.style import _NOW_CLAIM_RE, _NOW_Q_RE, reference_anchors  # noqa: PLC0415
+
+    answer = (report.answer or "").strip()
+    if not answer or not question or not _NOW_Q_RE.search(question):
+        return answer
+    low = answer.lower()
+    for v in report.verdicts:
+        if v.verdict != ClaimStatus.SUPPORTED or _is_page_claim(v.claim) or not _NOW_CLAIM_RE.search(v.claim):
+            continue
+        anchors = reference_anchors(question)
+        if anchors and not anchors & reference_anchors(v.claim):
+            continue
+        names = re.findall(r"\b(?:section|article|rule|regulation)\s+\d+[a-z]?\b|\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4}\b", v.claim)
+        if names and not any(n.lower() in low for n in names):
+            lead = v.claim.strip().rstrip(".") + "."
+            return f"{lead} {answer}"
+    return answer
+
+
 def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int, question: str = "") -> FinalAnswer:
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
     state = truth_state(report, question) if question and (report.verdicts or report.confidence == Confidence.NONE) else ""
+    report = report.model_copy(update={"answer": lead_with_the_present(report, question)}) if question else report
     ledger_state = state
     state = premise_state(state, question, lint_answer(report.answer, question=question).text) if state else state
     S = ClaimStatus

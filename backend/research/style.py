@@ -617,7 +617,7 @@ _DENIAL_RE = re.compile(
     r"\b(not|never|no longer|cannot|can'?t|doesn'?t|does not|didn'?t|did not|isn'?t|is not|aren'?t|are not|wasn'?t|weren'?t|myth|false"
     r"|void|unenforceable|invalid|unlawful|illegal|prohibited|impermissible|forbidden|barred|inadmissible|omitted|repealed|revoked)\b", re.I
 )
-_OPEN_RE = re.compile(r"\b(?:not (?:yet )?settled|unsettled|open question|remains? (?:open|unresolved|undecided)|courts? (?:are|remain) (?:split|divided)|no (?:court|appellate court|binding (?:court|decision|ruling)) has (?:yet )?(?:decided|ruled|established|held|resolved)|has not (?:yet )?been (?:decided|resolved|settled)|depends on the (?:four )?(?:statutory )?factors|case[- ]by[- ]case)\b", re.I)
+_OPEN_RE = re.compile(r"\b(?:not (?:yet )?settled|unsettled|open question|remains? (?:open|unresolved|undecided)|courts? (?:are|remain) (?:split|divided)|no (?:court|appellate court|binding (?:court|decision|ruling)) has (?:yet )?(?:decided|ruled|established|held|resolved)|has not (?:yet )?been (?:decided|resolved|settled)|depends on the (?:four )?(?:statutory )?factors|depends on (?:a |the )?(?:case|fact)[- ]specific|case[- ]by[- ]case|not automatically|not necessarily|no blanket rule)\b", re.I)
 _QUESTION_TAIL_RE = re.compile(r",\s*(?:even|although|though|unless|except|including|which|who|whom|whose|where|if|when|while|but)\b", re.I)
 _LEAD_NO = re.compile(r"^\s*(?:no|nope|nah)\b", re.I)
 _LEAD_YES = re.compile(r"^\s*(?:yes|yeah|yep|yup)\b", re.I)
@@ -735,7 +735,7 @@ def render_truth(state: str, *, question: str = "", answer: str = "", aspect: st
 _NEGATED_NOW_RE = re.compile(r"\b(?:no longer|not (?:currently )?in force|ceased to (?:be|have)|has been (?:omitted|repealed|revoked)|was (?:omitted|repealed|revoked)|is (?:omitted|repealed|revoked))\b", re.I)
 _NOW_Q_RE = re.compile(r"\b(?:still|currently|now|today|at present|at the moment|as of|in force|remains?|nowadays)\b", re.I)
 _NOW_CLAIM_RE = re.compile(
-    r"\b(?:currently|remains?|remained|still|as of|at present|today|is in force|in force|not in force|no longer|now|omitted|repealed|revoked)\b", re.I
+    r"\b(?:currently|current|remains?|remained|still|as of|at present|today|is in force|in force|not in force|no longer|now|omitted|repealed|revoked)\b", re.I
 )
 _REF_RE = re.compile(
     r"\b(sections?|secs?|s|articles?|arts?|clauses?|rules?|regulations?|paragraphs?|schedules?)\.?\s*(\d+[a-z]?)\b", re.I
