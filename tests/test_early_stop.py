@@ -206,3 +206,18 @@ async def test_a_partly_settled_primary_goes_to_targeted_research_without_a_sequ
     names = [c["provider"] for c in log]
     assert not (len(log) > 1 and names[1] == "chatgpt" and log[1].get("continue")), names
     assert len(log) > 1, "the open point is still researched"
+
+NEWS = "https://www.theguardian.com/technology/2018/age-13-consent"
+
+
+async def test_a_confirmed_primary_page_is_listed_first_even_when_the_ai_opened_a_secondary_one(net):
+    """2026-10-12 legal run: official pages were opened and confirmed but a secondary page led the sources."""
+    net.confirm(URL9, tier=SourceTier.PRIMARY_OFFICIAL)
+    net.confirm(NEWS, tier=SourceTier.JOURNALISM)
+    answer = OPENED_PRIMARY["answer"].replace(
+        f"{URL9} \u2014 **OPENED** (I read the page)",
+        f"{NEWS} \u2014 **OPENED** (I read the page)\nSection 9 age 13: {URL9} \u2014 **MENTIONED ONLY** (did not open it)",
+    )
+    job, _, _ = await run(providers("chatgpt"), {"chatgpt": {"answer": answer, "citations": []}}, LAW_Q)
+    urls = [s.url for s in job.final.sources]
+    assert URL9 in urls and urls[0] == URL9, (urls, [(e.url, e.claim_id, e.check_status, e.polarity, e.tier) for e in job.evidence], [(v.claim_id, v.verdict) for v in job.reports[-1].verdicts] if job.reports else None)

@@ -1172,6 +1172,17 @@ class Verifier:
                 slot["ev"] = ev  # the record showing the most of what the AI itself did
             if ev.claim_id not in slot["claims"]:
                 slot["claims"].append(ev.claim_id)
+        # A primary / official page we opened and confirmed against the answer, but that the claim extractor never tied to a
+        # claim id, is still the strongest page behind the answer (2026-10-12 legal run: legislation.gov.uk confirmed, unlisted).
+        from backend.models import SourceTier as _Tier  # noqa: PLC0415
+
+        for ev in evidence:
+            if (
+                ev.url and not ev.claim_id and ev.url not in by_url and ev.tier == _Tier.PRIMARY_OFFICIAL
+                and ev.check_status == SourceCheckStatus.CONFIRMED and ev.polarity == "support"
+                and any(v == ClaimStatus.SUPPORTED or v == ClaimStatus.PARTIALLY_SUPPORTED for v in rests_on.values())
+            ):
+                by_url[ev.url] = {"ev": ev, "claims": []}
         known = {c.url: c for c in report.sources}
         for url, slot in by_url.items():
             ev = slot["ev"]
@@ -1187,7 +1198,14 @@ class Verifier:
             citation.provenance = ev.provenance
         weights = {e.url: TIER_WEIGHT.get(e.tier, 0) for e in evidence if e.url}
         # A page only OmniBrain opened is an audit, not the AI's research: it never outranks one the AI used.
-        report.sources = sorted(report.sources, key=lambda c: (-_rank_name(c.provenance), -weights.get(c.url, 0)))[:6]
+        # An official / primary page that backs a settled claim is the source a reader should see first (2026-10-12 legal run:
+        # six legislation.gov.uk pages opened and confirmed, none listed). Among the rest, a page only OmniBrain opened never
+        # outranks one the AI used.
+        from backend.models import SourceTier  # noqa: PLC0415
+        primary = {e.url for e in evidence if e.url and e.tier == SourceTier.PRIMARY_OFFICIAL and e.check_status == SourceCheckStatus.CONFIRMED}
+        report.sources = sorted(
+            report.sources, key=lambda c: (c.url not in primary, -_rank_name(c.provenance), -weights.get(c.url, 0))
+        )[:6]
 
     @staticmethod
     def _strip_numbers(text: str) -> str:
