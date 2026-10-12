@@ -252,3 +252,33 @@ def test_a_reply_that_fits_is_stored_exactly_as_it_arrived():
     assert "trimmed" not in stored_raw(json.dumps({"answer": "x", "verdicts": []}))
     cut = stored_raw("y" * RAW_STORED_CHARS + "z")
     assert cut.startswith("y" * RAW_STORED_CHARS) and "trimmed by OmniBrain" in cut
+
+
+# ---------------------------------------------------------------- the answer follows the merged verdicts (live s9 run, 2026-10-12)
+def _cut_after(claim) -> str:
+    return ('{\n  "answer": "No, it is no longer in force.",\n  "confidence": "moderate",\n  "verdicts": [\n'
+            f'    {{"claim_id": "{claim.id}", "claim": "{claim.claim}", "verdict": "supported", "confidence": "moderate", "reasoning": "the page says so"}},\n'
+            '    {\n      "claim_id": "x')
+
+
+def _two_claims(confirmed_a: int):
+    a, ev = claim_and_evidence(confirmed=confirmed_a)
+    b = Claim(job_id="j", claim="The Bolt was first sold in 1999.", kind="date", provider_sources=["qwen"])
+    return a, b, ev
+
+
+async def test_an_incomplete_review_answers_from_a_curator_verdict_the_opened_pages_back(fake_openai):
+    a, b, ev = _two_claims(confirmed_a=1)  # one page: below the ledger's own two-source bar, so the ledger alone says "couldn't verify"
+    report = await verify(fake_openai, [_cut_after(a)] * 4, [a, b], ev)
+    assert report.reviewer_status == "INCOMPLETE"
+    va = next(v for v in report.verdicts if v.claim_id == a.id)
+    assert va.verdict == ClaimStatus.SUPPORTED
+    assert not report.answer.lower().startswith(("i couldn't", "i don't know")), report.answer
+
+
+async def test_an_incomplete_review_never_answers_from_a_curator_verdict_no_page_backs(fake_openai):
+    a, b, _ = _two_claims(confirmed_a=0)
+    report = await verify(fake_openai, [_cut_after(a)] * 4, [a, b], [])
+    assert report.reviewer_status == "INCOMPLETE"
+    assert next(v for v in report.verdicts if v.claim_id == a.id).verdict != ClaimStatus.SUPPORTED
+    assert report.answer.lower().startswith(("i couldn't", "i don't know")), report.answer

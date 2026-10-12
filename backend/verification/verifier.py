@@ -258,6 +258,21 @@ class Verifier:
             # What the curator decided stands; what it never reached is decided by the
             # evidence ledger with the same claim-level rules, never by inventing a verdict.
             recovered.verdicts = report.verdicts + [v for v in recovered.verdicts if v.claim_id not in judged]
+            # The answer above was written from the ledger's verdicts ALONE, before the curator's were merged in. Re-check the
+            # merged list against the evidence (a curator "supported" with no confirmed page is overruled as usual), and when a
+            # claim then stands on opened pages, answer from it instead of "couldn't verify" (live s9 run: "Section 9 is no
+            # longer in force" supported, the answer still said the pages confirm other points). Never raises uncertainty
+            # without evidence: _reconcile and _best_supported read the same ledger.
+            self._reconcile(recovered, claims, evidence, question, disagreements)
+            if any(v.verdict == ClaimStatus.SUPPORTED for v in recovered.verdicts) and (recovered.answer or "").lower().startswith(
+                ("i couldn't", "i could not", "i don't know")
+            ):
+                best = self._best_supported(claims, recovered.verdicts, evidence, question)
+                if best["confidence"] != Confidence.NONE:
+                    recovered.answer, recovered.why, recovered.sources = best["answer"], best["why"], best["sources"]
+                    recovered.confidence = best["confidence"]
+                    recovered.important_disagreement = best["disagreement"]
+                    recovered.caveats = list(best["caveats"]) + [c for c in recovered.caveats if c not in best["caveats"]]
             recovered.raw_output = stored_raw(reply.text)
             recovered.verifier_model = f"{self.endpoint.provider}:{self.endpoint.model} (review incomplete)"
             recovered.caveats = list(recovered.caveats) + [

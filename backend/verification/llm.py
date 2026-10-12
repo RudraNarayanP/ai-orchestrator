@@ -17,7 +17,11 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+import logging
+
 import httpx
+
+_log = logging.getLogger("omnibrain.llm")
 
 DEFAULT_BASE_URLS = {
     "ollama": "http://localhost:11434/v1",
@@ -144,7 +148,10 @@ class LLMClient:
         order = [m for m in models if not model_cooling(base, m)] + [m for m in models if model_cooling(base, m)]
         for index, model in enumerate(order):
             # With another model to turn to, a rate limit is not waited out: the next model is asked at once.
+            t0 = time.monotonic()
             reply = await self._complete_with(model, messages, temperature, max_tokens, retries, fail_fast=fail_fast or index < len(order) - 1)
+            _log.info("llm %s: %s in %.1fs%s", model, "ok" if reply.ok else f"failed ({(reply.error or '')[:80]})", time.monotonic() - t0,
+                      " (truncated)" if reply.truncated else "")
             if reply.ok or reply.fatal:
                 _COOLING.pop((base, model), None)
                 return reply
