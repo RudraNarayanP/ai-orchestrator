@@ -114,6 +114,8 @@ class BrowserConfig(BaseModel):
 
     args: list[str] = Field(default_factory=list)
     keep_windows_open: bool = True
+    close_tabs_after_job: bool = True
+    """Close every tab OmniBrain opened when a research job or a Compress finishes (they reopen in seconds when needed)."""
 
 
 class VerifierConfig(BaseModel):

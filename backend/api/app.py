@@ -180,6 +180,17 @@ class JobManager:
                     store.close()
             setattr(self, name, None)
 
+    async def release_tabs(self, why: str) -> None:
+        """After a job or a Compress: close the tabs OmniBrain opened (settings.browser.close_tabs_after_job)."""
+        engine = self.engine
+        if engine is None or not getattr(self.settings.browser, "close_tabs_after_job", True) or not hasattr(engine, "release_tabs"):
+            return
+        try:
+            n = await asyncio.wait_for(engine.release_tabs(), timeout=60)
+            log.info("[%s] closed %d tab(s) OmniBrain opened", why, n)
+        except Exception as exc:  # noqa: BLE001 -- cleanup never fails the job
+            log.warning("[%s] tab cleanup failed: %s", why, exc)
+
     async def thread_adapters(self) -> dict[str, Any]:
         """The thread screen's provider adapters, kept for the life of the engine: an adapter remembers which site chat
         belongs to which thread chat, so a fresh catalog per request would open a new site chat for every message."""
@@ -290,6 +301,7 @@ class JobManager:
                 log.exception("[%s] job failed", job.id)
                 await emit("error", job.error)
             finally:
+                await self.release_tabs(job.id)
                 job.updated_at = time.time()
                 job.rounds_run = max([r.number for r in job.rounds], default=job.rounds_run)
                 self.store.save_job(job)
@@ -608,6 +620,8 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
             return await svc.compress(tid, wanted, adapter_ask(adapters), read)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from None
+        finally:
+            await manager.release_tabs(f"compress {tid}")
 
     @app.delete("/api/threads/{tid}")
     async def thread_delete(tid: str) -> Any:

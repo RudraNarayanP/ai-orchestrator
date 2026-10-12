@@ -117,7 +117,7 @@ async def main(providers: list[str]) -> int:
         for p in providers:
             await say(p, CHECK)
     finally:
-        await engine.stop(keep_windows=True)
+        await engine.stop(keep_windows=False)
         stop.set()
         svc.store.close()
     report["foreground"] = {"start": start[1], "end": fg()[1], "changes": changes}
@@ -129,4 +129,5 @@ async def main(providers: list[str]) -> int:
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main([a for a in sys.argv[1:] if not a.startswith("--")] or ["chatgpt", "deepseek"])))
+
 

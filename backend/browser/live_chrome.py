@@ -1011,14 +1011,16 @@ class LiveChromeEngine:
 
     async def stop(self, keep_windows: bool | None = None) -> None:
         keep = self.settings.browser.keep_windows_open if keep_windows is None else keep_windows
-        if not keep:
-            for page in list(self._pages.values()):
-                try:
-                    await page.close()
-                except Exception as exc:  # noqa: BLE001
-                    self._note(f"closing tab {page.tab_id} failed: {exc}")
-        else:
-            self._note("left OmniBrain's tabs open in your Chrome")
+        providers = set(getattr(self.settings, "providers", {}) or {})
+        for key, page in list(self._pages.items()):
+            if keep and key in providers:
+                continue  # keep_windows_open keeps the provider chats; source, search and fetch tabs always go
+            try:
+                await page.close()
+            except Exception as exc:  # noqa: BLE001
+                self._note(f"closing tab {page.tab_id} failed: {exc}")
+        if keep:
+            self._note("left OmniBrain's provider tabs open in your Chrome")
         self._pages.clear()
 
     def _runner_for(self, key: str) -> ChromeUseRunner:
@@ -1186,6 +1188,26 @@ class LiveChromeEngine:
             return False
         self._note(f"closed the {provider} tab (job cancelled)")
         return True
+
+    def open_tab_keys(self) -> list[str]:
+        return [k for k, p in self._pages.items() if not p.is_closed()]
+
+    async def release_tabs(self, keep: "set[str] | frozenset[str]" = frozenset()) -> int:
+        """Close every tab OmniBrain opened except ``keep`` (tab keys). Called after each research job and each Compress,
+        so tabs never pile up in the user's Chrome (live 2026-10-12: 50+ leftover tabs, 9.6 GB). Each tab is its own
+        chrome-use session; closing it stops that session, which closes only the tabs it created."""
+        closed = 0
+        for key in [k for k in list(self._pages) if k not in keep]:
+            page = self._pages.pop(key, None)
+            if page is None:
+                continue
+            try:
+                if not page.is_closed():
+                    await page.close()
+                    closed += 1
+            except Exception as exc:  # noqa: BLE001 -- cleanup must never fail the job
+                self._note(f"closing tab {key} failed: {exc}")
+        return closed
 
     async def close_provider(self, provider: str) -> None:
         await self.close_tab(provider)

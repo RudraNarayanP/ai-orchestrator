@@ -1298,3 +1298,43 @@ def test_the_hand_back_never_taps_keys():
     import inspect
 
     assert "keybd_event" not in inspect.getsource(lc.ForegroundKeeper)
+
+
+# ------------------------------------------------------------------ no tab pile-up (live 2026-10-12: 50+ leftover tabs, Chrome at 9.6 GB)
+async def test_release_tabs_closes_every_tab_omnibrain_opened_and_never_the_users(fake, engine):
+    fake.update(last_tab_guard=True)
+    await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    await engine.open_research_page("search", "https://www.google.com/search?q=a&udm=50", key="srch_1")
+    await engine.open_research_page("search", "https://www.google.com/search?q=b&udm=50", key="srch_2")
+    assert len(fake.read()["tabs"]) == 4
+    assert await engine.release_tabs() == 3
+    assert list(fake.read()["tabs"]) == ["t1"] and engine.open_tab_keys() == []
+
+
+async def test_stop_with_keep_windows_keeps_one_tab_per_provider_but_closes_search_and_source_tabs(fake, engine):
+    fake.update(last_tab_guard=True)
+    await engine.open_research_page("chatgpt", "https://chatgpt.com/")
+    await engine.open_research_page("search", "https://www.google.com/search?q=a&udm=50", key="srch_1")
+    await engine.stop(keep_windows=True)
+    tabs = fake.read()["tabs"]
+    assert len(tabs) == 2 and "t1" in tabs, tabs
+
+
+async def test_a_finished_job_releases_its_tabs(monkeypatch):
+    from backend.api import app as api_app
+
+    class Eng:
+        released = 0
+
+        async def release_tabs(self):
+            Eng.released += 1
+            return 2
+
+    mgr = api_app.JobManager.__new__(api_app.JobManager)
+    mgr.engine = Eng()
+    mgr.settings = type("S", (), {"browser": type("B", (), {"close_tabs_after_job": True})()})()
+    await mgr.release_tabs("job_x")
+    assert Eng.released == 1
+    mgr.settings.browser.close_tabs_after_job = False
+    await mgr.release_tabs("job_y")
+    assert Eng.released == 1

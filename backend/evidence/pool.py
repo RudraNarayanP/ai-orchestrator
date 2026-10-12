@@ -237,8 +237,11 @@ def browser_fetch_factory(engine: Any, settings: Settings) -> Callable[..., Awai
     async def browser_fetch(url: str, *, timeout_s: int = 30, max_chars: int = 12000):
         from backend.evidence.sources import FetchedPage, _html_to_text, extract_date
 
+        key = f"fetch_{abs(hash(url)) % 61}"
         try:
-            page = await engine.open_research_page("fetch", url, key=f"fetch_{abs(hash(url)) % 61}")
+            # a cached tab under this key would still show the PREVIOUS url: always a fresh tab, closed right after
+            await engine.close_tab("fetch", key)
+            page = await engine.open_research_page("fetch", url, key=key)
             await page.wait_for_timeout(1200)
             html = await page.content()
             text = _html_to_text(await page.evaluate("() => document.body ? document.body.innerText : ''") or _html_to_text(html))
@@ -256,6 +259,11 @@ def browser_fetch_factory(engine: Any, settings: Settings) -> Callable[..., Awai
             )
         except Exception:  # noqa: BLE001
             return None
+        finally:
+            try:
+                await engine.close_tab("fetch", key)
+            except Exception:  # noqa: BLE001
+                pass
 
     return browser_fetch
 
