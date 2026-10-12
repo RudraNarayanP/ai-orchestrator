@@ -789,7 +789,8 @@ class ChatAdapter:
             pass
         return page
 
-    async def read_transcript(self, key: str = "", *, settle_s: float = 0.6, max_steps: int = 400, max_top_loads: int = 30) -> dict[str, Any] | None:
+    async def read_transcript(self, key: str = "", *, settle_s: float = 0.6, max_steps: int = 400, max_top_loads: int = 30,
+                              time_cap_s: float = 120.0) -> dict[str, Any] | None:
         """Every turn of this provider's chat, read from the page (Compress). ``key`` names a conversation this adapter opened;
         without one the chat already open in the tab is read. Background only: one synchronous page step per call (scroll the
         chat container, read what is there), the waiting done here, so a background tab's throttled timers do not matter and
@@ -820,11 +821,17 @@ class ChatAdapter:
             await asyncio.sleep(settle_s)
         windows, expanded, steps = [], 0, 0
         cmd = "read"
-        while steps < max_steps:
+        deadline = time.monotonic() + time_cap_s
+        prev_top = None
+        while steps < max_steps and time.monotonic() < deadline:
             got = await self._call(page, "transcriptStep", self._sel_dict, cmd)
             steps += 1
             if not isinstance(got, dict):
                 break
+            if cmd == "down" and got.get("top") == prev_top:  # the container did not move: this is the bottom
+                windows.append(got.get("turns") or [])
+                break
+            prev_top = got.get("top")
             windows.append(got.get("turns") or [])
             expanded += int(got.get("expanded") or 0)
             if got.get("expanded"):  # a "show more" was opened: read this window again once it has grown
@@ -839,7 +846,8 @@ class ChatAdapter:
             await self._call(page, "transcriptStep", self._sel_dict, "restore")
         except Exception:  # noqa: BLE001
             pass
-        return {"turns": merge_windows(windows), "url": page.url, "steps": steps, "loads": loads, "expanded": expanded}
+        return {"turns": merge_windows(windows), "url": page.url, "steps": steps, "loads": loads, "expanded": expanded,
+                "capped": time.monotonic() >= deadline}
 
     url_wait_s: float = 8.0
 

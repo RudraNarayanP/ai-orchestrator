@@ -942,15 +942,43 @@ DOM_LIBRARY_JS = r"""
     // overlapping window down and returns the turns visible there, after clicking "show more" inside them; 'restore' puts the
     // scroll position back. Turns carry their position in the scroll content and the site's message id when it has one.
     transcriptStep(cfg, cmd) {
-      const TURN = '[data-message-author-role], user-query, model-response, [data-testid="user-message"], [data-testid="bot-message"], ' +
-                   '[data-role="user"], [data-role="assistant"], [data-author="user"], [data-author="assistant"]';
-      const roleOf = el => {
+      // Turn containers: role-marked messages, or the rows of a virtualised list (ChatGPT 2026: [data-turn-key] holds the
+      // user message AND its reply; DeepSeek: [data-virtual-list-item-key] holds one message). Each container is split into
+      // its user part and its assistant part below.
+      const TURN = '[data-message-author-role], [data-turn-key], [data-virtual-list-item-key], user-query, model-response, ' +
+                   '[data-testid="user-message"], [data-testid="bot-message"], [data-role="user"], [data-role="assistant"], [data-author="user"], [data-author="assistant"]';
+      const USER = '[data-message-author-role="user"], [class*="user-message"], user-query, [data-testid="user-message"], [data-role="user"], [data-author="user"]';
+      const SKIP = '.ds-think-content, [class*="thinking"], [class*="reasoning"], .sr-only';
+      const attrRole = el => {
         const r = (el.getAttribute('data-message-author-role') || el.getAttribute('data-role') || el.getAttribute('data-author') || '').toLowerCase();
         if (r) return r;
         const t = el.tagName.toLowerCase(), tid = el.getAttribute('data-testid') || '';
         if (t === 'user-query' || tid === 'user-message') return 'user';
         if (t === 'model-response' || tid === 'bot-message') return 'assistant';
-        return isUserNode(el) ? 'user' : 'assistant';
+        return '';
+      };
+      const clean = (el) => {
+        const c = el.cloneNode(true);
+        c.querySelectorAll(SKIP + ', button, svg').forEach(n => n.remove());
+        return norm((c.innerText || c.textContent || '').replace(/^\s*(you said|chatgpt said|deepseek said|assistant said)\s*:\s*/i, ''));
+      };
+      const outer = (list) => list.filter(n => !list.some(o => o !== n && o.contains(n)));
+      const parts = (el) => {
+        const r = attrRole(el);
+        if (r === 'user' || r === 'assistant' || r === 'model') return [{role: r === 'model' ? 'assistant' : r, text: clean(el), sub: ''}];
+        const users = outer(Array.from(el.querySelectorAll(USER)));
+        let asst = [];
+        for (const sel of (cfg.assistant_message || [])) {
+          let found = [];
+          try { found = Array.from(el.querySelectorAll(sel)); } catch (e) { found = []; }
+          found = found.filter(n => !n.closest(SKIP) && !users.some(u => u.contains(n) || n.contains(u)));
+          if (found.length) { asst = outer(found); break; }
+        }
+        const out = [];
+        users.forEach((u, i) => out.push({role: 'user', text: clean(u), sub: 'u' + i}));
+        if (asst.length) out.push({role: 'assistant', text: norm(asst.map(clean).join('\n')), sub: 'a'});
+        if (!out.length) out.push({role: isUserNode(el) || !asst.length ? 'user' : 'assistant', text: clean(el), sub: ''});
+        return out.filter(o => o.text);
       };
       const nodes = () => {
         const found = Array.from(document.querySelectorAll(TURN)).filter(el => !(el.parentElement && el.parentElement.closest(TURN)));
@@ -979,16 +1007,17 @@ DOM_LIBRARY_JS = r"""
       for (const el of nodes()) {
         el.querySelectorAll('button, [role="button"]').forEach(btn => {
           const t = (btn.innerText || btn.getAttribute('aria-label') || '').trim();
-          if (/^(show more|read more|see more|expand|show full (message|text)|view more)$/i.test(t) && !btn.dataset.omnibrainExpanded) {
+          const cls = String(btn.className || '');
+          const opener = /^(show more|read more|see more|expand|show full (message|text)|view more)$/i.test(t) || /collapsible-text-toggle|show-?more|expand-?button/i.test(cls);
+          if (opener && !btn.closest(SKIP) && btn.getAttribute('aria-expanded') !== 'true' && !btn.dataset.omnibrainExpanded) {
             btn.dataset.omnibrainExpanded = '1';
             try { btn.click(); expanded++; } catch (e) {}
           }
         });
-        const text = norm(el.innerText || el.textContent || '');
-        if (!text) continue;
         if (!(el.dataset.omnibrainTurn || '').startsWith(tx.run + '-')) el.dataset.omnibrainTurn = tx.run + '-' + (++tx.marks);
-        const id = el.getAttribute('data-message-id') || el.getAttribute('data-turn-id') || el.id || '';
-        turns.push({role: roleOf(el), text, id, mark: el.dataset.omnibrainTurn, top: Math.round(el.getBoundingClientRect().top - base + sc.scrollTop)});
+        const id = el.getAttribute('data-message-id') || el.getAttribute('data-turn-key') || el.getAttribute('data-turn-id') || el.id || '';
+        const top = Math.round(el.getBoundingClientRect().top - base + sc.scrollTop);
+        parts(el).forEach((p, i) => turns.push({role: p.role, text: p.text, id: id ? id + ':' + p.sub : '', mark: el.dataset.omnibrainTurn + ':' + p.sub, top: top + i}));
       }
       return {turns, expanded, height: sc.scrollHeight, top: sc.scrollTop, atBottom: sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2,
               visibility: document.visibilityState};
