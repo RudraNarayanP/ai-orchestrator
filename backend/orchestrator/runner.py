@@ -898,7 +898,7 @@ class ResearchRunner:
                     job_id=job.id,
                 )
             )
-        done = await asyncio.gather(*tasks, return_exceptions=True)
+        done = await self._gather_capped(tasks, providers, round_no)
         out: list[ProviderResponse] = []
         for provider, item in zip(providers, done):
             if isinstance(item, BaseException):
@@ -937,12 +937,47 @@ class ResearchRunner:
         job.stop_note = f"stopped researching early: {spent:.0f}s used of the {budget:.0f}s budget; what was found is judged as it stands"
         return True
 
+    async def _gather_capped(self, coros: list[Any], providers: list[str], round_no: int) -> list[Any]:
+        """Run the asks together. After ``secondary_cap_s``, if at least one researcher has answered, drop the stragglers; if none has,
+        keep waiting (a round with no answer at all is worse than a slow one). Returns results in input order; a dropped ask is
+        ``None``."""
+        settings = getattr(self, "settings", None)
+        cap = float(getattr(getattr(settings, "research", None), "secondary_cap_s", 0) or 0)
+        tasks = [asyncio.ensure_future(c) for c in coros]
+        if not tasks:
+            return []
+        if cap <= 0:
+            return list(await asyncio.gather(*tasks, return_exceptions=True))
+        done, pending = await asyncio.wait(tasks, timeout=cap)
+        answered = lambda ts: any(not t.cancelled() and t.exception() is None and isinstance(t.result(), ProviderResponse)  # noqa: E731
+                                  and t.result().status.value == "completed" for t in ts)
+        while pending and not answered(done):
+            more, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            done |= more
+        for t, provider in zip(tasks, providers):
+            if t in pending:
+                t.cancel()
+                await self._emit("provider", f"{provider}: dropped from this question -- no answer within {cap:.0f}s while others had answered",
+                                 provider=provider, round_no=round_no)
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        out: list[Any] = []
+        for t in tasks:
+            if t.cancelled():
+                out.append(None)
+            elif t.exception() is not None:
+                out.append(t.exception())
+            else:
+                out.append(t.result())
+        return out
+
     async def _targeted_round(self, job: Job, follow_ups: list[FollowUp], targets: list[str], *, round_no: int) -> list[ProviderResponse]:
         """Give each unresolved point to a specific agent. One agent, one point."""
         tasks = []
         # One ask per researcher per round. Five open points over three researchers used to queue a SECOND turn behind
         # the first on two of them (one conversation per site), doubling the round for points the first answers cover.
         follow_ups = follow_ups[: max(1, len(targets))] if targets else follow_ups
+        names: list[str] = []
         for index, follow_up in enumerate(follow_ups):
             # the curator's preferred researcher, if it is one we can actually reach; otherwise whoever is available
             wanted = [p for p in follow_up.target_providers if p in self.adapters and p != "search" and self.health.get(p) not in {"logged_out", "broken", "rate_limited", "failed"}]
@@ -950,6 +985,7 @@ class ResearchRunner:
             if not pool:
                 break
             provider = pool[index % len(pool)]
+            names.append(provider)
             prompt = self._with_context(job, follow_up_prompt(self._q(job), follow_up))
             tasks.append(
                 self._ask(
@@ -957,7 +993,7 @@ class ResearchRunner:
                     continue_thread=self._turns.get((job.id, provider), 0) > 0,
                 )
             )
-        done = await asyncio.gather(*tasks, return_exceptions=True)
+        done = await self._gather_capped(tasks, names, round_no)
         return [item for item in done if isinstance(item, ProviderResponse)]
 
     async def _extract(self, responses: list[ProviderResponse], job: Job) -> list[Claim]:

@@ -208,6 +208,10 @@ class ResearchConfig(BaseModel):
     follow_up_providers: int = 3
     min_independent_sources: int = 2
     claim_batch_size: int = 12
+    secondary_cap_s: float = 40.0
+    """Parallel / targeted rounds: once one researcher has answered, the others get this long from the round's start, then the
+    stragglers are dropped from this question (0 = wait for every one). The slowest site never sets the pace (2026-10-12 profile:
+    a targeted round waited 92 s on a DeepSeek reply that came back empty)."""
     time_budget_s: int = 180
     """A question that has used this much wall-clock time starts no further research round: it goes to verification with what
     it has, and the answer says it stopped early (0 = no budget)."""

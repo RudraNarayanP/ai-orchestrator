@@ -465,3 +465,56 @@ def test_the_curator_is_told_to_name_repealed_replaced_or_unenacted_law_and_open
 
     for phrase in ("was repealed", "was replaced by", "has not been enacted", "applies now", "not settled", "does not exist"):
         assert phrase in ANSWER_CONTRACT, phrase
+
+
+# ---- latency (2026-10-12 profile: a targeted round waited 92 s on one site that then returned nothing)
+def _resp(provider, status="completed"):
+    from backend.models import ProviderResponse as _PR, ProviderStatus as _PS
+    r = _PR(job_id="j", provider=provider, prompt="p", answer_text="an answer")
+    r.status = _PS(status)
+    return r
+
+
+def _capped_runner(cap):
+    runner = object.__new__(ResearchRunner)
+    runner.settings = SimpleNamespace(research=SimpleNamespace(secondary_cap_s=cap))
+    events = []
+
+    async def emit(kind, message, **kw):
+        events.append(message)
+
+    runner._emit = emit
+    return runner, events
+
+
+def test_a_slow_researcher_is_dropped_once_another_has_answered():
+    import time as _t
+
+    async def fast():
+        await asyncio.sleep(0.05)
+        return _resp("google_ai")
+
+    async def slow():
+        await asyncio.sleep(10)
+        return _resp("le_chat")
+
+    runner, events = _capped_runner(0.3)
+    started = _t.monotonic()
+    out = asyncio.run(runner._gather_capped([fast(), slow()], ["google_ai", "le_chat"], 2))
+    assert _t.monotonic() - started < 2
+    assert out[0].provider == "google_ai" and out[1] is None
+    assert any("le_chat: dropped" in e for e in events)
+
+
+def test_nobody_is_dropped_while_no_one_has_answered():
+    async def failed():
+        await asyncio.sleep(0.05)
+        return _resp("copilot", "failed")
+
+    async def slowish():
+        await asyncio.sleep(0.6)
+        return _resp("deepseek")
+
+    runner, _ = _capped_runner(0.2)
+    out = asyncio.run(runner._gather_capped([failed(), slowish()], ["copilot", "deepseek"], 2))
+    assert out[1] is not None and out[1].provider == "deepseek", "the only real answer is waited for"
