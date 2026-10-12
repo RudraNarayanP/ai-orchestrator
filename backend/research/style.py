@@ -609,6 +609,7 @@ _DENIAL_RE = re.compile(
     r"|void|unenforceable|invalid|unlawful|illegal|prohibited|impermissible|forbidden|barred|inadmissible|omitted|repealed|revoked)\b", re.I
 )
 _OPEN_RE = re.compile(r"\b(?:not (?:yet )?settled|unsettled|open question|remains? (?:open|unresolved|undecided)|courts? (?:are|remain) (?:split|divided)|no (?:court|appellate court|binding (?:court|decision|ruling)) has (?:yet )?(?:decided|ruled|established|held|resolved)|has not (?:yet )?been (?:decided|resolved|settled)|depends on the (?:four )?(?:statutory )?factors|case[- ]by[- ]case)\b", re.I)
+_QUESTION_TAIL_RE = re.compile(r",\s*(?:even|although|though|unless|except|including|which|who|whom|whose|where|if|when|while|but)\b", re.I)
 _LEAD_NO = re.compile(r"^\s*(?:no|nope|nah)\b", re.I)
 _LEAD_YES = re.compile(r"^\s*(?:yes|yeah|yep|yup)\b", re.I)
 # What follows these words qualifies the answer; it does not decide whether the answer agrees or disagrees with the question.
@@ -635,7 +636,8 @@ def premise_state(state: str, question: str, answer: str) -> str:
         return "OPEN"
     # Only the question's own head clause sets its polarity: "Does India enforce awards ..., even one the government has NOT
     # notified?" asserts enforcement; the later "not" qualifies it (live 2026-10-12: answered "Yeah, you're right. India does not ...").
-    if _DENIAL_RE.search(_head_clause(re.split(r",", question or "", maxsplit=1)[0])):
+    main = _QUESTION_TAIL_RE.split(question or "", maxsplit=1)[0]
+    if _DENIAL_RE.search(main) or re.search(r"\b(?:no|without|nothing|none)\b", main, re.I):
         return state
     if _LEAD_YES.match(lead):
         return state  # the answer itself says yes: a "not yet in force" later in the sentence is a qualification, not a denial

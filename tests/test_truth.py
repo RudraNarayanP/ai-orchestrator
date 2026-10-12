@@ -343,3 +343,11 @@ def test_a_premise_flip_from_partly_keeps_low_confidence():
     fa = build_final_answer(rep, [], 1, "Are all the obligations of the Act already in force?")
     assert fa.answer.startswith("Nah") or fa.truth_state in {"UNVERIFIED", "CONFLICT"}, fa.answer
     assert "\u2705" not in fa.answer, "a flipped PARTLY never gains the high-confidence mark"
+
+
+def test_a_negation_inside_the_main_clause_still_counts():
+    """Regression found while re-checking PASS answers: "can parties choose the law of a country that has NO connection?" --
+    the "no" is part of what is asked, so a supported "they may" stays "Yeah"."""
+    q = "Under the Rome I Regulation, can the parties to a cross-border business-to-business contract choose the law of a country that has no connection to the contract?"
+    a = "Parties may choose the law of a country with no connection to the contract, as the regulation does not require an objective connection."
+    assert _premise("TRUE", q, a) == "TRUE"
