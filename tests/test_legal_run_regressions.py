@@ -443,3 +443,16 @@ def test_a_single_source_claim_beside_a_supported_one_does_not_make_the_answer_p
     assert truth_state(rep("Yes.", only_thin), DPDP_Q) == "PARTLY", "with nothing supported, thin evidence alone is still not a flat yes"
     final = build_final_answer(rep("Section 9(1) requires verifiable parental consent for a child's data.", ok, thin), [], 1, DPDP_Q)
     assert final.answer.startswith("Yeah, you're right.") and "date part" not in final.answer
+
+
+def test_a_still_in_force_question_answered_no_longer_in_force_leads_with_no():
+    """Live s9 re-check (2026-10-12): the verdict was PARTLY, and the reply opened "Yeah, the idea is right, but the date
+    part is a bit off - Section 9 ... is no longer in force" -- a yes in front of a no."""
+    from backend.research.style import render_truth
+
+    q = "Is section 9 of the Data Protection Act 2018 still in force as the provision that sets the UK's age of consent?"
+    out = render_truth("PARTLY", question=q, answer="Section 9 of the Data Protection Act 2018 is no longer in force.", aspect="date")
+    assert out.lower().startswith("nah") and "no longer in force" in out, out
+    # a PARTLY whose wrong part is not the asked-about status keeps the partly line
+    kept = render_truth("PARTLY", question=q, answer="It sets the age at 13, not 16.", aspect="number")
+    assert kept.startswith("Yeah, the idea is right"), kept

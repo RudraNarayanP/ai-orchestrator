@@ -695,6 +695,12 @@ def render_truth(state: str, *, question: str = "", answer: str = "", aspect: st
     if state == "FALSE":
         base = TRUTH_FALSE[:-1] + bro + "." if bro else TRUTH_FALSE
         return tiny(f"{base} {fit_fact(fact, 300 - len(base) - 1)}".strip(), max_sentences=2, max_chars=300)
+    if state == "PARTLY" and _NOW_Q_RE.search(question or "") and _NEGATED_NOW_RE.search(fact or ""):
+        # "Is section 9 STILL in force ...?" answered with "section 9 is no longer in force": the status asked about is
+        # the false part, so the headline is a no -- "Yeah, the idea is right" read as the opposite (live s9, 2026-10-12).
+        state = "FALSE"
+        base = TRUTH_FALSE[:-1] + bro + "." if bro else TRUTH_FALSE
+        return tiny(f"{base} {fit_fact(fact, 300 - len(base) - 1)}".strip(), max_sentences=2, max_chars=300)
     if state == "PARTLY":
         part = f"the {aspect.strip()} part" if aspect.strip() else "one detail"
         fix = fact.rstrip(".") if fact else ""
@@ -705,6 +711,7 @@ def render_truth(state: str, *, question: str = "", answer: str = "", aspect: st
     return tiny(answer, max_sentences=3, max_chars=280)
 
 # ---- questions about the present: which claim answers them ------------------------------------------------------------
+_NEGATED_NOW_RE = re.compile(r"\b(?:no longer|not (?:currently )?in force|ceased to (?:be|have)|has been (?:omitted|repealed|revoked)|was (?:omitted|repealed|revoked)|is (?:omitted|repealed|revoked))\b", re.I)
 _NOW_Q_RE = re.compile(r"\b(?:still|currently|now|today|at present|at the moment|as of|in force|remains?|nowadays)\b", re.I)
 _NOW_CLAIM_RE = re.compile(
     r"\b(?:currently|remains?|remained|still|as of|at present|today|is in force|in force|not in force|no longer|now|omitted|repealed|revoked)\b", re.I
