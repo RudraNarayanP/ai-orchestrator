@@ -456,3 +456,12 @@ def test_a_still_in_force_question_answered_no_longer_in_force_leads_with_no():
     # a PARTLY whose wrong part is not the asked-about status keeps the partly line
     kept = render_truth("PARTLY", question=q, answer="It sets the age at 13, not 16.", aspect="number")
     assert kept.startswith("Yeah, the idea is right"), kept
+
+
+def test_the_curator_is_told_to_name_repealed_replaced_or_unenacted_law_and_open_questions():
+    """2026-10-12 legal run: IPC s.379 given for "currently" (replaced by BNS s.303), DPA 1998 not called repealed,
+    the Digital India Act not called unenacted, AI-training fair use answered yes/no."""
+    from backend.research.style import ANSWER_CONTRACT
+
+    for phrase in ("was repealed", "was replaced by", "has not been enacted", "applies now", "not settled", "does not exist"):
+        assert phrase in ANSWER_CONTRACT, phrase

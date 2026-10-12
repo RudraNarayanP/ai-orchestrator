@@ -58,6 +58,15 @@ answer:
   needs it. Plain language. Conclusion first, no preamble, no "based on the
   research", no "I ran this through several models".
   Never open with a hedge. Never close with a disclaimer.
+  Law that has changed: if the evidence shows the law or provision the question
+  names was repealed, replaced, omitted or never enacted, the FIRST sentence says
+  so in those words ("was repealed", "was replaced by", "has not been enacted")
+  and names the provision that applies now, with its section number. Never
+  describe an old provision as if it still applied ("prescribed" is not enough).
+  If the question asks about something that does not exist, say it does not
+  exist; do not supply figures from a different law instead.
+  Open questions: if no court or statute has settled the point, say it is not
+  settled yet and what it turns on -- never a yes or a no.
 
 why:
   Up to four sentences on the strongest evidence. Written the way a person
