@@ -286,6 +286,43 @@ Stray "?" at the end of answers: not a bug; it is the intended emoji, mis-render
 | 3 | lg-lugano-uk | WARN | 199s | Nah, that doesn't work like that. The United Kingdom is not currently a party to the 2007 Lugano Convention in |
 | 4 | lg-erie-federal-common-law | PASS | 200s | Nah, that doesn't work like that. Under Erie Railroad Co. v. Tompkins, a federal court hearing a state-law cla |
 | 5 | lg-india-44a-us-decree | WARN | 145s | Nah, that doesn't work like that. A money judgment of a United States federal court cannot be executed directl |
+| 6 | lg-gdpr-art8-floor | WARN | 218s | Hmm, I'm not sure — the sources disagree. |
+| 7 | lg-uk-dpa-s9-in-force | FAIL | 188s | Nah, that doesn't work like that. Section 9 of the Data Protection Act 2018 is no longer in force; it was omit |
+| 8 | lg-dpf-no-scc | PASS | 52s | Yeah, you're right. The European Commission adopted the EU–US DPF adequacy decision on 10 July 2023. ✅ |
+| 9 | lg-eu-adequacy-uk | WARN | 193s | Couldn't verify that one. |
+| 10 | lg-dpdp-child-17 | PASS | 77s | Yeah, the idea is right, but the date part is a bit off — A 17-year-old qualifies as a child under the Digital |
+| 11 | lg-dpdp-all-in-force | FAIL | 74s | Yeah, the idea is right, but the date part is a bit off — As of 12 October 2026, all substantive obligations u |
+| 12 | lg-india-noncompete | WARN | 206s | Hmm, I'm not sure — the sources disagree. |
+| 13 | lg-india-basic-structure | FAIL | 101s | Yeah, you're right. The basic structure doctrine was established by the Supreme Court in Kesavananda Bharati v |
+| 14 | lg-india-property-fr | WARN | 154s | Hmm, I'm not sure — the sources disagree. |
+| 15 | lg-india-foreign-award-s34 | WARN | 203s | Hmm, I'm not sure — the sources disagree. |
+| 16 | lg-india-ipc-theft | FAIL | 145s | Section 379 of the Indian Penal Code, 1860 prescribed the punishment for theft, providing imprisonment of eith |
+| 17 | lg-india-digital-india-act | FAIL | 84s | India's proposed Digital India Act does not have a verified, enacted penalty for personal data breaches. |
+| 18 | lg-ccbyncsa-ad | PASS | 122s | Nah, that doesn't work like that. A company may not use a photograph licensed CC BY-NC-SA 4.0 in its paid adve |
+| 19 | lg-ccbysa-to-ccby | PASS | 104s | Nah, that doesn't work like that. A remix that adapts a CC BY-SA 4.0 work cannot be released under CC BY 4.0 a |
+| 20 | lg-ccbyncsa-gplv3 | FAIL | 64s | Yeah, the idea is right, but the number part is a bit off — CC BY-NC-SA 4.0 permits sharing and adapting licen |
+| 21 | lg-gpl-internal-use | WARN | 163s | Couldn't verify that one. |
+| 22 | lg-uk-copyright-1960 | WARN | 173s | Couldn't verify that one. |
+| 23 | lg-us-ai-authorship | PASS | 73s | Nah, that doesn't work like that. The U.S. Copyright Office will not register a work created entirely by an AI |
+| 24 | lg-ai-training-fair-use | FAIL | 150s | Yeah, the idea is right, but the date part is a bit off — Training a generative AI model on copyrighted books  |
+| 25 | lg-uk-contract-limitation | WARN | 176s | Under the Limitation Act 1980, the basic limitation period for a simple contract claim in England and Wales is |
+| 26 | lg-india-contract-limitation | WARN | 152s | Under the Limitation Act, 1963, the limitation period for a suit for compensation for breach of contract is th |
+| 27 | lg-nyc-no-deadline | PASS | 92s | Nah, that doesn't work like that. The 1958 New York Convention does not prescribe a specific number of years w |
+| 28 | lg-nyc-merits-review | PASS | 116s | Nah, that doesn't work like that. A court cannot refuse to enforce a New York Convention award merely because  |
+| 29 | lg-india-nyc-reciprocity | FAIL | 157s | Yeah, you're right. India does not enforce New York Convention awards made in any Convention state unless the  |
+| 30 | lg-fp-dpa-1998-age | FAIL | 100s | No section of the Data Protection Act 1998 sets the age at which a child can consent to online services in the |
+| 31 | lg-fp-us-gdpr | FAIL | 98s | There is no US federal GDPR, so there is no maximum fine under a US federal GDPR. The GDPR is an EU regulation |
+| 32 | lg-fp-ftc-noncompete | PASS | 113s | Nah, that doesn't work like that. A ban on employee non-compete agreements is not currently in force under a U |
+| 33 | lg-fp-first-amendment-private | FAIL | 88s | Yeah, the idea is right, but the detail part is a bit off — The First Amendment generally does not prevent a p |
+| 34 | lg-unk-fake-case | PASS | 100s | Couldn't verify that one. |
+| 35 | lg-unk-private-arbitration | PASS | 135s | Couldn't verify that one. |
+| 36 | lg-unk-future-amendment | PASS | 88s | Couldn't verify that one. |
+| 37 | lg-unk-dpf-appeal | PASS | 64s | Nah, that doesn't work like that. The Court of Justice has not yet ruled on the merits of Latombe's appeal (Ca |
+| 1 | lg-rome1-free-choice | WARN | 233s | Yeah, you're right. Under Article 3(1) of the Rome I Regulation, parties to a cross-border business-to-busines |
+| 2 | lg-rome1-uk-after-brexit | WARN | 204s | Couldn't verify that one. |
+| 3 | lg-lugano-uk | WARN | 199s | Nah, that doesn't work like that. The United Kingdom is not currently a party to the 2007 Lugano Convention in |
+| 4 | lg-erie-federal-common-law | PASS | 200s | Nah, that doesn't work like that. Under Erie Railroad Co. v. Tompkins, a federal court hearing a state-law cla |
+| 5 | lg-india-44a-us-decree | WARN | 145s | Nah, that doesn't work like that. A money judgment of a United States federal court cannot be executed directl |
 | 6 | lg-gdpr-art8-floor | WARN | 218s | Hmm, I'm not sure ù the sources disagree. |
 | 7 | lg-uk-dpa-s9-in-force | FAIL | 188s | Nah, that doesn't work like that. Section 9 of the Data Protection Act 2018 is no longer in force; it was omit |
 
