@@ -9,12 +9,12 @@ about as often as we can test.
 from __future__ import annotations
 
 # Bumped whenever the page-side API changes, so a page holding an older copy gets the new one.
-DOM_LIBRARY_VERSION = 9
+DOM_LIBRARY_VERSION = 10
 
 # Installed with page.evaluate(DOM_LIBRARY_JS) before any interaction.
 DOM_LIBRARY_JS = r"""
 (() => {
-  if (window.__omnibrain && window.__omnibrain.version === 9) return 'already';
+  if (window.__omnibrain && window.__omnibrain.version === 10) return 'already';
   const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
   const lower = (s) => (s || '').toLowerCase();
 
@@ -568,7 +568,7 @@ DOM_LIBRARY_JS = r"""
   }
 
   const api = {
-    version: 9,
+    version: 10,
     chooseSpeed(cfg, want) { return pickSpeed(cfg, want); },
     guestDismiss(cfg) { return guestDismiss(cfg); },
     modeControls(cfg) { return modeControls(cfg); },
@@ -678,19 +678,35 @@ DOM_LIBRARY_JS = r"""
     baseline(cfg) {
       const blocks = assistantBlocks(cfg);
       const texts = blocks.map(b => norm(b.innerText));
+      // A long chat is a virtualised list: old turns unmount as new ones mount, so the block COUNT can stay
+      // the same after a reply arrives (ChatGPT 2026, live: "only the pre-existing message was visible" with
+      // the reply on screen). Mark every block present now and remember its text head; a reply is a block
+      // that carries neither.
+      const mark = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      blocks.forEach(b => { try { b.setAttribute('data-ob-seen', mark); } catch (e) {} });
       return {
         count: blocks.length,
         lastText: texts.length ? texts[texts.length - 1] : '',
         lastLength: texts.length ? texts[texts.length - 1].length : 0,
         totalChars: texts.join('').length,
         roots: firstMessageRoots(cfg).length,
+        mark,
+        seen: texts.filter(Boolean).slice(-60).map(t => t.slice(0, 160)),
       };
     },
 
     capture(cfg, baseline) {
       const blocks = assistantBlocks(cfg);
-      const recent = blocks.slice(Math.max(0, (baseline && baseline.count ? baseline.count : 0)), blocks.length);
-      const scan = (recent.length ? recent : blocks.slice(-Math.max(1, cfg.scan_recent_blocks || 4)));
+      let recent;
+      if (baseline && baseline.mark) {
+        const seen = new Set(baseline.seen || []);
+        let lastMarked = -1;
+        blocks.forEach((b, i) => { if (b.getAttribute('data-ob-seen') === baseline.mark) lastMarked = i; });
+        recent = blocks.filter((b, i) => i > lastMarked && b.getAttribute('data-ob-seen') !== baseline.mark
+          && !seen.has(norm(b.innerText).slice(0, 160)));
+      } else {
+        recent = blocks.slice(Math.max(0, (baseline && baseline.count ? baseline.count : 0)), blocks.length);
+      }      const scan = (recent.length ? recent : blocks.slice(-Math.max(1, cfg.scan_recent_blocks || 4)));
       const items = scan.map(node => {
         const mediaOnly = (() => {
           const media = node.querySelectorAll('img, canvas, video, figure');
@@ -716,7 +732,7 @@ DOM_LIBRARY_JS = r"""
       return {
         busy: busy(cfg),
         blockCount: blocks.length,
-        newBlock: baseline ? blocks.length > baseline.count : items.length > 0,
+        newBlock: baseline ? (baseline.mark ? recent.length > 0 : blocks.length > baseline.count) : items.length > 0,
         items,
         text: combined,
         plainLength: norm(combined).length,

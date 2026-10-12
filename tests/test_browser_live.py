@@ -796,3 +796,24 @@ async def test_guest_chat_never_touches_age_terms_captcha_or_login_only_dialogs(
         assert await adapter.continue_as_guest(page) == []
     finally:
         await engine.stop(keep_windows=False)
+
+
+async def test_a_reply_in_a_virtualised_long_chat_is_captured(browser_settings, fixture_server):
+    """Live (ChatGPT long chat, compress check 2026-10-12): the reply was on screen, yet the turn failed with
+    "only the pre-existing message was visible" -- the page unmounts old turns as new ones mount, so the
+    count of assistant messages never grew past the baseline."""
+    engine = BrowserEngine(browser_settings)
+    cfg = ProviderConfig(enabled=True, label="Fixture", url=f"{fixture_server}?virtual=1", adapter="generic_chat", max_retries=0)
+    built = build_adapter("fixture", engine, browser_settings, cfg)
+    built.sel.stable_ms = 700
+    built.sel.never_started_ms = 8000
+    built.sel.force_capture_ms = 20000
+    built.sel.hard_timeout_ms = 30000
+    try:
+        first = await built.ask("job-virtual", "question one", 1)
+        assert "announced on 14 May 2026" in first.answer_text
+        second = await built.ask("job-virtual", "question two", 2, continue_thread=True)
+        assert second.status == ProviderStatus.COMPLETED, (second.status, second.error)
+        assert "549" in second.answer_text and "announced on 14 May 2026" not in second.answer_text, second.answer_text[:200]
+    finally:
+        await engine.stop(keep_windows=False)

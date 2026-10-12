@@ -49,6 +49,9 @@ const input = document.getElementById('composer-input');
 const send = document.getElementById('send');
 const stop = document.getElementById('stop');
 const STALL_REPLY = new URLSearchParams(location.search).has('stall_reply');
+// ?virtual=1: a long chat as a virtualised list (ChatGPT 2026) -- mounting a reply unmounts the oldest turn,
+// so the number of assistant nodes on the page does not grow when the answer arrives.
+const VIRTUAL = new URLSearchParams(location.search).has('virtual');
 document.getElementById('cookie').onclick = () => document.getElementById('overlay').remove();
 
 const ANSWERS = [
@@ -110,6 +113,7 @@ function stream(answer) {
   bar.append(Object.assign(el('button'), {textContent: 'Regenerate'}));
   bar.append(el('span', null, 'Acme said'));
   holder.append(bar);
+  if (VIRTUAL) { const old = thread.querySelector('[data-message-author-role="assistant"]'); if (old) old.remove(); }
   thread.append(holder);
 
   // stream character-by-character so the capture loop has to track growth
