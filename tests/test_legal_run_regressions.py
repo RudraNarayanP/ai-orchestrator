@@ -518,3 +518,12 @@ def test_nobody_is_dropped_while_no_one_has_answered():
     runner, _ = _capped_runner(0.2)
     out = asyncio.run(runner._gather_capped([failed(), slowish()], ["copilot", "deepseek"], 2))
     assert out[1] is not None and out[1].provider == "deepseek", "the only real answer is waited for"
+
+
+def test_latency_defaults_keep_the_slowest_steps_bounded():
+    """2026-10-13 profile: one straggler site and a 75 s curator ceiling set the pace of every question."""
+    from backend.settings import Settings
+
+    s = Settings()
+    assert 0 < s.research.secondary_cap_s <= 45
+    assert 0 < s.verifier.time_cap_s <= 30

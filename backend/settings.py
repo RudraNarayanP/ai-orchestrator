@@ -136,7 +136,7 @@ class VerifierConfig(BaseModel):
     timeout_s: int = 240
     reasoning: Literal["auto", "off"] = "off"
     """'auto' lets a reasoning curator think (about 90 s per review on the free tier); 'off' answers the verdicts directly."""
-    time_cap_s: int = 75
+    time_cap_s: int = 30
     """Wall-clock ceiling for ONE curator review across the model and its fallbacks (0 = no ceiling). A model that has not
     answered in its share of this is abandoned for the next one; with none left the evidence ledger judges, and says so."""
     deep_verification: bool = True
