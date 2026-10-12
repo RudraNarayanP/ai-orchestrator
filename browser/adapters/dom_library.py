@@ -958,9 +958,11 @@ DOM_LIBRARY_JS = r"""
         return '';
       };
       const clean = (el) => {
-        const c = el.cloneNode(true);
-        c.querySelectorAll(SKIP + ', button, svg').forEach(n => n.remove());
-        return norm((c.innerText || c.textContent || '').replace(/^\s*(you said|chatgpt said|deepseek said|assistant said)\s*:\s*/i, ''));
+        // the live element's innerText keeps line breaks between blocks (a detached clone's text glues "Heading" + "Body");
+        // the thinking / screen-reader parts are then cut out of it
+        let t = el.innerText || el.textContent || '';
+        el.querySelectorAll(SKIP).forEach(n => { const x = n.innerText || ''; if (x.trim()) t = t.split(x).join(' '); });
+        return norm(t.replace(/^\s*(you said|chatgpt said|deepseek said|assistant said)\s*:\s*/i, '').replace(/\n\s*(chatgpt said|deepseek said)\s*:\s*/ig, ' '));
       };
       const outer = (list) => list.filter(n => !list.some(o => o !== n && o.contains(n)));
       const parts = (el) => {
@@ -998,9 +1000,11 @@ DOM_LIBRARY_JS = r"""
         if (!tx.sc || !tx.sc.isConnected) { tx.sc = scrollerOf(first); tx.origin = tx.sc.scrollTop; }
       }
       const sc = tx.sc;
-      if (cmd === 'top') { sc.scrollTop = 0; return {height: sc.scrollHeight, top: sc.scrollTop}; }
+      // virtualised lists re-window on scroll events; a background tab may not deliver them on its own, so send one
+      const nudge = () => { try { sc.dispatchEvent(new Event('scroll')); } catch (e) {} };
+      if (cmd === 'top') { sc.scrollTop = 0; nudge(); return {height: sc.scrollHeight, top: sc.scrollTop}; }
       if (cmd === 'restore') { sc.scrollTop = tx.origin || 0; this._tx = null; return {restored: true}; }
-      if (cmd === 'down') sc.scrollTop = sc.scrollTop + Math.max(200, Math.floor(sc.clientHeight * 0.7));
+      if (cmd === 'down') { sc.scrollTop = sc.scrollTop + Math.max(200, Math.floor(sc.clientHeight * 0.7)); nudge(); }
       const base = sc === document.scrollingElement || sc === document.documentElement ? 0 : sc.getBoundingClientRect().top;
       let expanded = 0;
       const turns = [];
