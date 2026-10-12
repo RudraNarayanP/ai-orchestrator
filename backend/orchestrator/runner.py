@@ -309,7 +309,11 @@ class ResearchRunner:
 
         # FIRST escalation: the same AI, in the same conversation, looks again.
         # Parallelism comes only after that has failed to settle it.
-        if not assessment.sufficient:
+        # When the primary already established part of the question, the open points go straight
+        # to the targeted round instead: a sequential re-ask of the whole question first only adds
+        # a minute without narrowing anything the targeted round would not (live DPDP run: 295 s).
+        partly_settled = bool(assessment.established) and bool(assessment.unresolved)
+        if not assessment.sufficient and not partly_settled:
             before = len(job.responses)
             (round_no, responses, claims, evidence, disagreements, assessment) = await self._thread_follow_up(
                 job, analysis, primary, round_no, responses, claims, evidence, disagreements, assessment

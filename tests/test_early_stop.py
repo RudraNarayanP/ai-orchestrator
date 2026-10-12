@@ -173,3 +173,36 @@ async def test_side_remarks_that_no_page_confirms_do_not_block_an_early_stop(net
     assert [c["provider"] for c in log] == ["chatgpt"], "the asked claim is settled by a primary page the AI opened"
     a = job.assessments[0]
     assert a.strong_primary and a.unresolved, "the side remarks stay unresolved; they just do not decide the answer"
+
+TWO_PART_Q = LAW_Q.replace("?", ", and on what date did section 9 come into force?")
+PARTLY = {
+    "answer": OPENED_PRIMARY["answer"].replace(
+        "\n\nSOURCE LINKS",
+        "\n2. Section 9 of the Data Protection Act 2018 came into force on 25 May 2018.\n\nSOURCE LINKS",
+    ),
+    "citations": [],
+}
+
+
+async def test_a_partly_settled_primary_goes_to_targeted_research_without_a_sequential_re_ask(net, monkeypatch):
+    """Live DPDP run (295 s): the primary settled part of it, then a whole-question re-ask in the same
+    chat ran for ~70 s before the targeted round asked about the open part anyway."""
+    from backend.orchestrator.runner import ResearchRunner
+
+    original = ResearchRunner._assess
+
+    def partial(self, *a, focus="", **k):
+        out = original(self, *a, focus=focus, **k)
+        if focus == "primary":
+            established = list(out.established) or ["Section 9 sets the age at 13."]
+            out = out.model_copy(update={"sufficient": False, "strong_primary": False, "established": established,
+                                         "unresolved": list(out.unresolved) or ["When did section 9 come into force?"]})
+        return out
+
+    monkeypatch.setattr(ResearchRunner, "_assess", partial)
+    net.confirm(URL9, tier=SourceTier.PRIMARY_OFFICIAL)
+    settings = providers("chatgpt", "gemini", "qwen")
+    job, log, _ = await run(settings, {"chatgpt": [PARTLY, PARTLY], "gemini": {"answer": "It came into force on 25 May 2018."}, "qwen": {"answer": "It came into force on 25 May 2018."}}, TWO_PART_Q)
+    names = [c["provider"] for c in log]
+    assert not (len(log) > 1 and names[1] == "chatgpt" and log[1].get("continue")), names
+    assert len(log) > 1, "the open point is still researched"
