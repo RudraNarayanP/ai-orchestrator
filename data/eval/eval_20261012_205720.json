@@ -1,0 +1,1468 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "google_ai",
+   "copilot",
+   "meta_ai",
+   "le_chat",
+   "pi",
+   "qwen",
+   "deepseek"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "lg-erie-federal-common-law",
+   "category": "legal-conflict-of-laws",
+   "kind": "answer",
+   "question": "Under Erie Railroad Co. v. Tompkins, must a US federal court that hears a state-law claim in diversity jurisdiction apply federal general common law?",
+   "answer": "Nah, that doesn't work like that. Under Erie Railroad Co. v. Tompkins, a federal court hearing a state-law claim under diversity jurisdiction must apply the relevant state's substantive law, not federal general common law. ❌",
+   "why": "The Erie Railroad Co. v. Tompkins decision explicitly overruled Swift v. Tyson and held that there is no federal general common law. Federal courts in diversity cases must apply the substantive law of the state, including its common law, as declared by its legislature or highest court, except where federal constitutional provisions or Acts of Congress control.",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://www.law.cornell.edu/supremecourt/text/304/64",
+    "https://tile.loc.gov/storage-services/service/ll/usrep/usrep304/usrep304064/usrep304064.pdf",
+    "https://www.govinfo.gov/app/details/USREPORTS-304/USREPORTS-304-64"
+   ],
+   "primary_domains": [
+    "supreme.justia.com",
+    "law.cornell.edu",
+    "supremecourt.gov"
+   ],
+   "primary_opened": [
+    "https://www.law.cornell.edu/supremecourt/text/304/64",
+    "https://www.law.cornell.edu/supremecourt/text/304/64",
+    "https://www.law.cornell.edu/supremecourt/text/304/64",
+    "https://www.law.cornell.edu/supremecourt/text/304/64",
+    "https://www.law.cornell.edu/supremecourt/text/304/64",
+    "https://www.law.cornell.edu/supremecourt/text/304/64"
+   ],
+   "primary_cited": [
+    "https://www.law.cornell.edu/supremecourt/text/304/64"
+   ],
+   "pages_opened": 28,
+   "pages_confirmed": 26,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt"
+   ],
+   "providers_failed": [],
+   "rounds": 1,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 1,
+   "verifier_calls": 1,
+   "stop_reason": "remaining uncertainty is not material to the question (round 1)",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [],
+   "claim_text_len": 1056,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 84.2,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "lg-uk-dpa-s9-in-force",
+   "category": "legal-privacy",
+   "kind": "answer",
+   "question": "Is section 9 of the Data Protection Act 2018 still in force as the provision that sets the UK's age of consent for online services?",
+   "answer": "Couldn't verify that one.",
+   "why": "",
+   "confidence": "Low confidence",
+   "caveats": [
+    "Not confirmed by the pages we opened: Section 9 of the Data Protection Act 2018 was omitted from the Act with effect from 31 December 2020 under the EU-exit amendments and is no longer in force as the provision setting the UK's age of consent for online services."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25",
+    "https://www.legislation.gov.uk/ukpga/2018/12/notes/division/6/index.htm",
+    "https://www.legislation.gov.uk/ukpga/2018/12/pdfs/ukpga_20180012_en.pdf",
+    "https://www.legislation.gov.uk/ukpga/2018/12/part/2/chapter/2/enacted",
+    "https://www.legislation.gov.uk/ukpga/2018/12/contents",
+    "https://www.legislation.gov.uk/ukpga/2025/18/section/117"
+   ],
+   "primary_cited": [],
+   "pages_opened": 16,
+   "pages_confirmed": 4,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "google_ai"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (2) plus 1 follow-up round granted on top; the claims the curator judged are settled by opened evidence and 13 further wording(s) the curator did not judge",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "failed",
+     "error": "needs_focus: skipped in silent mode - the send did not go through in a background tab (Omn"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "rate_limited",
+     "error": "rate_limited: t reached You have reached your message limit. Your limit will reset in 30 m"
+    }
+   ],
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [],
+   "claim_text_len": 1384,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 162.0,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "said it could not answer an answerable question"
+    ]
+   }
+  },
+  {
+   "id": "lg-dpf-no-scc",
+   "category": "legal-privacy",
+   "kind": "answer",
+   "question": "Can a company in the EU transfer personal data to a US company that is certified under the EU-US Data Privacy Framework without also using standard contractual clauses?",
+   "answer": "Yeah, the idea is right, but the date part is a bit off — The European Commission adopted an adequacy decision for transfers to US organisations participating in the EU–US DPF on 10 July 2023.",
+   "why": "5 pages we opened, from 2 independent sites, state this.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "One part of this is not confirmed: If the US recipient acts as a processor on behalf of the EU company, the parties must still enter into a da..."
+   ],
+   "sources": [
+    "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/adequacy-decisions_en",
+    "https://www.edpb.europa.eu/system/files/2026-04/edpb_dpf_faq-for-businesses_v2_en.pdf",
+    "https://www.edpb.europa.eu/documents/other-guidance/eu-us-data-privacy-framework-faq-for-european-businesses-version-20_en",
+    "https://www.edpb.europa.eu/topics/international-transfers-and-international-cooperation/adequacy-decision_en",
+    "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/eu-us-data-transfers_de",
+    "https://dataprotection.ie/en/individuals/EU-US-Data-Privacy-Framework"
+   ],
+   "primary_domains": [
+    "eur-lex.europa.eu",
+    "dataprivacyframework.gov",
+    "commission.europa.eu"
+   ],
+   "primary_opened": [
+    "https://www.dataprivacyframework.gov/program-articles/Contract-Requirements-for-Data-Transfers-to-a-Processor",
+    "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/adequacy-decisions_en",
+    "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/adequacy-decisions_en",
+    "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/adequacy-decisions_en",
+    "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/adequacy-decisions_en",
+    "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/adequacy-decisions_en"
+   ],
+   "primary_cited": [
+    "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/adequacy-decisions_en",
+    "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/eu-us-data-transfers_de"
+   ],
+   "pages_opened": 38,
+   "pages_confirmed": 18,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt"
+   ],
+   "providers_failed": [],
+   "rounds": 1,
+   "verifier_model": "deterministic ledger (no verifier call)",
+   "browser_sessions": 1,
+   "verifier_calls": 0,
+   "stop_reason": "evidence sufficient after the primary researcher; no escalation earned",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://www.dataprivacyframework.gov/program-articles/Contract-Requirements-for-Data-Transfers-to-a-Processor": true,
+    "https://www.edpb.europa.eu/topics/international-transfers-and-international-cooperation/adequacy-decision_en": true,
+    "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/adequacy-decisions_en": true,
+    "https://www.edpb.europa.eu/system/files/2026-04/edpb_dpf_faq-for-businesses_v2_en.pdf": true,
+    "https://www.edpb.europa.eu/documents/other-guidance/eu-us-data-privacy-framework-faq-for-european-businesses-version-20_en": true,
+    "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32023D1795": true,
+    "https://eur-lex.europa.eu/eli/dec_impl/2023/1795/oj": true,
+    "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/eu-us-data-transfers_de": true,
+    "https://dataprotection.ie/en/individuals/EU-US-Data-Privacy-Framework": true
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 1621,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 57.2,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "lg-dpdp-all-in-force",
+   "category": "legal-privacy",
+   "kind": "answer",
+   "question": "As of October 2026, are all the substantive obligations of India's Digital Personal Data Protection Act 2023 already in force?",
+   "answer": "Nah, that doesn't work like that. As of October 2026, not all substantive obligations of India's Digital Personal Data Protection Act 2023 are in force; the core compliance obligations (notice, consent, data principal rights, breach notification, cross-border transfers. ❌",
+   "why": "The official commencement notifications (G.S.R. 843(E) and G.S.R. 846(E)) dated 13 November 2025 establish a phased implementation: institutional provisions took effect immediately, the Consent Manager framework activates on 13 November 2026, and the core substantive obligations (notice, consent, rights, security, breach notification, cross-border transfers, and penalties) take effect 18 months later, on 13 May 2027. As of October 2026, only the initial and intermediate phases are in force; the major compliance obligations are not yet active.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "One part of this is not confirmed: Active penalty enforcement under the DPDP Rules reached up to ₹250 crore."
+   ],
+   "sources": [
+    "https://www.meity.gov.in/static/uploads/2025/11/53450e6e5dc0bfa85ebd78686cadad39.pdf",
+    "https://ssrana.in/articles/meity-notifies-final-digital-personal-data-protection-rules-2025/#1",
+    "https://prod-bo.ibanet.org/The-practicalities-of-implimenting-India-digital-personal-data-protection-act",
+    "https://ssrana.in/articles/dpdp-removal-of-difficulties-order-2026-what-has-been-changed-for-childrens-data-and-sdf-audits/",
+    "https://www.azbpartners.com/bank/indias-digital-personal-data-protection-act-phased-rollout-and-key-compliance-milestones/",
+    "https://webiis08.mondaq.com/india/privacy-protection/1846732/the-digital-personal-data-protection-consent-manager-framework-what-data-fiduciaries-must-do-before-the-november-2026-deadline#1"
+   ],
+   "primary_domains": [
+    "meity.gov.in",
+    "indiacode.nic.in",
+    "pib.gov.in",
+    "egazette.gov.in"
+   ],
+   "primary_opened": [
+    "https://egazette.gov.in/WriteReadData/2025/267647.pdf",
+    "https://www.meity.gov.in/static/uploads/2025/11/53450e6e5dc0bfa85ebd78686cadad39.pdf",
+    "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2190014&lang=2&reg=3",
+    "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2198217&lang=1&reg=3",
+    "https://www.meity.gov.in/static/uploads/2024/06/1c8b4c5b1b0b4b0e8b0b0b0b0b0b0b0b.pdf",
+    "https://www.meity.gov.in/"
+   ],
+   "primary_cited": [
+    "https://www.meity.gov.in/static/uploads/2025/11/53450e6e5dc0bfa85ebd78686cadad39.pdf"
+   ],
+   "pages_opened": 40,
+   "pages_confirmed": 36,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "deepseek",
+    "google_ai"
+   ],
+   "providers_failed": [
+    "copilot",
+    "gemini",
+    "le_chat"
+   ],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 6,
+   "verifier_calls": 1,
+   "stop_reason": "sources still conflict on DPDP Act enforcement status|date; reported as unresolved rather than averaged",
+   "provider_log": [
+    {
+     "provider": "google_ai",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "google_ai",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "secondary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "secondary",
+     "status": "failed",
+     "error": "needs_focus: skipped in silent mode - the send did not go through in a background tab (Omn"
+    },
+    {
+     "provider": "copilot",
+     "role": "secondary",
+     "status": "failed",
+     "error": "needs_focus: skipped in silent mode - the last send here did not go through in a backgroun"
+    },
+    {
+     "provider": "le_chat",
+     "role": "secondary",
+     "status": "rate_limited",
+     "error": "rate_limited: t reached You have reached your message limit. Your limit will reset in 28 m"
+    },
+    {
+     "provider": "deepseek",
+     "role": "secondary",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [],
+   "claim_text_len": 4599,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 234.2,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "lg-india-basic-structure",
+   "category": "legal-india",
+   "kind": "answer",
+   "question": "Can Parliament use Article 368 to amend the basic structure of the Indian Constitution?",
+   "answer": "Nah, that doesn't work like that. Parliament cannot use Article 368 to amend or destroy the basic structure of the Indian Constitution; this limitation was established by the Supreme Court in Kesavananda Bharati v. State of Kerala (1973). ❌",
+   "why": "The Kesavananda Bharati judgment, as published on Indian Kanoon and the Supreme Court's official website, is the primary source establishing that while Article 368 grants Parliament broad amending power, this power is constrained by the basic structure doctrine and cannot be used to alter or destroy the Constitution's basic structure. The judgment was delivered by a 13-judge bench with a 7-6 majority on April 24, 1973, and has been consistently upheld in subsequent cases like Minerva Mills.",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://www.pib.gov.in/PressReleasePage.aspx?PRID=1890297&lang=2&reg=48",
+    "https://www.sci.gov.in/document/his-holiness-kesavananda-bharati-v-state-of-kerala-1973-supp-scr-1/",
+    "https://indiankanoon.org/doc/257876/",
+    "https://www.scobserver.in/wp-content/uploads/2024/03/Suprme-Court-Judgement_-Kesavananda-Bharati-v-State-of-Kerala-1973.pdf"
+   ],
+   "primary_domains": [
+    "indiacode.nic.in",
+    "main.sci.gov.in",
+    "sci.gov.in"
+   ],
+   "primary_opened": [
+    "https://www.sci.gov.in/document/his-holiness-kesavananda-bharati-v-state-of-kerala-1973-supp-scr-1/",
+    "https://www.sci.gov.in/document/his-holiness-kesavananda-bharati-v-state-of-kerala-1973-supp-scr-1/",
+    "https://www.sci.gov.in/document/his-holiness-kesavananda-bharati-v-state-of-kerala-1973-supp-scr-1/",
+    "https://www.sci.gov.in/document/his-holiness-kesavananda-bharati-v-state-of-kerala-1973-supp-scr-1/",
+    "https://www.sci.gov.in/constitution/",
+    "https://www.sci.gov.in/constitution/"
+   ],
+   "primary_cited": [
+    "https://www.sci.gov.in/document/his-holiness-kesavananda-bharati-v-state-of-kerala-1973-supp-scr-1/"
+   ],
+   "pages_opened": 43,
+   "pages_confirmed": 36,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "google_ai"
+   ],
+   "providers_failed": [
+    "copilot",
+    "deepseek"
+   ],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (2); the claims the curator judged are settled by opened evidence and 6 further wording(s) the curator did not judge",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "deepseek",
+     "role": "targeted",
+     "status": "failed",
+     "error": "answer captured but empty after cleaning"
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "failed",
+     "error": "needs_focus: skipped in silent mode - the last send here did not go through in a backgroun"
+    }
+   ],
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [],
+   "claim_text_len": 2307,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 249.5,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "lg-india-ipc-theft",
+   "category": "legal-india",
+   "kind": "false_premise",
+   "question": "Which section of the Indian Penal Code, 1860 currently punishes theft?",
+   "answer": "Section 379 of the Indian Penal Code, 1860 prescribed the punishment for theft as imprisonment of either description for a term extending to three years, or with fine, or with both. ⚖️",
+   "why": "The IndiaCode eCourts page for IPC Section 379 confirms the heading 'Punishment for theft' and the penalty: imprisonment of either description for a term which may extend to three years, or with fine, or with both. The Ministry of Home Affairs press release confirms the Bharatiya Nyaya Sanhita, 2023 came into force on 1 July 2024. Section 358(1) of the BNS repeals the IPC, and Section 303 of the BNS now governs theft.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "One part of this is not confirmed: Section 379 of the Indian Penal Code, 1860 prescribed the general punishment for theft.",
+    "The official PDF of the Bharatiya Nyaya Sanhita, 2023 could not be opened due to unreachable links, but the repeal and current provision are supported by the legislative text and government announcement."
+   ],
+   "sources": [
+    "https://www.legislative.gov.in/static/uploads/2026/03/91680c7f82e4613a3ff0426aaab15d9b.pdf"
+   ],
+   "primary_domains": [
+    "indiacode.nic.in"
+   ],
+   "primary_opened": [
+    "https://www.indiacode.nic.in/bitstream/123456789/4219/1/THE-INDIAN-PENAL-CODE-1860.pdf",
+    "https://www.indiacode.nic.in/bitstream/123456789/20062/1/a2023-45.pdf",
+    "https://www.indiacode.nic.in/indiacode/handle/123456789/20062?col=123456789%2F1362&view_type=search",
+    "https://www.indiacode.nic.in/bitstream/123456789/15290/1/ipc.pdf",
+    "https://www.indiacode.nic.in/repealedfileopen?rfilename=A1860-45.pdf"
+   ],
+   "primary_cited": [],
+   "pages_opened": 11,
+   "pages_confirmed": 4,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "google_ai"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (2) plus 1 follow-up round granted on top with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "failed",
+     "error": "needs_focus: skipped in silent mode - the last send here did not go through in a backgroun"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "rate_limited",
+     "error": "rate_limited: t reached You have reached your message limit. Your limit will reset in 18 m"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "turn": 2,
+     "continued": true,
+     "superseded": false
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [
+    {
+     "provider": "chatgpt",
+     "verdict": "confirmed",
+     "initial_claim": "Section 379 of the Indian Penal Code, 1860 (IPC) prescribed the general punishment for theft. However, as of 12 October 2026, the IPC has been repealed and replaced by the Bharatiya Nyaya Sanhita, 2023 (BNS), effective 1 July 2024. Section 379 remains relevant to offences committed under the former ",
+     "follow_up_result": "The original answer was correct on all three points, and I found an official IndiaCode-hosted copy of the Indian Penal Code that reproduces the exact statutory wording in its search result. However, the official PDF could not be opened successfully, so I cannot claim to have personally read the prim",
+     "final_position": "Section 379 of the Indian Penal Code, 1860 (IPC) prescribed the general punishment for theft. However, as of 12 October 2026, the IPC has been repealed and replaced by the Bharatiya Nyaya Sanhita, 2023 (BNS), effective 1 July 2024. Section 379 remains relevant to offences committed under the former "
+    }
+   ],
+   "ai_opened": {
+    "https://indiacode.ecourtsindia.com/ipc/section/379/": true,
+    "https://www.indiacode.nic.in/bitstream/123456789/4219/1/THE-INDIAN-PENAL-CODE-1860.pdf": true,
+    "https://www.indiacode.nic.in/bitstream/123456789/20062/1/a2023-45.pdf": true,
+    "https://www.indiacode.ecourtsindia.com/bns/section/358/": false,
+    "https://www.indiacode.nic.in/indiacode/handle/123456789/20062?col=123456789%2F1362&view_type=search": false,
+    "https://www.indiacode.nic.in/bitstream/123456789/15290/1/ipc.pdf": false,
+    "https://www.legislative.gov.in/static/uploads/2026/03/91680c7f82e4613a3ff0426aaab15d9b.pdf": true,
+    "https://www.indiacode.nic.in/repealedfileopen?rfilename=A1860-45.pdf": false
+   },
+   "unsupported_figures": [
+    "section379"
+   ],
+   "claim_text_len": 1700,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 224.5,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "missing expected content: (Bharatiya Nyaya Sanhita|\\bBNS\\b), \\b303\\b",
+     "no primary source cited",
+     "figures with no opened page behind them: section379"
+    ]
+   }
+  },
+  {
+   "id": "lg-india-digital-india-act",
+   "category": "legal-india",
+   "kind": "false_premise",
+   "question": "What penalty does India's Digital India Act impose for a personal data breach?",
+   "answer": "The enacted Digital Personal Data Protection Act, 2023 (DPDP Act) provides for penalties under its Schedule: up to ₹250 crore for failing to implement reasonable security safeguards to prevent a personal data breach, and up to ₹200 crore for failing to notify the Data Protection Board or affected individuals of a breach, with the exact amount determined by the Data Protection Board following an inquiry. ⚖️",
+   "why": "The Digital India Act remains a proposal and has not been enacted, so it imposes no penalties. The DPDP Act, 2023 is the enacted legislation governing personal data breaches, with its Schedule specifying maximum penalties of ₹250 crore for inadequate security safeguards and ₹200 crore for failure to notify, subject to adjudication by the Data Protection Board under section 33.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "One part of this is not confirmed: Section 33(2) of the DPDP Act identifies factors relevant to determining the amount of penalties."
+   ],
+   "sources": [
+    "https://www.pib.gov.in/Pressreleaseshare.aspx?PRID=1947264&lang=2&reg=48",
+    "https://sansad.in/getFile/BillsTexts/LSBillTexts/Asintroduced/113_2023_LS_Eng83202330313PM.pdf?source=legislation",
+    "https://www.dpdpact2023.com/schedule"
+   ],
+   "primary_domains": [
+    "meity.gov.in",
+    "indiacode.nic.in"
+   ],
+   "primary_opened": [
+    "https://ceg.meity.gov.in/archievenews.jsp",
+    "https://www.indiacode.nic.in/bitstream/123456789/22037/2/a2023-22.pdf",
+    "https://www.indiacode.nic.in/indiacode/handle/123456789/22037?view_type=browse"
+   ],
+   "primary_cited": [],
+   "pages_opened": 24,
+   "pages_confirmed": 21,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "google_ai"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 2,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (2); the claims the curator judged are settled by opened evidence and 4 further wording(s) the curator did not judge",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://ceg.meity.gov.in/archievenews.jsp": true,
+    "https://www.pib.gov.in/Pressreleaseshare.aspx?PRID=1947264&lang=2&reg=48": true,
+    "https://sansad.in/getFile/BillsTexts/LSBillTexts/Asintroduced/113_2023_LS_Eng83202330313PM.pdf?source=legislation": true,
+    "https://www.indiacode.nic.in/bitstream/123456789/22037/2/a2023-22.pdf": true,
+    "https://www.indiacode.nic.in/indiacode/handle/123456789/22037?view_type=browse": true,
+    "https://sansad.in/ls/legislation/bills": false,
+    "https://www.dpdpact2023.com/schedule": false
+   },
+   "unsupported_figures": [
+    "250",
+    "200"
+   ],
+   "claim_text_len": 1788,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 125.2,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "asserts something it must not ((rs\\.?\\s?\\d|rupees|\\u20b9|\\bcrore\\b|\\blakh\\b))",
+     "missing expected content: (not (?:yet )?(?:been )?(?:enacted|passed|in force|law)|no such|does.?n.t exist|does not exist|not an act)",
+     "no primary source cited",
+     "figures with no opened page behind them: 250, 200"
+    ]
+   }
+  },
+  {
+   "id": "lg-ccbyncsa-gplv3",
+   "category": "legal-ip-licensing",
+   "kind": "answer",
+   "question": "Can material licensed CC BY-NC-SA 4.0 be included in a program that is distributed under the GNU GPL version 3?",
+   "answer": "Nah, that doesn't work like that. Material licensed CC BY-NC-SA 4.0 cannot be incorporated into an adapted or combined work distributed under GNU GPL version 3, because Creative Commons has not designated GPLv3 as a compatible license for CC BY-NC-SA 4.0. ❌",
+   "why": "The CC BY-NC-SA 4.0 license includes a ShareAlike condition (section 3(b)(1)) that requires adaptations to be licensed under the same license, a later version, a ported version, or a license specifically designated as compatible by Creative Commons. The official Creative Commons compatible licenses list shows that no non-Creative Commons licenses, including GPLv3, have been designated as compatible with CC BY-NC-SA 4.0. Therefore, distributing an adaptation of CC BY-NC-SA 4.0 material under GPLv3 violates the license terms.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "One part of this is not confirmed: CC BY-NC-SA 4.0 material incorporated into an adapted or combined work distributed under GNU GPL version 3...",
+    "The analysis assumes the material is incorporated into an adapted or combined work; mere aggregation of independent works may be treated differently under GPL terms, but this was not verified due to lack of access to the GNU GPL FAQ."
+   ],
+   "sources": [
+    "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en",
+    "https://creativecommons.org/faq/index.html"
+   ],
+   "primary_domains": [
+    "creativecommons.org",
+    "gnu.org"
+   ],
+   "primary_opened": [
+    "https://creativecommons.org/compatible-licenses/",
+    "https://creativecommons.org/compatible-licenses/",
+    "https://creativecommons.org/compatible-licenses/",
+    "https://creativecommons.org/compatible-licenses/",
+    "https://creativecommons.org/compatible-licenses/",
+    "https://creativecommons.org/compatible-licenses/"
+   ],
+   "primary_cited": [
+    "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en",
+    "https://creativecommons.org/faq/index.html"
+   ],
+   "pages_opened": 29,
+   "pages_confirmed": 17,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "google_ai"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (2) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "failed",
+     "error": "needs_focus: skipped in silent mode - the last send here did not go through in a backgroun"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "rate_limited",
+     "error": "rate_limited: t reached You have reached your message limit. Your limit will reset in 14 m"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://creativecommons.org/compatible-licenses/": true,
+    "https://creativecommons.org/licenses/by-nc-sa/4.0/": true,
+    "https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en": true,
+    "https://creativecommons.org/faq/index.html": true,
+    "https://www.gnu.org/licenses/gpl-faq.en.html": false,
+    "https://creativecommons.org/2015/10/08/cc-by-sa-4-0-now-one-way-compatible-with-gplv3/": false
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 1744,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 116.6,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "lg-ai-training-fair-use",
+   "category": "legal-ip-licensing",
+   "kind": "contested",
+   "question": "Is training a generative AI model on copyrighted books without a licence fair use under US law?",
+   "answer": "Yeah, you're right. Training a generative AI model on copyrighted books without a licence is not automatically fair use under US law; it depends on a case-specific four-factor analysis, and while some courts have found certain training uses to be fair use, no blanket rule exists. ✅",
+   "why": "The US Copyright Act's fair use provision (17 U.S.C. § 107) requires a four-factor analysis for any use, including AI training. The Bartz v. Anthropic case demonstrates that courts apply this test to AI training, finding some uses (like model training) to be fair use while rejecting others (like building a pirated library). No statute or ruling creates a blanket exception for AI training.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "The Bartz decision is a single district court ruling and not binding precedent; other courts may reach different conclusions."
+   ],
+   "sources": [
+    "https://www.law.cornell.edu/uscode/text/17/107.html",
+    "https://www.govinfo.gov/content/pkg/USCODE-2024-title17/html/USCODE-2024-title17-chap1-sec107.htm",
+    "https://www.bartonesq.com/news-article/ca-district-court-rules-that-copyrighted-content-used-for-training-ai-is-fair-use/"
+   ],
+   "primary_domains": [],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 31,
+   "pages_confirmed": 29,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "google_ai"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 2,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (2) with material uncertainty still open",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://docs.justia.com/cases/federal/district-courts/california/candce/3%3A2024cv05417/434709/231": true,
+    "https://www.bartonesq.com/news-article/ca-district-court-rules-that-copyrighted-content-used-for-training-ai-is-fair-use/": false,
+    "https://www.law.cornell.edu/uscode/text/17/107.html": true,
+    "https://www.govinfo.gov/content/pkg/USCODE-2024-title17/html/USCODE-2024-title17-chap1-sec107.htm": true,
+    "https://www.govinfo.gov/app/details/USCOURTS-cand-3_24-cv-05417/USCOURTS-cand-3_24-cv-05417-2/context": true,
+    "https://www.reuters.com/legal/thomson-reuters-wins-ai-copyright-fair-use-ruling-against-one-time-competitor-2025-02-11/": true
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 2324,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 117.3,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "asserts something it must not (^\\W*(?:yes|yeah|yep|no|nope|nah)\\b)",
+     "asserted a settled yes/no on a question the sources leave open"
+    ]
+   }
+  },
+  {
+   "id": "lg-india-nyc-reciprocity",
+   "category": "legal-limitation-arbitration",
+   "kind": "answer",
+   "question": "Does India enforce New York Convention awards made in any Convention state, even one the Indian government has not notified as a reciprocating territory?",
+   "answer": "Couldn't verify that one.",
+   "why": "",
+   "confidence": "Low confidence",
+   "caveats": [
+    "Not confirmed by the pages we opened: India does not enforce New York Convention awards made in any Convention state unless the territory has been formally notified by the Central Government as a reciprocating territory under Section 44(b) of the Arbitration and Conciliation Act, 1996. The..."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "indiacode.nic.in"
+   ],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 10,
+   "pages_confirmed": 7,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "google_ai"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (2); the claims the curator judged are settled by opened evidence and 10 further wording(s) the curator did not judge",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "failed",
+     "error": "needs_focus: skipped in silent mode - the last send here did not go through in a backgroun"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "rate_limited",
+     "error": "backing off 48s after a rate limit (4 in a row); not asking again yet"
+    }
+   ],
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [],
+   "claim_text_len": 2549,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 100.6,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "said it could not answer an answerable question"
+    ]
+   }
+  },
+  {
+   "id": "lg-fp-dpa-1998-age",
+   "category": "legal-trap",
+   "kind": "false_premise",
+   "question": "Which section of the Data Protection Act 1998 currently sets the age at which a child can consent to online services in the UK?",
+   "answer": "No section of the Data Protection Act 1998 currently sets the age at which a child can consent to online services in the UK; the Act was repealed by the Data Protection Act 2018, and the age threshold of 13 is now set by Article 8 of the UK GDPR. ❌",
+   "why": "The Data Protection Act 1998 was repealed by the Data Protection Act 2018, as shown on legislation.gov.uk. Section 9 of the 2018 Act, which set the age at 13 for children's consent to information society services, was omitted on 31 December 2020. The ICO guidance confirms that Article 8 of the UK GDPR now sets this age at 13.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "One part of this is not confirmed: Section 9 of the Data Protection Act 2018 was omitted on 31 December 2020.",
+    "The legislation.gov.uk pages were blocked by bot-check challenges, but the status notes and explanatory notes were accessible and sufficient to confirm the repeal, omission, and age threshold."
+   ],
+   "sources": [
+    "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/children-and-the-uk-gdpr-old/what-are-the-rules-about-an-iss-and-consent/?q=parental+responsibility"
+   ],
+   "primary_domains": [
+    "legislation.gov.uk"
+   ],
+   "primary_opened": [
+    "https://www.legislation.gov.uk/ukpga/1998/29",
+    "https://www.legislation.gov.uk/ukpga/2018/12/section/9/2018-05-25",
+    "https://www.legislation.gov.uk/ukpga/2018/12/notes/division/6/index.htm",
+    "https://www.legislation.gov.uk/ukpga/1998/29/enacted",
+    "https://www.legislation.gov.uk/eur/2016/679/article/8",
+    "https://www.legislation.gov.uk/ukpga/2018/12/2026-09-30"
+   ],
+   "primary_cited": [],
+   "pages_opened": 9,
+   "pages_confirmed": 2,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "google_ai"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 3,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (2) plus 1 follow-up round granted on top; the claims the curator judged are settled by opened evidence and 6 further wording(s) the curator did not judge",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "chatgpt",
+     "role": "thread_follow_up",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "failed",
+     "error": "needs_focus: skipped in silent mode - the send did not go through in a background tab (Omn"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "rate_limited",
+     "error": "rate_limited: t reached You have reached your message limit. Your limit will reset in 7 mi"
+    }
+   ],
+   "threads": [],
+   "corrections": [],
+   "ai_opened": {},
+   "unsupported_figures": [
+    "2018",
+    "13"
+   ],
+   "claim_text_len": 1489,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 1
+   },
+   "runtime_s": 156.3,
+   "judgement": {
+    "verdict": "FAIL",
+    "reasons": [
+     "no primary source cited",
+     "figures with no opened page behind them: 2018, 13"
+    ]
+   }
+  },
+  {
+   "id": "lg-fp-us-gdpr",
+   "category": "legal-trap",
+   "kind": "false_premise",
+   "question": "What is the maximum fine under the US federal GDPR?",
+   "answer": "Couldn't verify that one.",
+   "why": "",
+   "confidence": "Low confidence",
+   "caveats": [
+    "Not confirmed by the pages we opened: There is no US federal law called the 'US federal GDPR'; the GDPR is an EU regulation. Under Article 83(5) of the EU GDPR, the maximum administrative fine is €20 million or 4% of the undertaking's total worldwide annual turnover in the preceding financial..."
+   ],
+   "sources": [],
+   "primary_domains": [],
+   "primary_opened": [],
+   "primary_cited": [],
+   "pages_opened": 8,
+   "pages_confirmed": 1,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "google_ai"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (2); the claims the curator judged are settled by opened evidence and 11 further wording(s) the curator did not judge",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "failed",
+     "error": "needs_focus: skipped in silent mode - the last send here did not go through in a backgroun"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "rate_limited",
+     "error": "backing off 417s after a rate limit (5 in a row); not asking again yet"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng/": true,
+    "https://www.edpb.europa.eu/topics/cooperation-enforcement/fines_en": true,
+    "https://www.govinfo.gov/content/pkg/CHRG-116shrg52692/html/CHRG-116shrg52692.htm": true,
+    "https://commission.europa.eu/law/law-topic/data-protection/information-business-and-organisations/enforcement-and-sanctions_en": false
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 1388,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 92.2,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "said it could not answer an answerable question"
+    ]
+   }
+  },
+  {
+   "id": "lg-fp-first-amendment-private",
+   "category": "legal-trap",
+   "kind": "answer",
+   "question": "Does the First Amendment to the US Constitution stop a private social media company from removing a user's post?",
+   "answer": "Nah, that doesn't work like that. The First Amendment to the U.S. Constitution ordinarily does not prevent a private social media company from removing a user's post.",
+   "why": "2 pages we opened, from an independent site, state this.",
+   "confidence": "Moderate confidence",
+   "caveats": [
+    "Only one independent site backs this."
+   ],
+   "sources": [
+    "https://www.supremecourt.gov/search.aspx?filename=%2Fdocket%2Fdocketfiles%2Fhtml%2Fpublic%2F22-277.html"
+   ],
+   "primary_domains": [
+    "supremecourt.gov",
+    "law.cornell.edu"
+   ],
+   "primary_opened": [
+    "https://www.law.cornell.edu/constitution-conan/amendment-1/state-action-doctrine-and-free-speech",
+    "https://www.law.cornell.edu/constitution-conan/amendment-1/state-action-doctrine-and-free-speech",
+    "https://www.law.cornell.edu/constitution-conan/amendment-1/state-action-doctrine-and-free-speech",
+    "https://www.law.cornell.edu/constitution-conan/amendment-1/state-action-doctrine-and-free-speech",
+    "https://www.law.cornell.edu/constitution-conan/amendment-1/state-action-doctrine-and-free-speech",
+    "https://www.law.cornell.edu/constitution-conan/amendment-1/state-action-doctrine-and-free-speech"
+   ],
+   "primary_cited": [
+    "https://www.supremecourt.gov/search.aspx?filename=%2Fdocket%2Fdocketfiles%2Fhtml%2Fpublic%2F22-277.html"
+   ],
+   "pages_opened": 25,
+   "pages_confirmed": 2,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt"
+   ],
+   "providers_failed": [],
+   "rounds": 1,
+   "verifier_model": "deterministic ledger (no verifier call)",
+   "browser_sessions": 1,
+   "verifier_calls": 0,
+   "stop_reason": "evidence sufficient after the primary researcher; no escalation earned",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://www.law.cornell.edu/constitution-conan/amendment-1/state-action-doctrine-and-free-speech": true,
+    "https://www.law.cornell.edu/supremecourt/text/17-1702": true,
+    "https://www.supremecourt.gov/opinions/18pdf/17-1702_h315.pdf": true,
+    "https://www.supremecourt.gov/opinions/23pdf/22-277new_8mjp.pdf": true,
+    "https://www.supremecourt.gov/search.aspx?filename=%2Fdocket%2Fdocketfiles%2Fhtml%2Fpublic%2F22-277.html": true
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 1509,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 56.7,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  },
+  {
+   "id": "lg-unk-fake-case",
+   "category": "legal-trap",
+   "kind": "unanswerable",
+   "question": "What did the Court of Appeal hold in Brightwater Estates Ltd v Hallam-Voss [2019] EWCA Civ 1472 about implied terms in franchise agreements?",
+   "answer": "Couldn't verify that one.",
+   "why": "",
+   "confidence": "Low confidence",
+   "caveats": [
+    "Not confirmed by the pages we opened: The case Brightwater Estates Ltd v Hallam-Voss [2019] EWCA Civ 1472 does not exist; the neutral citation [2019] EWCA Civ 1472 was not issued by the English Court of Appeal (Civil Division) in 2019, and no judgment under that name or citation appears in..."
+   ],
+   "sources": [],
+   "primary_domains": [
+    "bailii.org",
+    "judiciary.uk",
+    "caselaw.nationalarchives.gov.uk"
+   ],
+   "primary_opened": [
+    "https://caselaw.nationalarchives.gov.uk/search?query=%5B2019%5D%20EWCA%20Civ%201472",
+    "https://www.bailii.org/ew/cases/EWCA/Civ/2019/1934.html",
+    "https://www.bailii.org/ew/cases/EWHC/KB/2025/2096.html"
+   ],
+   "primary_cited": [],
+   "pages_opened": 11,
+   "pages_confirmed": 7,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "google_ai"
+   ],
+   "providers_failed": [
+    "copilot",
+    "le_chat"
+   ],
+   "rounds": 2,
+   "verifier_model": "openrouter:nvidia/nemotron-3-super-120b-a12b:free",
+   "browser_sessions": 4,
+   "verifier_calls": 1,
+   "stop_reason": "stopped at max rounds (2); the claims the curator judged are settled by opened evidence and 12 further wording(s) the curator did not judge",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "status": "failed",
+     "error": "needs_focus: skipped in silent mode - the last send here did not go through in a backgroun"
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "status": "rate_limited",
+     "error": "backing off 267s after a rate limit (5 in a row); not asking again yet"
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "google_ai",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "copilot",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "le_chat",
+     "role": "targeted",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://caselaw.nationalarchives.gov.uk/search?query=%5B2019%5D%20EWCA%20Civ%201472": true,
+    "https://www.bailii.org/ew/cases/EWCA/Civ/2019/1934.html": false,
+    "https://www.bailii.org/ew/cases/EWHC/KB/2025/2096.html": true,
+    "https://ts-p.co.uk/insights/implied-terms-of-good-faith-in-franchise-agreements/": true,
+    "https://find-and-update.company-information.service.gov.uk/company/03440828": false,
+    "https://8newsquare.co.uk/wp-content/uploads/Playtech-Software-Limited-V-Realtime-SIA.pdf": false
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 2631,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 105.6,
+   "judgement": {
+    "verdict": "PASS",
+    "reasons": []
+   }
+  }
+ ]
+}
