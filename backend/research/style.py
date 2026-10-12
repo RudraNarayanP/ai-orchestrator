@@ -58,6 +58,8 @@ answer:
   needs it. Plain language. Conclusion first, no preamble, no "based on the
   research", no "I ran this through several models".
   Never open with a hedge. Never close with a disclaimer.
+  A yes/no question gets "Yes" or "No" as the answer's first word, then the
+  reason -- unless the point is genuinely unsettled, then say it is not settled.
   Law that has changed: if the evidence shows the law or provision the question
   names was repealed, replaced, omitted or never enacted, the FIRST sentence says
   so in those words ("was repealed", "was replaced by", "has not been enacted")
@@ -653,7 +655,20 @@ def premise_state(state: str, question: str, answer: str) -> str:
     first = _head_clause(_first_sentence(lead))
     if _LEAD_NO.match(lead) or (first and _DENIAL_RE.search(first)):
         return "FALSE"
+    # The denial can sit in a later sentence that answers the question itself ("Article 368 empowers Parliament to amend the
+    # Constitution. ... Parliament cannot amend it in a manner that destroys its basic structure." -- live 2026-10-13, shown as
+    # "Yeah, you're right"). A later sentence counts only when its head clause denies AND it shares the question's key terms.
+    asked = _key_terms(main)
+    for sentence in split_sentences(_LEAD_YESNO.sub("", lead))[1:3]:
+        head = _head_clause(sentence)
+        if _DENIAL_RE.search(head) and len(asked & _key_terms(head)) >= 3:
+            return "FALSE"
     return state
+
+
+def _key_terms(text: str) -> set[str]:
+    stop = {"which", "there", "their", "about", "under", "would", "could", "should", "these", "those", "where", "while"}
+    return {w for w in re.findall(r"[a-z]{4,}", (text or "").lower()) if w not in stop}
 
 
 def _first_sentence(text: str) -> str:

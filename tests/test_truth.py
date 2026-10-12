@@ -412,3 +412,18 @@ def test_a_round_ends_at_the_hard_ceiling_even_if_nobody_answered():
     started = _t.monotonic()
     out = _a.run(runner._gather_capped([never()], ["le_chat"], 2))
     assert _t.monotonic() - started < 2 and out == [None]
+
+
+def test_a_denial_in_a_later_sentence_about_the_asked_point_leads_with_no():
+    q = "Can Parliament use Article 368 to amend the basic structure of the Indian Constitution?"
+    a = ("Article 368 empowers Parliament to amend the Indian Constitution. "
+         "Parliament cannot amend the Constitution in a manner that damages or destroys its basic structure.")
+    assert _premise("TRUE", q, a) == "FALSE"
+    # a denial about something the user did not ask stays a side remark
+    assert _premise("TRUE", "Is it true the Eiffel Tower is in Paris?", "The Eiffel Tower is in Paris. It is not in Lyon.") == "TRUE"
+
+
+def test_the_curator_is_told_to_lead_a_yes_no_question_with_yes_or_no():
+    from backend.research.style import ANSWER_CONTRACT
+
+    assert '"Yes" or "No" as the answer\'s first word' in ANSWER_CONTRACT
