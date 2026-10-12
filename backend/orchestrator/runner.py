@@ -1016,8 +1016,14 @@ class ResearchRunner:
         done, pending = await asyncio.wait(tasks, timeout=cap)
         answered = lambda ts: any(not t.cancelled() and t.exception() is None and isinstance(t.result(), ProviderResponse)  # noqa: E731
                                   and t.result().status.value == "completed" for t in ts)
+        hard = float(getattr(getattr(settings, "research", None), "secondary_hard_cap_s", 0) or 0)
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + max(0.0, hard - cap) if hard > cap else None
         while pending and not answered(done):
-            more, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            left = None if deadline is None else deadline - loop.time()
+            if left is not None and left <= 0:
+                break  # nobody answered within the hard ceiling either: the round ends with what it has
+            more, pending = await asyncio.wait(pending, timeout=left, return_when=asyncio.FIRST_COMPLETED)
             done |= more
         for t, provider in zip(tasks, providers):
             if t in pending:

@@ -1505,11 +1505,33 @@ def lead_with_the_present(report: VerifierReport, question: str) -> str:
     return answer
 
 
+_ACT_RE = re.compile(r"\b((?:[A-Z][\w'-]*\s+){1,6}(?:Act|Code|Regulation|Sanhita|Bill)(?:,?\s+\d{4})?)")
+
+
+def lead_with_the_named_law(report: VerifierReport, question: str) -> str:
+    """When the question names a law and the answer talks only about a DIFFERENT law, the settled claim about the law the user
+    named leads. Live (2026-10-12, "What penalty does India's Digital India Act impose?"): the supported claim "the Digital India
+    Act does not have a documented personal-data-breach penalty" was dropped and the answer gave another Act's penalty figures.
+    Only a SUPPORTED claim is ever promoted."""
+    answer = (report.answer or "").strip()
+    named = [m.group(1).strip() for m in _ACT_RE.finditer(question or "")]
+    if not answer or not named:
+        return answer
+    core = [re.sub(r",?\s+\d{4}$", "", n).lower() for n in named]
+    if any(c in answer.lower() for c in core):
+        return answer
+    for v in report.verdicts:
+        if v.verdict == ClaimStatus.SUPPORTED and not _is_page_claim(v.claim) and any(c in v.claim.lower() for c in core):
+            return f"{v.claim.strip().rstrip('.')}. {answer}"
+    return answer
+
+
 def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int, question: str = "") -> FinalAnswer:
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
     state = truth_state(report, question) if question and (report.verdicts or report.confidence == Confidence.NONE) else ""
     report = report.model_copy(update={"answer": lead_with_the_present(report, question)}) if question else report
+    report = report.model_copy(update={"answer": lead_with_the_named_law(report, question)}) if question else report
     ledger_state = state
     state = premise_state(state, question, lint_answer(report.answer, question=question).text) if state else state
     S = ClaimStatus
@@ -1537,7 +1559,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
             text = partial
         elif state:
             body = apply_uk_iss_age_temporal_frame(
-                _lint_headline_answer(report.answer, question=question, state=state, unknowns=unknowns),
+                lead_with_the_named_law(report.model_copy(update={"answer": _lint_headline_answer(report.answer, question=question, state=state, unknowns=unknowns)}), question),
                 report.caveats or [],
                 question,
                 why=report.why or "",
@@ -1551,7 +1573,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
             text = humanize(shown, "high" if state in {"TRUE", "FALSE"} and ledger_state in {"TRUE", "FALSE"} else "low")
         else:
             body = apply_uk_iss_age_temporal_frame(
-                _lint_headline_answer(report.answer, question=question, state=state, unknowns=unknowns),
+                lead_with_the_named_law(report.model_copy(update={"answer": _lint_headline_answer(report.answer, question=question, state=state, unknowns=unknowns)}), question),
                 report.caveats or [],
                 question,
                 why=report.why or "",

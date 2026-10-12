@@ -213,6 +213,8 @@ class ResearchConfig(BaseModel):
     the primary finishes first; used only when the primary did not settle it."""
     speculative_count: int = 2
     secondary_cap_s: float = 40.0
+    secondary_hard_cap_s: float = 90.0
+    """Even when nobody has answered yet, a parallel/targeted round ends this long after it started (live: one site took 214 s)."""
     """Parallel / targeted rounds: once one researcher has answered, the others get this long from the round's start, then the
     stragglers are dropped from this question (0 = wait for every one). The slowest site never sets the pace (2026-10-12 profile:
     a targeted round waited 92 s on a DeepSeek reply that came back empty)."""

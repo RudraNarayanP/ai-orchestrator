@@ -375,3 +375,40 @@ def test_a_question_about_the_law_now_leads_with_the_settled_claim_about_now():
     unsettled = report(verdict(ClaimStatus.INSUFFICIENT_EVIDENCE, "Section 303 of the Bharatiya Nyaya Sanhita addresses theft under the current criminal law."),
                        answer="Section 379 of the Indian Penal Code, 1860 prescribed the punishment for theft.")
     assert lead_with_the_present(unsettled, q).startswith("Section 379")
+
+
+def test_an_answer_about_a_different_law_is_led_by_the_settled_claim_about_the_named_law():
+    from backend.verification.verifier import lead_with_the_named_law
+
+    q = "What penalty does India's Digital India Act impose for a personal data breach?"
+    rep = report(
+        verdict(ClaimStatus.SUPPORTED, "India's Digital India Act does not have a verified, documented personal-data-breach penalty."),
+        answer="The enacted Digital Personal Data Protection Act, 2023 provides penalties of up to 250 crore.",
+    )
+    out = lead_with_the_named_law(rep, q)
+    assert out.startswith("India's Digital India Act does not have"), out
+    weak = report(verdict(ClaimStatus.INSUFFICIENT_EVIDENCE, "The Digital India Act is a proposed initiative."),
+                  answer="The enacted Digital Personal Data Protection Act, 2023 provides penalties.")
+    assert lead_with_the_named_law(weak, q).startswith("The enacted"), "only a settled claim leads"
+
+
+def test_a_round_ends_at_the_hard_ceiling_even_if_nobody_answered():
+    import asyncio as _a
+    import time as _t
+    from types import SimpleNamespace as _NS
+    from backend.orchestrator.runner import ResearchRunner
+
+    runner = object.__new__(ResearchRunner)
+    runner.settings = _NS(research=_NS(secondary_cap_s=0.1, secondary_hard_cap_s=0.4))
+
+    async def emit(*a, **k):
+        return None
+
+    runner._emit = emit
+
+    async def never():
+        await _a.sleep(30)
+
+    started = _t.monotonic()
+    out = _a.run(runner._gather_capped([never()], ["le_chat"], 2))
+    assert _t.monotonic() - started < 2 and out == [None]
