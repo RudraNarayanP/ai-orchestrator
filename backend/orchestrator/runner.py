@@ -339,7 +339,19 @@ class ResearchRunner:
         # to the targeted round instead: a sequential re-ask of the whole question first only adds
         # a minute without narrowing anything the targeted round would not (live DPDP run: 295 s).
         partly_settled = bool(assessment.established) and bool(assessment.unresolved)
-        if not assessment.sufficient and not partly_settled:
+        # Re-ask only on a real conflict (user rule, 2026-10-13): when two or more AIs answered and none of their claims
+        # materially contradict, more researchers add minutes, not certainty -- what is still unproven goes to the curator,
+        # which judges it on the evidence and keeps it unconfirmed if the evidence does not carry it.
+        agreed = (
+            len({r.provider for r in responses}) >= 2
+            and bool(assessment.established)
+            and not any(d.severity == "material" for d in disagreements)
+            and not analysis.high_stakes
+        )
+        if agreed:
+            await self._emit("assessment", f"{len({r.provider for r in responses})} researchers agree with no material conflict -- no re-ask round",
+                             round_no=round_no, job=job, sufficient=assessment.sufficient)
+        if not assessment.sufficient and not partly_settled and not agreed:
             before = len(job.responses)
             (round_no, responses, claims, evidence, disagreements, assessment) = await self._thread_follow_up(
                 job, analysis, primary, round_no, responses, claims, evidence, disagreements, assessment
@@ -356,7 +368,7 @@ class ResearchRunner:
         # Level 2 -- expansion, earned by failure, never assumed.
         job.level = EscalationLevel.PARALLEL
         out_of_time = self._over_budget(job)
-        partial = bool(assessment.established) and bool(assessment.unresolved) and not out_of_time
+        partial = bool(assessment.established) and bool(assessment.unresolved) and not out_of_time and not agreed
         if partial:
             # Most of it is settled. Investigate only what is not -- re-running
             # every provider on the whole question wastes sessions and re-asks
@@ -381,7 +393,7 @@ class ResearchRunner:
         # After a targeted expansion, what remains is a conflict for the verifier,
         # not a gap more researchers would fill.
         # Sufficient but high-stakes goes to the curator, not to a swarm: parallel research is for an unresolved claim.
-        if secondaries and not partial and not assessment.sufficient and not out_of_time:
+        if secondaries and not partial and not agreed and not assessment.sufficient and not out_of_time:
             context = self._failure_context(responses, claims, evidence, disagreements, assessment)
             job.escalation_log.append(
                 EscalationStep(

@@ -264,3 +264,22 @@ async def test_a_slow_unsettled_primary_finds_second_opinions_already_in_hand(ne
     assert early, [c["provider"] for c in log]
     assert any("early second opinions" in (a.focus if hasattr(a, "focus") else str(a)) or True for a in job.assessments)
     assert "13" in (job.final.answer or ""), job.final.answer
+
+
+async def test_agreeing_researchers_with_no_conflict_get_no_re_ask_round(net, monkeypatch):
+    """2026-10-14 dpf run: primary + an early second opinion agreed, yet a targeted round re-asked 3 sites (+60 s)."""
+    from backend.orchestrator.runner import ResearchRunner
+
+    original = ResearchRunner._assess
+
+    def partial(self, *a, focus="", **k):
+        out = original(self, *a, focus=focus, **k)
+        return out.model_copy(update={"sufficient": False, "strong_primary": False,
+                                      "established": list(out.established) or ["Section 9 sets the age at 13."],
+                                      "unresolved": list(out.unresolved) or ["A side point no page confirms."]})
+
+    monkeypatch.setattr(ResearchRunner, "_assess", partial)
+    net.confirm(URL9, tier=SourceTier.PRIMARY_OFFICIAL)
+    job, log = await _run_spec(HEDGE, 0.4)
+    assert any(c["provider"] != "chatgpt" for c in log), "second opinions were asked"
+    assert all(c["round"] == 1 for c in log), [(c["provider"], c["round"]) for c in log]
