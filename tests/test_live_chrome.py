@@ -1377,3 +1377,28 @@ def test_release_tabs_stops_sessions_whose_tab_never_registered():
     eng._sessions = {"grok": R("omnibrain-grok"), "chatgpt": R("omnibrain-chatgpt")}
     asyncio.run(eng.release_tabs(keep={"chatgpt"}))
     assert stopped == [("session", "stop", "omnibrain-grok")]
+
+
+def test_startup_stops_sessions_a_dead_run_left_with_tabs(tmp_path):
+    import asyncio, json as _json
+    from backend.browser.live_chrome import LiveChromeEngine
+
+    (tmp_path / "omnibrain-qwen.created-targets.json").write_text(_json.dumps({"target_ids": ["A"]}))
+    (tmp_path / "omnibrain-grok.created-targets.json").write_text(_json.dumps({"target_ids": []}))
+    (tmp_path / "someone-else.created-targets.json").write_text(_json.dumps({"target_ids": ["B"]}))
+    stopped = []
+
+    class R:
+        session = "omnibrain"
+
+        def for_session(self, name):
+            return self
+
+        async def run(self, *args):
+            stopped.append(args)
+
+    eng = LiveChromeEngine.__new__(LiveChromeEngine)
+    eng.runner = R()
+    eng._note = lambda *_: None
+    assert asyncio.run(eng.sweep_orphans(tmp_path)) == 1
+    assert stopped == [("session", "stop", "omnibrain-qwen")]

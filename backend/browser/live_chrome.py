@@ -968,6 +968,38 @@ class LiveChromeEngine:
             f"live Chrome driver: chrome-use answered `status`"
             + (f" -- but {problem}; the first tab will fail until that is fixed" if problem else "")
         )
+        await self.sweep_orphans()
+
+    async def sweep_orphans(self, state_dir: "Path | None" = None) -> int:
+        """At startup, stop OmniBrain sessions a previous (killed / interrupted) process left owning tabs.
+
+        Live 2026-10-14: a run cut off mid-job left chatgpt, google_ai and qwen tabs open (no release_tabs ran). chrome-use keeps
+        ``<session>.created-targets.json`` per session; a non-empty one for ``<our prefix>-*`` means tabs WE created are still
+        open. Stopping that session closes only the tabs it created -- never the user's own."""
+        from pathlib import Path  # noqa: PLC0415
+
+        root = state_dir or Path.home() / ".chrome-use"
+        stopped = 0
+        try:
+            files = sorted(root.glob(f"{self.runner.session}-*.created-targets.json"))
+        except OSError:
+            return 0
+        for f in files:
+            try:
+                ids = json.loads(f.read_text(encoding="utf-8") or "{}").get("target_ids") or []
+            except (OSError, ValueError):
+                continue
+            name = f.name[: -len(".created-targets.json")]
+            if not ids or not _SESSION_NAME.match(name):
+                continue
+            try:
+                await self.runner.for_session(name).run("session", "stop", name)
+                stopped += 1
+            except Exception as exc:  # noqa: BLE001 -- cleanup never blocks startup
+                self._note(f"could not stop leftover session {name}: {exc}")
+        if stopped:
+            self._note(f"closed tabs left by an earlier OmniBrain run ({stopped} session(s))")
+        return stopped
 
     async def _resolve_browser(self) -> None:
         """``chrome_use_browser: edge`` (or ``chrome``): pin every session to the profile the extension is connected in
