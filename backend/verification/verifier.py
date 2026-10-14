@@ -493,7 +493,7 @@ class Verifier:
                 "published": e.published,
                 "freshness": freshness(e.published)["verdict"],
                 "notes": e.check_notes,
-                "verbatim_excerpt_found_in_page": (e.verbatim_excerpt or "")[:400],
+                "verbatim_excerpt_found_in_page": (e.verbatim_excerpt or "")[:280],
                 "cited_by_ai": e.cited_by or ("nobody -- OmniBrain found it itself" if e.origin != "provider" else []),
                 "ai_said_it_opened_it": {True: "opened", False: "MENTIONED ONLY (never read by the AI)", None: "not stated"}[e.ai_opened],
         "provenance": e.provenance or "OMNIBRAIN_ONLY (no AI cited it: an audit, not the AI's research)",
@@ -515,9 +515,9 @@ class Verifier:
                         + (" SUPERSEDED_BY_ITS_OWN_CORRECTION" if r.superseded else ""),
                         f"web_research={r.web_research_status.value} signals={r.web_research_signals}",
                         f"cited={len(r.citations)}",
-                        "PROMPT WE SENT:",
-                        r.prompt[:900],
-                        "",
+                        # the standard research prompt is boilerplate the curator does not need; a targeted / follow-up ask is
+                        # context it does (what exactly was re-asked). Trimmed curator prompt, 2026-10-14.
+                        *(["PROMPT WE SENT:", r.prompt[:600], ""] if r.role not in ("primary", "secondary") else []),
                         "ANSWER:",
                         r.answer_text or r.raw_text or "",
                     ]
@@ -529,11 +529,11 @@ class Verifier:
             f"QUESTION UNDER RESEARCH:\n{question}",
             f"ROUND: {1 if round_no is None else round_no}",
             "ATOMIC CLAIMS (from the providers):",
-            json.dumps(claim_rows, ensure_ascii=False, indent=1)[:14000],
+            json.dumps(claim_rows, ensure_ascii=False)[:10000],
             "EVIDENCE WE INDEPENDENTLY FETCHED:",
-            json.dumps(ev_rows, ensure_ascii=False, indent=1)[:20000],
+            json.dumps(ev_rows, ensure_ascii=False)[:12000],
             "DETECTED CONFLICTS:",
-            json.dumps(dis_rows, ensure_ascii=False, indent=1)[:8000],
+            json.dumps(dis_rows, ensure_ascii=False)[:5000],
             "SELF-CORRECTIONS (an AI revising itself after a same-conversation follow-up; a correction is evidence, not failure):",
             json.dumps(
                 [
