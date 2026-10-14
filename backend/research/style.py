@@ -659,11 +659,22 @@ def premise_state(state: str, question: str, answer: str) -> str:
     # Constitution. ... Parliament cannot amend it in a manner that destroys its basic structure." -- live 2026-10-13, shown as
     # "Yeah, you're right"). A later sentence counts only when its head clause denies AND it shares the question's key terms.
     asked = _key_terms(main)
-    for sentence in split_sentences(_LEAD_YESNO.sub("", lead))[1:3]:
+    sentences = split_sentences(_LEAD_YESNO.sub("", lead))
+    for sentence in sentences[1:4]:
         head = _head_clause(sentence)
         if _DENIAL_RE.search(head) and len(asked & _key_terms(head)) >= 3:
             return "FALSE"
+    # A contrast that rejects the very thing asked about: "must a federal court apply federal general common law?" ->
+    # "it must apply state law, rather than federal general common law" (live 2026-10-14, Erie, shown as "Yeah, you're
+    # right" in 2 of 3 runs). The words after "not / rather than / instead of" must name the question's own object.
+    for sentence in sentences[:3]:
+        for m in _CONTRAST_RE.finditer(sentence):
+            if len(asked & _key_terms(m.group(1))) >= 2:
+                return "FALSE"
     return state
+
+
+_CONTRAST_RE = re.compile(r"(?:,\s*not|\brather than|\binstead of|\bas opposed to)\s+((?:[\w'-]+\s+){0,6}[\w'-]+)", re.I)
 
 
 def _key_terms(text: str) -> set[str]:

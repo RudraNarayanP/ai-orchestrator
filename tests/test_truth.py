@@ -458,3 +458,21 @@ def test_the_curator_runs_at_temperature_zero():
     from backend.settings import Settings
 
     assert Settings().verifier.temperature == 0.0
+
+
+# ---- 2026-10-14 stability run: Erie shown as "Yeah, you're right" in 2 of 3 runs
+def test_a_contrast_rejecting_the_asked_object_is_a_no():
+    from backend.research.style import premise_state
+
+    q = ERIE_Q
+    a = ("Under Erie, a U.S. federal court hearing a state-law claim under diversity jurisdiction must apply state "
+         "substantive law, rather than federal general common law.")
+    assert premise_state("TRUE", q, a) == "FALSE"
+    assert premise_state("PARTLY", q, "Erie overruled Swift v. Tyson. A federal court must apply state law, not federal general common law.") == "FALSE"
+
+
+def test_a_contrast_about_something_else_keeps_the_yes():
+    from backend.research.style import premise_state
+
+    q = "Can a company in the EU transfer personal data to a certified US company?"
+    assert premise_state("TRUE", q, "Yes. It can transfer the data under the adequacy decision, rather than via SCCs.") == "TRUE"
