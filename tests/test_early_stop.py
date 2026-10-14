@@ -283,3 +283,30 @@ async def test_agreeing_researchers_with_no_conflict_get_no_re_ask_round(net, mo
     job, log = await _run_spec(HEDGE, 0.4)
     assert any(c["provider"] != "chatgpt" for c in log), "second opinions were asked"
     assert all(c["round"] == 1 for c in log), [(c["provider"], c["round"]) for c in log]
+
+
+async def test_started_second_opinions_join_the_first_claim_pass():
+    import asyncio
+    from types import SimpleNamespace
+    from backend.orchestrator.runner import ResearchRunner
+
+    class Resp:
+        pass
+
+    from backend.models import ProviderResponse
+    r = ProviderResponse.model_construct(provider="gemini", status=SimpleNamespace(value="completed"))
+
+    async def fast():
+        return r
+
+    async def slow():
+        await asyncio.sleep(5)
+
+    runner = ResearchRunner.__new__(ResearchRunner)
+    runner.settings = SimpleNamespace(research=SimpleNamespace(speculation_grace_s=0.2))
+    spec = [("gemini", asyncio.ensure_future(fast()), {"started": True}), ("qwen", asyncio.ensure_future(slow()), {"started": True}),
+            ("pi", asyncio.ensure_future(slow()), {"started": False})]
+    got = await runner._early_collect(spec)
+    assert got == [r] and [n for n, _, _ in spec] == ["qwen", "pi"]
+    for _, t, _ in spec:
+        t.cancel()

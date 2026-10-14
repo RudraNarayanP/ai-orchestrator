@@ -291,6 +291,9 @@ class ResearchRunner:
             job.responses.extend([r for r in [response] if r])
             return await self._driver_down_fail(job)
         responses: list[ProviderResponse] = [r for r in [response] if r]
+        # Second opinions already streaming get a short grace so ONE claim/source pass covers them all (2026-10-14 profile:
+        # extract+check ran twice in a row, primary then the early opinion, ~23 s of serial work).
+        responses.extend(await self._early_collect(speculative))
         job.responses.extend(responses)
         record.response_ids = [r.id for r in responses]
         job.browser_sessions_used += len({r.provider for r in responses})
@@ -998,6 +1001,24 @@ class ResearchRunner:
 
             out.append((name, asyncio.ensure_future(one()), flag))
         return out
+
+    async def _early_collect(self, speculative: list[tuple[str, Any, dict[str, bool]]]) -> list[ProviderResponse]:
+        """Wait at most ``speculation_grace_s`` for second opinions that have STARTED; take the ones that finished and remove them
+        from ``speculative``. Asks not yet started are left to ``_drop_speculation`` (a settled primary still cancels them)."""
+        grace = float(getattr(getattr(getattr(self, "settings", None), "research", None), "speculation_grace_s", 0) or 0)
+        started = [t for _, t, f in speculative if f["started"]]
+        if not started or grace <= 0:
+            return []
+        await asyncio.wait(started, timeout=grace)
+        got: list[ProviderResponse] = []
+        for item in list(speculative):
+            t = item[1]
+            if t.done() and not t.cancelled() and t.exception() is None:
+                r = t.result()
+                speculative.remove(item)
+                if isinstance(r, ProviderResponse) and r.status.value == "completed":
+                    got.append(r)
+        return got
 
     async def _drop_speculation(self, speculative: list[tuple[str, Any, dict[str, bool]]], *, keep_started: bool) -> list[ProviderResponse]:
         """Cancel speculative asks that have not started; with ``keep_started``, collect the ones that did (capped like any round)."""

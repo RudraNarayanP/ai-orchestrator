@@ -212,6 +212,8 @@ class ResearchConfig(BaseModel):
     """Start this many seconds after the primary, a few independent researchers on the same question (0 = off). Cancelled unseen if
     the primary finishes first; used only when the primary did not settle it."""
     speculative_count: int = 2
+    speculation_grace_s: float = 10.0
+    """After the primary answers, second opinions already started get this long to finish so one claim/source pass covers all."""
     secondary_cap_s: float = 40.0
     secondary_hard_cap_s: float = 90.0
     """Even when nobody has answered yet, a parallel/targeted round ends this long after it started (live: one site took 214 s)."""
