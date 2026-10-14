@@ -476,3 +476,36 @@ def test_a_contrast_about_something_else_keeps_the_yes():
 
     q = "Can a company in the EU transfer personal data to a certified US company?"
     assert premise_state("TRUE", q, "Yes. It can transfer the data under the adequacy decision, rather than via SCCs.") == "TRUE"
+
+
+# ---- 2026-10-14: the yes/no lead comes from the settled claims' polarity
+BASIC_Q = "Can Parliament use Article 368 to amend the basic structure of the Indian Constitution?"
+
+
+def test_the_lead_follows_the_settled_claim_even_when_the_curator_words_it_as_a_yes():
+    rep = report(verdict(ClaimStatus.SUPPORTED, "Article 368 gives Parliament the power to amend the Constitution."),
+                 verdict(ClaimStatus.SUPPORTED, "Parliament cannot use Article 368 to amend the basic structure of the Constitution."),
+                 verdict(ClaimStatus.PARTIALLY_SUPPORTED, "Kesavananda Bharati was decided by a 7-6 majority in 1973."),
+                 answer="Article 368 empowers Parliament to amend the Constitution.")
+    fa = build_final_answer(rep, [], 1, BASIC_Q)
+    assert fa.truth_state == "FALSE" and fa.answer.startswith("Nah"), fa.answer
+
+
+def test_partly_from_an_unasked_detail_does_not_soften_a_settled_yes():
+    q = "Can a company in the EU transfer personal data to a US company certified under the Data Privacy Framework?"
+    rep = report(verdict(ClaimStatus.SUPPORTED, "A company in the EU can transfer personal data to a certified US company under the adequacy decision."),
+                 verdict(ClaimStatus.PARTIALLY_SUPPORTED, "The decision was published on 20 September 2023."),
+                 answer="A company in the EU can transfer personal data to a certified US company.")
+    from backend.verification.verifier import answer_the_asked_question
+
+    assert answer_the_asked_question("PARTLY", rep, q)[0] == "TRUE"
+
+
+def test_partly_stays_when_the_asked_point_itself_is_only_partly_supported():
+    q = "Can a company in the EU transfer personal data to a US company certified under the Data Privacy Framework?"
+    rep = report(verdict(ClaimStatus.SUPPORTED, "A company in the EU can transfer personal data to a certified US company."),
+                 verdict(ClaimStatus.PARTIALLY_SUPPORTED, "Every personal data transfer to a certified US company is covered."),
+                 answer="A company in the EU can transfer personal data to a certified US company.")
+    from backend.verification.verifier import answer_the_asked_question
+
+    assert answer_the_asked_question("PARTLY", rep, q)[0] == "PARTLY"

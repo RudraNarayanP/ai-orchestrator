@@ -1549,6 +1549,22 @@ def answer_the_asked_question(state: str, report: VerifierReport, question: str)
     if len(asked) < 2:
         return state, report  # too short a question to judge relevance by words
     need = 1 if len(asked) < 4 else 2
+    # The yes/no comes from the SETTLED CLAIMS, not from the curator's wording (2026-10-14 stability run: same evidence,
+    # three runs, three different leads). The supported claim that best answers the question sets the polarity.
+    from backend.research.style import premise_state  # noqa: PLC0415
+
+    overlap = lambda v: len(asked & _key_terms(v.claim))  # noqa: E731
+    on_question = [v for v in report.verdicts if not _is_page_claim(v.claim) and overlap(v) >= need]
+    best_on = max((v for v in on_question if v.verdict == ClaimStatus.SUPPORTED), key=overlap, default=None)
+    if best_on is not None and state in {"TRUE", "PARTLY"}:
+        polarity = premise_state("TRUE", question, best_on.claim)
+        if polarity == "FALSE":
+            return "FALSE", report.model_copy(update={"answer": best_on.claim.strip().rstrip(".") + "."})
+        doubtful = {ClaimStatus.PARTIALLY_SUPPORTED, ClaimStatus.REFUTED, ClaimStatus.CONTESTED}
+        if (state == "PARTLY" and polarity == "TRUE" and not _DENIAL_RE.search(main)
+                and not any(v.verdict in doubtful for v in on_question)):
+            # "partly" came only from side details (a date, a number) the question did not ask about
+            state = "TRUE"
     lead = _first_sentence(lint_answer(report.answer, question=question).text)
     numbers = set(re.findall(r"\d[\d,.]*\d|\d", main))
     if len(asked & _key_terms(lead)) >= need or numbers & set(re.findall(r"\d[\d,.]*\d|\d", lead)):
