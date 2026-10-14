@@ -70,7 +70,7 @@ questions:
     category: legal-privacy
     kind: answer
     question: "Can a company in the EU transfer personal data to a US company that is certified under the EU-US Data Privacy Framework without also using standard contractual clauses?"
-    primary_domains: [eur-lex.europa.eu, dataprivacyframework.gov, commission.europa.eu]
+    primary_domains: [eur-lex.europa.eu, dataprivacyframework.gov, commission.europa.eu, ec.europa.eu, edpb.europa.eu]
     expect: {must_match: ['^\W*(?:yes|yeah|yep)\b']}
     notes: "Adequacy Decision (EU) 2023/1795 of 10 July 2023; upheld by the General Court in Latombe (T-553/23, 3 Sept 2025). The appeal C-703/25 P is pending as of 2026-10-11, so the decision stands. Yes."
   - id: lg-eu-adequacy-uk
