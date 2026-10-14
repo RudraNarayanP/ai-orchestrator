@@ -1338,3 +1338,42 @@ async def test_a_finished_job_releases_its_tabs(monkeypatch):
     mgr.settings.browser.close_tabs_after_job = False
     await mgr.release_tabs("job_y")
     assert Eng.released == 1
+
+
+# ---- 2026-10-13: per-provider sessions left running after a job
+def test_closing_a_tab_also_stops_its_session():
+    import asyncio
+    from backend.browser.live_chrome import close_created_tab
+
+    calls = []
+
+    class R:
+        session = "omnibrain-grok"
+
+        async def run(self, *args):
+            calls.append(args)
+
+    how = asyncio.run(close_created_tab(R(), "T1"))
+    assert ("tab", "close", "T1") in calls and ("session", "stop", "omnibrain-grok") in calls and "session stop" in how
+
+
+def test_release_tabs_stops_sessions_whose_tab_never_registered():
+    import asyncio
+    from types import SimpleNamespace
+    from backend.browser.live_chrome import LiveChromeEngine
+
+    stopped = []
+
+    class R:
+        def __init__(self, s):
+            self.session = s
+
+        async def run(self, *args):
+            stopped.append(args)
+
+    eng = LiveChromeEngine.__new__(LiveChromeEngine)
+    eng._pages = {}
+    eng._note = lambda *_: None
+    eng._sessions = {"grok": R("omnibrain-grok"), "chatgpt": R("omnibrain-chatgpt")}
+    asyncio.run(eng.release_tabs(keep={"chatgpt"}))
+    assert stopped == [("session", "stop", "omnibrain-grok")]

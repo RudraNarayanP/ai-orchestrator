@@ -465,12 +465,18 @@ async def close_created_tab(runner: ChromeUseRunner, tab_id: str) -> str:
     (never adopted or foreign ones, i.e. never the user's own tabs)."""
     try:
         await runner.run("tab", "close", tab_id)
-        return "tab close"
     except LiveChromeError as exc:
         if "last tab" not in str(exc).lower():
             raise
-    await runner.run("session", "stop", runner.session)
-    return "session stop"
+        await runner.run("session", "stop", runner.session)
+        return "session stop"
+    # 2026-10-13: the tab closed, but its session daemon kept running (one per provider, piling up after every job);
+    # stop it too -- a session owns exactly one OmniBrain tab, so nothing else goes with it.
+    try:
+        await runner.run("session", "stop", runner.session)
+    except LiveChromeError:
+        pass
+    return "tab close + session stop"
 
 
 def _parse_json_line(text: str) -> dict[str, Any] | None:
@@ -1025,7 +1031,9 @@ class LiveChromeEngine:
 
     def _runner_for(self, key: str) -> ChromeUseRunner:
         slug = re.sub(r"[^a-z0-9]+", "-", key.lower()).strip("-") or "tab"
-        return self.runner.for_session(f"{self.runner.session}-{slug}")
+        runner = self.runner.for_session(f"{self.runner.session}-{slug}")
+        self.__dict__.setdefault("_sessions", {})[key] = runner  # every session this engine started, for release_tabs
+        return runner
 
     # ---- tabs
     async def open_research_page(self, provider: str, url: str, key: str | None = None) -> LivePage:
@@ -1207,6 +1215,15 @@ class LiveChromeEngine:
                     closed += 1
             except Exception as exc:  # noqa: BLE001 -- cleanup must never fail the job
                 self._note(f"closing tab {key} failed: {exc}")
+        # sessions whose tab never registered (open timed out, cancelled mid-open) or was already closed still run a
+        # daemon and may still own a tab: stop them too, so Chrome returns to its baseline after every job
+        sessions = self.__dict__.get("_sessions", {})
+        for key in [k for k in list(sessions) if k not in keep and k not in self._pages]:
+            runner = sessions.pop(key)
+            try:
+                await runner.run("session", "stop", runner.session)
+            except Exception as exc:  # noqa: BLE001
+                self._note(f"stopping session {runner.session} failed: {exc}")
         return closed
 
     async def close_provider(self, provider: str) -> None:
