@@ -131,7 +131,7 @@ class VerifierConfig(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
     """Extra request headers, e.g. {"HTTP-Referer": "http://localhost", "X-Title": "OmniBrain"} for OpenRouter."""
 
-    temperature: float = 0.1
+    temperature: float = 0.0
     max_tokens: int = 4096
     timeout_s: int = 240
     reasoning: Literal["auto", "off"] = "off"

@@ -1526,6 +1526,53 @@ def lead_with_the_named_law(report: VerifierReport, question: str) -> str:
     return answer
 
 
+def answer_the_asked_question(state: str, report: VerifierReport, question: str) -> tuple[str, VerifierReport]:
+    """The headline of a yes/no answer must answer THE question asked, with the polarity of the settled claims.
+
+    Live (2026-10-13, Erie, three runs): the curator's answer was a side fact ("Erie ... was decided on April 25, 1938") and the
+    headline read "Yeah, you're right." -- agreement with a premise nothing addressed. General rule: for a claim check shown as
+    TRUE / FALSE / PARTLY, the answer's first sentence must share the question's key terms. If it does not, the answer is rebuilt
+    from the SUPPORTED claim that best matches the question, its polarity read off that claim; with no such claim the answer is
+    "Couldn't verify". Nothing here ever upgrades a state; at most it replaces an off-question sentence or downgrades.
+    """
+    from backend.research.style import _DENIAL_RE, _QUESTION_TAIL_RE, _first_sentence, _head_clause, _key_terms, is_claim_check  # noqa: PLC0415
+
+    if state not in {"TRUE", "FALSE", "PARTLY"} or not question or not is_claim_check(question):
+        return state, report
+    main = _QUESTION_TAIL_RE.split(question, maxsplit=1)[0]
+    asked = _key_terms(" ".join(w for w in re.findall(r"\S+", main) if not w[:1].isupper()))
+    # words that frame a claim check ("is it true", "right", "doesn't") say nothing about which fact was asked
+    filler = {"true", "really", "right", "correct", "doesnt", "dont", "isnt", "cant", "wont", "arent", "does", "have", "that", "this", "with"}
+    asked -= filler
+    if len(asked) < 2:
+        asked = _key_terms(main) - filler
+    if len(asked) < 2:
+        return state, report  # too short a question to judge relevance by words
+    need = 1 if len(asked) < 4 else 2
+    lead = _first_sentence(lint_answer(report.answer, question=question).text)
+    numbers = set(re.findall(r"\d[\d,.]*\d|\d", main))
+    if len(asked & _key_terms(lead)) >= need or numbers & set(re.findall(r"\d[\d,.]*\d|\d", lead)):
+        return state, report
+    if state == "FALSE" and any(v.verdict == ClaimStatus.REFUTED for v in report.verdicts):
+        return state, report  # the ledger itself refutes the premise; the "Nah" headline comes from it, not from the text
+    best = max(
+        (v for v in report.verdicts if v.verdict == ClaimStatus.SUPPORTED and not _is_page_claim(v.claim)),
+        key=lambda v: len(asked & _key_terms(v.claim)),
+        default=None,
+    )
+    if best is None or len(asked & _key_terms(best.claim)) < need:
+        return "UNVERIFIED", report
+    question_denies = bool(_DENIAL_RE.search(main) or re.search(r"\b(?:no|without|nothing|none)\b", main, re.I))
+    claim_denies = bool(_DENIAL_RE.search(_head_clause(best.claim)))
+    if question_denies:
+        # a negative question: agreement is not readable off word polarity; never guess a "yeah"
+        return ("PARTLY" if state == "PARTLY" else "UNVERIFIED"), report
+    new_state = "FALSE" if claim_denies else ("PARTLY" if state == "PARTLY" else "TRUE")
+    if new_state == "TRUE" and state == "FALSE":
+        return "UNVERIFIED", report  # the settled claims and the curator disagree on polarity: do not pick one
+    return new_state, report.model_copy(update={"answer": best.claim.strip().rstrip(".") + "."})
+
+
 def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int, question: str = "") -> FinalAnswer:
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
@@ -1534,6 +1581,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
     report = report.model_copy(update={"answer": lead_with_the_named_law(report, question)}) if question else report
     ledger_state = state
     state = premise_state(state, question, lint_answer(report.answer, question=question).text) if state else state
+    state, report = answer_the_asked_question(state, report, question)
     S = ClaimStatus
     settled = {S.SUPPORTED, S.REFUTED, S.PARTIALLY_SUPPORTED, S.CONTESTED}
     unknowns = [v.claim for v in report.verdicts if v.verdict not in settled]

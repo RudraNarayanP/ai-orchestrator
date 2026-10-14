@@ -427,3 +427,34 @@ def test_the_curator_is_told_to_lead_a_yes_no_question_with_yes_or_no():
     from backend.research.style import ANSWER_CONTRACT
 
     assert '"Yes" or "No" as the answer\'s first word' in ANSWER_CONTRACT
+
+
+# ---- 2026-10-13: the headline must answer the asked question (Erie: "Yeah, you're right. Erie ... was decided on April 25, 1938.")
+ERIE_Q = ("Under Erie Railroad Co. v. Tompkins, must a US federal court that hears a state-law claim under diversity jurisdiction "
+          "apply federal general common law?")
+DATE = "Erie Railroad Co. v. Tompkins was decided on April 25, 1938."
+
+
+def test_an_off_question_headline_is_rebuilt_from_the_settled_claim_with_its_polarity():
+    rep = report(verdict(ClaimStatus.SUPPORTED, DATE),
+                 verdict(ClaimStatus.SUPPORTED, "A federal court hearing a state-law claim under diversity jurisdiction must not apply federal general common law."),
+                 answer=DATE)
+    fa = build_final_answer(rep, [], 1, ERIE_Q)
+    assert fa.answer.startswith("Nah") and "general common law" in fa.answer, fa.answer
+
+
+def test_an_off_question_headline_with_nothing_settled_on_the_point_is_couldnt_verify():
+    fa = build_final_answer(report(verdict(ClaimStatus.SUPPORTED, DATE), answer=DATE), [], 1, ERIE_Q)
+    assert fa.truth_state == "UNVERIFIED" and "you're right" not in fa.answer.lower(), fa.answer
+
+
+def test_an_on_question_headline_is_left_alone():
+    q = "Can Parliament use Article 368 to amend the basic structure of the Indian Constitution?"
+    rep = report(verdict(ClaimStatus.SUPPORTED, "Parliament cannot amend the basic structure."), answer="No. Parliament cannot amend the basic structure.")
+    assert build_final_answer(rep, [], 1, q).answer.startswith("Nah")
+
+
+def test_the_curator_runs_at_temperature_zero():
+    from backend.settings import Settings
+
+    assert Settings().verifier.temperature == 0.0
