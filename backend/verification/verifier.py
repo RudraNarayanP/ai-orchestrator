@@ -1315,6 +1315,7 @@ def _asked_figures(text: str) -> set[str]:
 
 
 _PAGE_CLAIM_RE = re.compile(r"^\s*the (?:url|link|page|pdf|document at|website at)\b|https?://", re.I)
+_LEAD_POLARITY_RE = re.compile(r"^\s*(?:no|yes|nah|nope|yep|yeah)\b", re.I)
 
 
 def _is_page_claim(claim: str) -> bool:
@@ -1788,12 +1789,18 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
     state = truth_state(report, question) if question and (report.verdicts or report.confidence == Confidence.NONE) else ""
+    said = report.answer or ""  # the answer as it was given, before the reordering steps below move its sentences
     report = report.model_copy(update={"answer": lead_with_the_present(report, question)}) if question else report
     report = report.model_copy(update={"answer": lead_with_the_named_law(report, question)}) if question else report
     report = report.model_copy(update={"answer": present_first(report, question)}) if question else report
     report = ground_answer(report, question) if question else report
     ledger_state = state
-    state = premise_state(state, question, lint_answer(report.answer, question=question).text) if state else state
+    # Judged on what the reviewer said, not on how we re-laid it out: present-first can move the sentence that
+    # carried the "No." off the front, and then there is no denial left to read (live 2026-10-16, Erie -- the
+    # curator answered "No. Under Erie ... apply the relevant state substantive law" and the run said
+    # "Yeah, you're right.", agreement with the exact premise Erie rejects).
+    judged = said if question and said and not _LEAD_POLARITY_RE.match((report.answer or "").strip()) else report.answer
+    state = premise_state(state, question, lint_answer(judged, question=question).text) if state else state
     state, report = answer_the_asked_question(state, report, question)
     S = ClaimStatus
     settled = {S.SUPPORTED, S.REFUTED, S.PARTIALLY_SUPPORTED, S.CONTESTED}

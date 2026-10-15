@@ -593,3 +593,29 @@ def test_a_restatement_of_the_question_survives_the_echo_filter():
         "active, applicable certification under the EU-US Data Privacy Framework.")
     assert not echoes_our_instructions("The official register lists every certified US company under the framework.")
     assert not echoes_our_instructions(REAL)
+
+
+# ---- 2026-10-16 live Erie run: the reordering step ate the reviewer's "No."
+
+ERIE_Q = ("Under Erie Railroad Co. v. Tompkins, must a US federal court that hears a state-law claim in "
+          "diversity jurisdiction apply federal general common law?")
+
+
+def test_reordering_the_answer_never_turns_a_no_into_a_you_re_right():
+    """Replayed from job_261016012634_3abb71bd (live FAIL). The curator answered "No. Under Erie ... apply the
+    relevant state substantive law"; present-first moved a change sentence to the front and the "No." went with
+    the sentence it replaced, so premise_state found no denial to read and the run agreed with the exact premise
+    Erie rejects. Polarity is judged on what the reviewer said, not on how we re-laid it out."""
+    report = rep(
+        "No. Under Erie Railroad Co. v. Tompkins, a federal court hearing a state-law claim in diversity "
+        "jurisdiction must apply the relevant state substantive law, including state common law, rather than "
+        "independently applying a supposed body of federal general common law.",
+        v(S.SUPPORTED, "Under Erie Railroad Co. v. Tompkins, a federal court hearing a state-law claim under "
+                       "diversity jurisdiction must apply the relevant state substantive law, including state common law."),
+        v(S.SUPPORTED, "Erie expressly held that there is no federal general common law."),
+    )
+    fa = build_final_answer(report, [], 1, ERIE_Q)
+    assert fa.truth_state == "FALSE", (fa.truth_state, fa.answer)
+    assert fa.answer.startswith(("Nah", "No")), fa.answer
+    assert "state substantive law" in fa.answer, fa.answer
+    assert "Yeah" not in fa.answer and "you're right" not in fa.answer, fa.answer
