@@ -392,3 +392,49 @@ async def test_a_pushback_with_no_new_evidence_leaves_the_verdict_where_the_page
         (c.claim, c.status) for c in flipped
     ]
     assert "SPCX" not in job.final.answer or "couldn" in job.final.answer.lower(), job.final.answer
+
+
+# ------------------------------------------- an ambiguous follow-up gets one question, not research
+
+POOL_TURN = ConversationTurn(
+    job_id="job_pool",
+    question="Can students of RTU Riga and KIIT Bhubaneswar use the swimming pool at their own campus, and is it open to outsiders?",
+    answer="The RTU Riga pool is staff-only; KIIT's is open to enrolled students.",
+    confirmed_claims=["The RTU Riga swimming pool is staff-only."],
+    confidence="moderate",
+)
+
+
+def test_ambiguity_is_only_claimed_when_the_thread_offers_two_subjects():
+    assert memory.ambiguous_subjects("and what about class attendance?", [POOL_TURN]) == ["RTU Riga", "KIIT Bhubaneswar"]
+    assert memory.ambiguous_subjects("What is the attendance rule at KIIT Bhubaneswar?", [POOL_TURN]) == []
+    assert memory.ambiguous_subjects("and how did they build it?", [PRIOR]) == [], "one subject is not a choice"
+    assert memory.ambiguous_subjects("and what about class attendance?", []) == []
+
+
+async def test_an_ambiguous_follow_up_asks_which_one_instead_of_researching_both(settings, net):
+    """Answering "and what about class attendance?" for both institutions and blending the two would
+    present a picked subject as if the evidence had picked it. One short question costs no browser
+    session and no researcher's time."""
+    scripts = {
+        "chatgpt": {"answer": "must not be asked", "citations": []},
+        "gemini": {"answer": "must not be asked", "citations": []},
+        "search": {"answer": "r", "citations": []},
+    }
+    job, adapters = await _run_turn(settings, net, "and what about class attendance?", scripts, history=[POOL_TURN])
+
+    assert job.final is not None and job.final.answer.startswith("Which one do you mean"), job.final.answer
+    assert "RTU Riga" in job.final.answer and "KIIT Bhubaneswar" in job.final.answer, job.final.answer
+    assert adapters["chatgpt"].calls == [] and adapters["gemini"].calls == []
+    assert job.browser_sessions_used == 0 and job.rounds_run == 0
+    assert job.final.research_status == "NOT_NEEDED" and job.final.synthesis_status == "CLARIFY"
+    assert job.analysis.ambiguity == "RTU Riga or KIIT Bhubaneswar"
+
+
+async def test_a_follow_up_with_one_subject_in_the_thread_is_researched(settings, net):
+    scripts = {
+        "chatgpt": {"answer": "KEY CLAIMS\n1. Acme Corp built the Bolt by hand in its Austin factory.", "citations": []},
+        "search": {"answer": "r", "citations": []},
+    }
+    job, adapters = await _run_turn(settings, net, "And how did they build it?", scripts, history=[PRIOR])
+    assert adapters["chatgpt"].calls, "no clarifying question when there is nothing to choose between"

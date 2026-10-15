@@ -114,6 +114,32 @@ def standalone_question(question: str, prior: ConversationTurn) -> str:
     return f'{question.strip()} (in the context of: "{subject}")'
 
 
+def ambiguous_subjects(question: str, history: Iterable[ConversationTurn]) -> list[str]:
+    """The subjects a follow-up could be about, when it names none of them itself.
+
+    "and what about class attendance?" after a question that compared two institutions asks about one of
+    them, and which one is not knowable from the text. Researching both and blending them invents a answer;
+    the honest move is one short question. Returns [] when the follow-up names its own subject or the thread
+    offers only one candidate.
+    """
+    turns = [t for t in (history or []) if t]
+    if not turns:
+        return []
+    if entities_in(question or "", skip_first=True):
+        return []
+    if not (is_follow_up(question, turns[-1]) or is_pushback(question, turns[-1])):
+        return []
+    options: list[str] = []
+    for turn in turns[-3:]:
+        for name in entities_in(turn.question or "", skip_first=True):
+            if name not in options and len(name.split()) <= 5:
+                options.append(name)
+    # The question we already answered is what "they" pointed at: it is not a candidate for re-asking
+    # against itself, so only a thread that genuinely names two subjects is ambiguous.
+    distinct = [o for o in options if o not in entities_in(question or "")]
+    return list(dict.fromkeys(distinct))[:3] if len(set(distinct)) >= 2 else []
+
+
 def history_block(history: Iterable[ConversationTurn], *, max_turns: int = 3) -> str:
     """Prompt text that puts the earlier turns in front of a provider."""
     turns = list(history)[-max_turns:]

@@ -197,6 +197,36 @@ class ResearchRunner:
         await self._prepare_memory(job)
         await self._prepare_thread(job)
 
+        options = memory.ambiguous_subjects(job.question, job.history)
+        if options:
+            # One short question instead of research into both subjects: "and what about class attendance?"
+            # after a comparison of two institutions does not say which one the user means, and guessing
+            # would present a chosen subject as if the evidence had chosen it.
+            job.status = JobStatus.COMPLETED
+            job.level = EscalationLevel.DIRECT
+            job.analysis.ambiguity = " or ".join(options[:3])
+            job.escalation_log.append(
+                EscalationStep(level=EscalationLevel.DIRECT, reason=f"follow-up names no subject; thread offers {len(options)}",
+                               triggered_by=["ambiguous_follow_up"])
+            )
+            await self._emit("escalation", f"asking one clarifying question: {job.analysis.ambiguity}", job=job)
+            job.final = FinalAnswer(
+                answer=f"Which one do you mean — {options[0]} or {options[1]}?",
+                why="",
+                confidence=Confidence.NONE,
+                confidence_label="Nothing answered yet",
+                caveats=[],
+                rounds_run=0,
+                providers_used=[],
+                providers_failed=[],
+                research_status="NOT_NEEDED",
+                reviewer_status="NOT_RUN",
+                synthesis_status="CLARIFY",
+            )
+            job.stop_reason = "follow-up named no subject and the thread holds more than one: asked one clarifying question"
+            await self._emit("final", job.final.answer, job=job)
+            return job
+
         if not analysis.needs_web_research and analysis.trivial:
             # banter with no model configured: one provider, no research framing.
             primary = router.select_primary(analysis, enabled, self.health, self.prior_health)
