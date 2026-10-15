@@ -167,8 +167,13 @@ INJECTION_RE = re.compile(
     r")\b",
     re.I,
 )
-# An agent narrating its own plan ("I'll independently verify ...") is not a statement about the world.
-SELF_NARRATION_RE = re.compile(r"^\s*(?:i'?ll|i will|i'?m going to|i am going to|let me|first,? i)\b", re.I)
+# An agent narrating its own plan ("I'll independently verify ...", "Now I need to open the primary
+# sources ...") or reciting the exchange ("You sent: ...") is not a statement about the world.
+SELF_NARRATION_RE = re.compile(
+    r"^\s*(?:i'?ll|i will|i'?m going to|i am going to|let me|first,? i|now[,.]? i|i need to|i have to|i must|"
+    r"next,? i|you (?:sent|asked|said)|i asked you|original question)",
+    re.I,
+)
 MODEL_TOKEN_RE = re.compile(r"\b[A-Za-z]{0,6}-?[A-Za-z]*\d[\w-]*\b")
 
 
@@ -222,6 +227,40 @@ def link_like(text: str) -> bool:
     url_chars = sum(len(u) for u in urls)
     letters = sum(1 for ch in stripped if ch.isalpha())
     return url_chars >= len(stripped) * 0.55 or letters < 18
+
+
+_PROMPT_TEMPLATES = ("RESPONSE_SCHEMA", "WEB_INSTRUCTION", "THREAD_FOLLOW_UP", "ANTI_INJECTION", "ESCALATION_TEMPLATE")
+
+
+def _instruction_text() -> str:
+    """The fixed sentences of our own prompt -- never the question, a provider's answer or a thread summary.
+
+    Matching against the template rather than the rendered prompt matters: the rendered prompt quotes the
+    earlier AI's answer to a second researcher, so a claim that appeared there is a finding we asked for,
+    not an instruction.
+    """
+    from backend.research import prompts  # noqa: PLC0415
+
+    return "\n".join(getattr(prompts, name, "") for name in _PROMPT_TEMPLATES if isinstance(getattr(prompts, name, ""), str))
+
+
+def echoes_our_instructions(claim: str) -> bool:
+    """True when the candidate is our own instruction text, quoted back at us.
+
+    Live (2026-10-15, dpf): one provider pasted the prompt into its answer and the extractor turned
+    "Run the searches, find the sources yourself", "Report which pages you actually opened" and eight more
+    of our lines into claims -- ten of twenty-four rows. Those are not claims about the world, and they ate
+    most of the reviewer's twelve-claim budget, so the claims that answered the question ended
+    unadjudicated and the run refused to answer. Eight running tokens of our own template, with word
+    boundaries ignored because flattened page text loses spaces ("reportingabout them"), and nothing else.
+    """
+    tokens = re.findall(r"[a-z0-9]+", (claim or "").lower())
+    if len(tokens) < 5:
+        return False
+    hay = "".join(re.findall(r"[a-z0-9]+", _instruction_text().lower()))
+    window = min(8, len(tokens))
+    return any(len(run := "".join(tokens[i : i + window])) >= 28 and run in hay
+               for i in range(len(tokens) - window + 1))
 
 
 def is_assertive(sentence: str) -> bool:
@@ -530,6 +569,8 @@ async def extract_claims(
         topic_map = {c["claim"]: c.get("topic", "") for c in model_claims.get(response.id, [])}
         for text, kind in pairs:
             normalised = " ".join(text.split())[:400]
+            if echoes_our_instructions(normalised):
+                continue
             claims.append(
                 Claim(
                     id=stable_claim_id(normalised),

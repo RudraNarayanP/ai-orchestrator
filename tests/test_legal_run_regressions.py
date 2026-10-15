@@ -494,3 +494,72 @@ def test_fetch_cap_defaults_to_about_18_seconds():
     from backend.settings import Settings
 
     assert 15 <= Settings().search.fetch_timeout_s <= 20 and Settings().search.per_query_timeout_s <= 20
+
+
+# ---- 2026-10-15 dpf/IPC runs: our own prompt and the AI's own planning were becoming "claims"
+
+PROMPT = (
+    "You are the researcher here, so do the research yourself with your own web search and browsing. Run the searches, "
+    "find the sources yourself, prefer primary sources, then OPEN the pages. Report which pages you actually opened and "
+    'which you only saw mentioned. say "NO WEB ACCESS" on the first line. Do not guess at reasons, do not turn a missing '
+    "record into a yes or a no, and do not add warnings or advice nobody asked for."
+)
+REAL = "The European Commission adopted an adequacy decision for the EU-US Data Privacy Framework on 10 July 2023."
+DPF_ASK = ("Can a company in the EU transfer personal data to a US company that is certified under the EU-US Data Privacy "
+           "Framework without also using standard contractual clauses?")
+
+
+def _response(answer_text: str, prompt: str = PROMPT):
+    from backend.models import ProviderResponse, ProviderStatus
+
+    return ProviderResponse(
+        id="r_echo", job_id="j", round=1, provider="chatgpt", prompt=prompt,
+        status=ProviderStatus.COMPLETED, answer_text=answer_text, raw_text=answer_text,
+    )
+
+
+def test_the_prompt_we_sent_quoted_back_is_never_a_claim():
+    """Ten of the twenty-four claims in job_261015202610_8882818c were OmniBrain's own instruction lines,
+    pasted back by a provider. They are not claims about the world, and they took most of the reviewer's
+    twelve-claim budget -- the claims answering the question ended unadjudicated and the run refused."""
+    from backend.research import claims as claim_ops
+
+    text = "\n".join([
+        "KEY CLAIMS",
+        "1. " + REAL,
+        "2. Run the searches, find the sources yourself, prefer primary sources.",
+        "3. Report which pages you actually opened and which you only saw mentioned.",
+        "4. Do not guess at reasons, do not turn a missing record into a yes or a no.",
+    ])
+    out = asyncio.run(claim_ops.extract_claims([_response(text)], "j", question=DPF_ASK))
+    assert [c.claim for c in out] == [REAL], [c.claim for c in out]
+
+
+def test_an_ai_narrating_its_own_plan_is_not_a_claim():
+    """job_261014231527_6ff5d39e carried "Now I need to open the primary sources - the actual Indian Penal
+    Code text to verify which section punishes theft." as a claim row: the model's own next step, not a
+    finding."""
+    from backend.research import claims as claim_ops
+
+    text = (
+        "KEY CLAIMS\n1. Now I need to open the primary sources - the actual Indian Penal Code text to verify "
+        "which section punishes theft.\n2. " + REAL
+    )
+    out = asyncio.run(claim_ops.extract_claims([_response(text, prompt="answer")], "j", question="Which IPC section punishes theft?"))
+    assert [c.claim for c in out] == [REAL], [c.claim for c in out]
+
+
+def test_a_restatement_of_the_question_survives_the_echo_filter():
+    """The filter matches our fixed template sentences, not the rendered prompt: the rendered prompt quotes
+    the question and the earlier AI's answer, and a claim that restates what was asked -- in order to answer
+    it -- is the most valuable row in the ledger. Measured on the stored rows of the refused dpf run: 10
+    instruction echoes dropped, 12 real claims kept."""
+    from backend.research.claims import echoes_our_instructions
+
+    assert echoes_our_instructions("Report which pages you actually opened and which you only saw mentioned.")
+    assert echoes_our_instructions("Prefer primary or original sources over reportingabout them.")
+    assert not echoes_our_instructions(
+        "As of 15 October 2026, a company in the EU can transfer personal data to a US company covered by an "
+        "active, applicable certification under the EU-US Data Privacy Framework.")
+    assert not echoes_our_instructions("The official register lists every certified US company under the framework.")
+    assert not echoes_our_instructions(REAL)
