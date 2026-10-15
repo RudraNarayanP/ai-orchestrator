@@ -43,6 +43,10 @@
  * (job_261010170703_e3fa8deb, 2026-10-10): no new assistant node exists yet, while the
  * previous answer's node grows a "Searching the web" status line. A capture taken then is
  * the old answer plus a status fragment -- which must not be recorded as the new reply.
+ * The reply deliberately never arrives on this turn: with no new block and no progress-only
+ * line, the adapter gives up at never_started_ms (6 s in the regression test), long before
+ * any plausible answer, and a node that mutated after the refusal would only make a later
+ * test in this profile race a DOM nobody asked about.
  */
 const thread = document.getElementById('thread');
 const input = document.getElementById('composer-input');
@@ -85,7 +89,7 @@ function respond(promptText) {
   stop.hidden = false;
 
   if (STALL_REPLY && turnIndex === 1) {
-    // no new assistant node for a long time; the previous answer's node grows a status line
+    // no new assistant node ever; the previous answer's node only grows a status line
     setTimeout(() => {
       const prev = thread.querySelectorAll('[data-message-author-role="assistant"]');
       const node = prev[prev.length - 1];
@@ -93,7 +97,6 @@ function respond(promptText) {
       stop.hidden = true;
       send.hidden = false;
     }, 1200);
-    setTimeout(() => stream(answer), 30000);
     return;
   }
   if (STALL_REPLY && turnIndex === 0) {
