@@ -54,3 +54,21 @@ def test_the_pool_reads_official_hits_in_parallel_and_files_them(monkeypatch):
 
     asyncio.run(P._official_evidence("j", "Which section of the Indian Penal Code, 1860 punishes theft?", [], [], settings, 1, trace, emit))
     assert seen == ["https://www.indiacode.nic.in/bns-303"] and trace[0]["official"] == 1
+
+
+def test_citations_the_ais_gave_become_direct_official_urls():
+    from backend.evidence.official import direct_official_urls
+
+    urls = direct_official_urls(["Erie Railroad Co. v. Tompkins, 304 U.S. 64 (1938)", "Commission Implementing Decision (EU) 2023/1795"])
+    assert "https://www.law.cornell.edu/supremecourt/text/304/64" in urls
+    assert any("CELEX:32023D1795" in u for u in urls)
+
+
+def test_a_publishers_homepage_is_not_an_official_hit():
+    assert not official_link({"href": "https://egazette.gov.in/default.aspx"}, "Which section of the Indian Penal Code punishes theft?")
+    assert not official_link({"href": "https://www.sci.gov.in/"}, "Which section of the Indian Penal Code punishes theft?")
+
+
+def test_at_most_two_official_searches_per_question():
+    q = "Can a company in the EU transfer personal data to a US company certified under the EU-US Data Privacy Framework?"
+    assert 1 <= len(official_queries(q)) <= 2

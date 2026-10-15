@@ -554,20 +554,21 @@ async def _official_evidence(
     trace: list[dict[str, Any]], emit: Callable[..., Awaitable[None]],
 ) -> list[Evidence]:
     """Search the official publishers for the law the question names and read the top hits (http only: no extra tabs)."""
-    from backend.evidence.official import official_link, official_queries  # noqa: PLC0415
+    from backend.evidence.official import direct_official_urls, official_link, official_queries  # noqa: PLC0415
     from backend.evidence.search_http import search as http_search  # noqa: PLC0415
 
     queries = official_queries(question)
     if not queries:
         return []
+    already = {l.get("href") for l in links}
+    direct = [u for u in direct_official_urls([c.claim for c in claims], question) if u not in already]
     timeout = settings.search.per_query_timeout_s
 
     async def one(q: str) -> Any:
         return await asyncio.wait_for(http_search(q, engines=settings.search.engines, limit=6, timeout_s=timeout), timeout + 2)
 
     results = await asyncio.gather(*(one(q) for q in queries), return_exceptions=True)
-    already = {l.get("href") for l in links}
-    picked: list[dict[str, Any]] = []
+    picked: list[dict[str, Any]] = [{"href": u, "origin": "search", "cited_by": "official text lookup", "polarity": "support"} for u in direct]
     for q, res in zip(queries, results):
         if isinstance(res, BaseException):
             trace.append({"query": q[:90], "error": type(res).__name__})
@@ -580,8 +581,10 @@ async def _official_evidence(
     if not picked:
         return []
     await emit("evidence", f"reading {len(picked)} official page(s) for the law the question names", None, round_no)
-    return await gather_from_links(
+    found = await gather_from_links(
         job_id, picked, max_pages=len(picked), concurrency=6, browser_fetch=None, round_no=round_no, origin="search",
         max_chars=settings.search.fetch_body_chars, attribute_to=[(c.id, c.claim) for c in _rank_claims(claims)[:12]],
         require_names=subject_names(question),
     )
+    # a guessed or dead official URL is not evidence of anything: keep only pages that were actually read
+    return [e for e in found if e.check_status not in {SourceCheckStatus.BROKEN_URL, SourceCheckStatus.NOT_CHECKED}]
