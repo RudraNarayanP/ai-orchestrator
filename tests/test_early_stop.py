@@ -310,3 +310,25 @@ async def test_started_second_opinions_join_the_first_claim_pass():
     assert got == [r] and [n for n, _, _ in spec] == ["qwen", "pi"]
     for _, t, _ in spec:
         t.cancel()
+
+
+async def test_high_stakes_with_sufficient_evidence_and_no_conflict_goes_to_the_curator_without_a_re_ask(net, monkeypatch):
+    """2026-10-15 Erie: 'evidence sufficient after primary ... no material conflict', then a 110 s targeted round anyway."""
+    from backend.orchestrator.runner import ResearchRunner
+
+    orig_analyze, orig_assess = ResearchRunner._analyze, ResearchRunner._assess
+
+    async def high(self, *a, **k):
+        out = await orig_analyze(self, *a, **k)
+        return out.model_copy(update={"high_stakes": True})
+
+    def enough(self, *a, focus="", **k):
+        out = orig_assess(self, *a, focus=focus, **k)
+        return out.model_copy(update={"sufficient": True, "established": list(out.established) or ["Section 9 sets the age at 13."],
+                                      "unresolved": list(out.unresolved) or ["A side point."]})
+
+    monkeypatch.setattr(ResearchRunner, "_analyze", high)
+    monkeypatch.setattr(ResearchRunner, "_assess", enough)
+    net.confirm(URL9, tier=SourceTier.PRIMARY_OFFICIAL)
+    job, log = await _run_spec(HEDGE, 0)
+    assert all(c["round"] == 1 for c in log), [(c["provider"], c["round"]) for c in log]

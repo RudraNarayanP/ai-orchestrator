@@ -348,11 +348,13 @@ class ResearchRunner:
         # Re-ask only on a real conflict (user rule, 2026-10-13): when two or more AIs answered and none of their claims
         # materially contradict, more researchers add minutes, not certainty -- what is still unproven goes to the curator,
         # which judges it on the evidence and keeps it unconfirmed if the evidence does not carry it.
+        no_conflict = not any(d.severity == "material" for d in disagreements)
         agreed = (
-            len({r.provider for r in responses}) >= 2
-            and bool(assessment.established)
-            and not any(d.severity == "material" for d in disagreements)
-            and not analysis.high_stakes
+            (len({r.provider for r in responses}) >= 2 and bool(assessment.established) and no_conflict and not analysis.high_stakes)
+            # High-stakes questions skip the lightweight stop, but evidence that is already SUFFICIENT with no material
+            # conflict goes straight to the curator -- a re-ask is for a real conflict (2026-10-15 Erie: "evidence sufficient
+            # after primary ... no material conflict", then a 110 s targeted round that changed nothing).
+            or (assessment.sufficient and no_conflict)
         )
         if agreed:
             await self._emit("assessment", f"{len({r.provider for r in responses})} researchers agree with no material conflict -- no re-ask round",
