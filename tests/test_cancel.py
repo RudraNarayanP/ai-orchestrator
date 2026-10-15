@@ -188,3 +188,47 @@ async def test_manager_cancel_sets_the_token_then_cancels_the_task(tmp_path):
     with pytest.raises(asyncio.CancelledError):
         await task
     assert await manager.cancel("job_x") is False and await manager.cancel("nope") is False
+
+# ------------------------------------------- the record is written before the tabs close
+
+async def test_a_finished_job_is_on_disk_before_the_tab_cleanup(tmp_path, monkeypatch):
+    """Live (2026-10-15): every eval run's last question left a `pending` row with no answer. The runner
+    emits its final answer, then the manager closed OmniBrain's tabs -- seconds of browser work -- and only
+    then wrote the row. A process stopped in that window kept the answer in the event stream and lost it
+    from the audit trail. Persist first, clean up second."""
+    from backend.models import Confidence, FinalAnswer
+
+    settings = base_settings(storage={"db_path": str(tmp_path / "p.db")})
+    store = api_app.Store(settings)
+    manager = api_app.JobManager(settings, store, api_app.EventBroker())
+    job = Job(question="When did Acme release the Bolt?", mode=ResearchMode.STANDARD)
+    store.save_job(job)
+    seen: list[tuple[str, str]] = []
+
+    async def fake_engine_get():
+        return None
+
+    class _Catalog:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def all(self):
+            return {}
+
+    async def fake_run(self, target: Job) -> Job:
+        target.status = JobStatus.COMPLETED
+        target.final = FinalAnswer(answer="March 2026.", confidence=Confidence.HIGH)
+        return target
+
+    async def watch_release_tabs(self_job_id: str) -> None:
+        row = store.job_snapshot(job.id)
+        seen.append((row["status"], (row["answer_text"] or "")))
+
+    monkeypatch.setattr(api_app, "ProviderCatalog", _Catalog)
+    monkeypatch.setattr(ResearchRunner, "run", fake_run)
+    monkeypatch.setattr(api_app.JobManager, "release_tabs", lambda self, jid: watch_release_tabs(jid))
+    manager.engine_get = fake_engine_get  # type: ignore[assignment]
+
+    await manager._run(job, manager.emit_factory(job.id))
+    assert seen == [("completed", "March 2026.")], seen
+    assert store.job_snapshot(job.id)["status"] == "completed"

@@ -301,9 +301,15 @@ class JobManager:
                 log.exception("[%s] job failed", job.id)
                 await emit("error", job.error)
             finally:
-                await self.release_tabs(job.id)
+                # Persist before the browser cleanup: releasing OmniBrain's tabs takes seconds, and a
+                # process stopped in that window left the finished answer in the event stream and the row
+                # still `pending` with no answer_text -- the audit trail of the last question of every
+                # eval run was lost (four such rows from 2026-10-15).
                 job.updated_at = time.time()
                 job.rounds_run = max([r.number for r in job.rounds], default=job.rounds_run)
+                self.store.save_job(job)
+                await self.release_tabs(job.id)
+                job.updated_at = time.time()
                 self.store.save_job(job)
                 await emit("done", job.status.value, payload={"final": bool(job.final)})
 
