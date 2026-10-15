@@ -912,6 +912,95 @@ class ForegroundKeeper:
         return int(u.GetForegroundWindow() or 0) == hwnd
 
 
+_STILL_ACTIVE = 259
+_PROCESS_IMAGE_NAME = re.compile(r"python(\.exe)?$", re.I)
+
+
+def _owner_alive(pid: int) -> bool:
+    """True while that pid is a running Python process -- the only thing that can be an OmniBrain run.
+
+    Windows reuses pids, so a bare liveness check could have an unrelated program hold the browser lock forever.
+    Anything this code cannot determine (permissions, a non-Windows host) counts as alive: the safe direction is to
+    refuse a second run, never to let two runs share one Chrome.
+    """
+    if pid <= 0:
+        return False
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes  # noqa: PLC0415
+        from ctypes import wintypes  # noqa: PLC0415
+
+        kernel32 = ctypes.windll.kernel32
+    except Exception:  # noqa: BLE001
+        return True
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        if kernel32.GetExitCodeProcess(handle, ctypes.byref(code)) and int(code.value) != _STILL_ACTIVE:
+            return False
+        buf = ctypes.create_unicode_buffer(1024)
+        size = wintypes.DWORD(1024)
+        if not kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+            return True  # alive but not readable: honour the lock
+        return bool(_PROCESS_IMAGE_NAME.search(buf.value or ""))
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+class DriverLock:
+    """One process at a time may drive the person's Chrome.
+
+    Live 2026-10-15: two eval runs were started a minute apart. Both name their chrome-use sessions
+    ``omnibrain-<provider>``, so the second run's tab release closed the first run's tabs mid-question -- the
+    providers came back ``about:blank`` and ``tab_reset_failed`` and neither run measured anything, while the
+    person's own browser carried the wreckage. The lock file holds the owner's pid and is reclaimed when that
+    pid is gone, so a killed or crashed run can never lock the product out of its own browser.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.owner = 0
+
+    def read_pid(self) -> int:
+        try:
+            return int(self.path.read_text(encoding="utf-8").strip() or 0)
+        except (OSError, ValueError):
+            return 0
+
+    def acquire(self, _reclaimed: bool = False) -> tuple[bool, int]:
+        """True when this process now owns the browser; else False and the pid of the process that does."""
+        try:
+            fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            held = self.read_pid()
+            if held and held != os.getpid() and _owner_alive(held):
+                return False, held
+            if _reclaimed:
+                return True, os.getpid()  # unlink of a dead owner's file failed: let the run go, don't loop
+            try:
+                self.path.unlink()
+            except OSError:
+                return True, os.getpid()
+            return self.acquire(_reclaimed=True)
+        except OSError:
+            return True, os.getpid()  # an unwritable data dir must not stop the product
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(str(os.getpid()))
+        self.owner = os.getpid()
+        return True, os.getpid()
+
+    def release(self) -> None:
+        if self.owner == os.getpid() and self.read_pid() in (os.getpid(), 0):
+            try:
+                self.path.unlink()
+            except OSError:
+                pass
+        self.owner = 0
+
+
 class LiveChromeEngine:
     """Drop-in for ``BrowserEngine``: one new tab per provider in your own Chrome."""
 
@@ -946,6 +1035,9 @@ class LiveChromeEngine:
         self._product_of = relay_ancestry  # injectable for tests
         self._browser_lock = asyncio.Lock()
         self._browser_resolved = False
+        self.driver_lock = DriverLock(
+            Path(tempfile.gettempdir()) / f"omnibrain-chrome-use-{cfg.chrome_use_session}.lock"
+        )  # keyed by the chrome-use session name: that is exactly what two runs collide on
 
     def _note(self, message: str) -> None:
         line = f"{time.strftime('%H:%M:%S')} {message}"
@@ -956,6 +1048,12 @@ class LiveChromeEngine:
 
     # ---- lifecycle
     async def start(self) -> None:
+        owned, other = self.driver_lock.acquire()
+        if not owned:
+            raise LiveChromeError(
+                f"another OmniBrain run (pid {other}) is driving this Chrome; its tabs and these would be the same "
+                "omnibrain-* sessions, so only one run can use the browser at a time. Wait for it, or stop it."
+            )
         try:
             status = await self.runner.run("status")
         except LiveChromeUnavailable:
@@ -1061,6 +1159,7 @@ class LiveChromeEngine:
         if keep:
             self._note("left OmniBrain's provider tabs open in your Chrome")
         self._pages.clear()
+        self.driver_lock.release()
 
     def _runner_for(self, key: str) -> ChromeUseRunner:
         slug = re.sub(r"[^a-z0-9]+", "-", key.lower()).strip("-") or "tab"

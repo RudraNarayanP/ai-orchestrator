@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -1402,3 +1403,58 @@ def test_startup_stops_sessions_a_dead_run_left_with_tabs(tmp_path):
     eng._note = lambda *_: None
     assert asyncio.run(eng.sweep_orphans(tmp_path)) == 1
     assert stopped == [("session", "stop", "omnibrain-qwen")]
+
+
+# ------------------------------------------------------------------ one run at a time in the person's Chrome
+
+
+def test_the_driver_lock_refuses_a_live_owner_and_reclaims_a_dead_one(tmp_path, monkeypatch):
+    """Two runs share one chrome-use session name, so the second one's tab release closes the first one's tabs."""
+    monkeypatch.setattr(lc, "_owner_alive", lambda pid: pid == 4242)
+    path = tmp_path / "cu.lock"
+    lock = lc.DriverLock(path)
+    path.write_text("4242", encoding="utf-8")
+    assert lock.acquire() == (False, 4242)
+    assert path.read_text(encoding="utf-8") == "4242"  # the holder's lock is left alone
+
+    path.write_text("9999", encoding="utf-8")  # a run that was killed mid-question
+    owned, pid = lock.acquire()
+    assert owned and pid == os.getpid()
+    assert path.read_text(encoding="utf-8") == str(os.getpid())
+
+
+def test_releasing_only_ever_clears_our_own_lock(tmp_path, monkeypatch):
+    monkeypatch.setattr(lc, "_owner_alive", lambda pid: True)
+    path = tmp_path / "cu.lock"
+    lock = lc.DriverLock(path)
+    owned, _ = lock.acquire()
+    assert owned
+    lock.release()
+    assert not path.exists()
+
+    path.write_text("4242", encoding="utf-8")  # someone else took it while we were down
+    other = lc.DriverLock(path)
+    assert other.acquire() == (False, 4242)
+    other.release()
+    assert path.read_text(encoding="utf-8") == "4242"
+
+
+async def test_start_refuses_to_drive_the_chrome_another_run_owns(fake, monkeypatch, tmp_path):
+    monkeypatch.setattr(lc, "_owner_alive", lambda pid: pid == 4242)
+    eng = LiveChromeEngine(live_settings(), runner=fake.runner)
+    eng.driver_lock = lc.DriverLock(tmp_path / "cu.lock")
+    eng.driver_lock.path.write_text("4242", encoding="utf-8")
+    with pytest.raises(LiveChromeError, match="another OmniBrain run"):
+        await eng.start()
+    assert fake.verbs() == []  # refused before a single chrome-use command was sent
+
+
+async def test_start_reclaims_the_lock_of_a_run_that_died(fake, tmp_path, monkeypatch):
+    monkeypatch.setattr(lc, "_owner_alive", lambda pid: False)
+    eng = LiveChromeEngine(live_settings(), runner=fake.runner)
+    eng.driver_lock = lc.DriverLock(tmp_path / "cu.lock")
+    eng.driver_lock.path.write_text("9999", encoding="utf-8")
+    await eng.start()
+    assert eng.driver_lock.path.read_text(encoding="utf-8") == str(os.getpid())
+    await eng.stop(keep_windows=False)
+    assert not eng.driver_lock.path.exists()  # the next run starts clean
