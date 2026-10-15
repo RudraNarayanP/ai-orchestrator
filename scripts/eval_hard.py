@@ -288,13 +288,18 @@ def render_markdown(stamp: str, records: list[dict[str, Any]], meta: dict[str, A
     lines += ["", "Totals: " + ", ".join(f"{k} {v}" for k, v in sorted(tally.items())), ""]
     lines.append("## Details")
     for r in records:
+        turns = r.get("turns") or [r["question"]]
         lines += [
             "",
             f"### {r['id']} ({r['kind']}) -- {r['judgement']['verdict']}",
-            f"Q: {r['question']}",
-            "",
-            f"A: {r['answer']}",
-            "",
+        ]
+        if len(turns) > 1:
+            for n, (t, a) in enumerate(zip(turns, r.get("turn_answers") or []), start=1):
+                lines += [f"Q{n}: {t}", "", f"A{n}: {a}", ""]
+            lines += [f"(judged on the last turn: {r['question']})", ""]
+        else:
+            lines += [f"Q: {r['question']}", "", f"A: {r['answer']}", ""]
+        lines += [
             f"- why: {r['why'] or '-'}",
             f"- confidence: {r['confidence']}; rounds {r['rounds']}; used {r['providers_used']}; failed {r['providers_failed']}",
             f"- primary sources opened: {r['primary_opened'] or 'none'}; cited: {r['primary_cited'] or 'none'}",
@@ -319,9 +324,9 @@ def call(base: str, path: str, body: dict | None = None, timeout: int = 60) -> A
     return json.load(urllib.request.urlopen(req, timeout=timeout))
 
 
-def ask(base: str, question: str, mode: str, max_rounds: int, timeout_s: int) -> tuple[dict[str, Any], float]:
+def ask(base: str, question: str, mode: str, max_rounds: int, timeout_s: int, conversation_id: str | None = None) -> tuple[dict[str, Any], float]:
     started = time.time()
-    job = call(base, "/api/jobs", {"question": question, "mode": mode, "max_rounds": max_rounds, "conversation_id": None})
+    job = call(base, "/api/jobs", {"question": question, "mode": mode, "max_rounds": max_rounds, "conversation_id": conversation_id})
     jid = job["job_id"]
     while time.time() - started < timeout_s:
         time.sleep(4)
@@ -425,16 +430,33 @@ def main() -> int:
         print(f"server on {port}; providers {providers}; verifier {verifier}", flush=True)
         meta = {"providers": providers, "verifier": verifier, "mode": args.mode, "max_rounds": args.max_rounds}
         for i, q in enumerate(questions, 1):
-            print(f"[{i}/{len(questions)}] {q['id']}: {q['question'][:90]}", flush=True)
+            print(f"[{i}/{len(questions)}] {q['id']}: {(q.get('turns') or [q['question']])[-1][:90]}", flush=True)
+            turns = [t for t in (q.get("turns") or []) if isinstance(t, str) and t.strip()] or [q["question"]]
             try:
-                snap, secs = ask(base, q["question"], args.mode, args.max_rounds, args.timeout)
-                rec = analyse(q, snap, secs)
+                # A thread is asked turn by turn in one conversation: the second message is judged on what
+                # the first one established, which is the whole point of the multi-turn cases.
+                cid: str | None = None
+                secs = 0.0
+                snap: dict[str, Any] = {}
+                said: list[str] = []
+                for text in turns:
+                    snap, one = ask(base, text, args.mode, args.max_rounds, args.timeout, cid)
+                    secs += one
+                    live = snap.get("live") or snap
+                    said.append(((live.get("final") or {}).get("answer")) or "")
+                    cid = cid or snap.get("conversation_id") or live.get("conversation_id")
+                asked = dict(q)
+                asked["question"] = turns[-1]
+                rec = analyse(asked, snap, secs)
+                rec["turns"] = turns
+                rec["turn_answers"] = said
             except Exception as exc:  # noqa: BLE001
-                rec = {"id": q["id"], "category": q["category"], "kind": q["kind"], "question": q["question"], "answer": "", "why": None,
+                rec = {"id": q["id"], "category": q["category"], "kind": q["kind"], "question": turns[-1], "answer": "", "why": None,
                        "confidence": None, "caveats": [], "sources": [], "primary_domains": [], "primary_opened": [], "primary_cited": [],
                        "pages_opened": 0, "pages_confirmed": 0, "refutation": {}, "providers_used": [], "providers_failed": [], "rounds": 0,
                        "verifier_model": None, "unsupported_figures": [], "claim_text_len": 0, "voice": {"ok": False, "problems": ["no answer"]},
-                       "runtime_s": 0, "judgement": {"verdict": "FAIL", "reasons": [f"run error: {type(exc).__name__}: {exc}"]}}
+                       "runtime_s": 0, "turns": turns, "turn_answers": [],
+                       "judgement": {"verdict": "FAIL", "reasons": [f"run error: {type(exc).__name__}: {exc}"]}}
             records.append(rec)
             print(f"    -> {rec['judgement']['verdict']} in {int(rec['runtime_s'])}s: {rec['answer'][:120]!r} {rec['judgement']['reasons']}", flush=True)
             (OUT_DIR / f"eval_{stamp}.json").write_text(json.dumps({"meta": meta, "records": records}, indent=1, ensure_ascii=False), encoding="utf-8")
