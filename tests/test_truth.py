@@ -662,3 +662,45 @@ def test_every_now_sentence_leads_so_the_short_answer_keeps_the_replacement():
     assert first_two.startswith("The Indian Penal Code, 1860 was repealed"), out
     assert "Section 303" in first_two, first_two
     assert "379" in out, "the historical rule is not deleted, only moved behind what applies now"
+
+
+# ---- 2026-10-15 item 4: every specific in the answer has to be in something we read
+
+ATT_Q = "Does KIIT enforce 75% attendance, and where is it recorded?"
+
+
+def test_an_app_name_and_consequence_no_page_contains_are_dropped():
+    """The providers answer with an app, a channel and a consequence nobody opened a page for. Agreement is
+    not a source: the sentence goes, and what the ledger confirmed stays."""
+    rep = report(
+        verdict(ClaimStatus.SUPPORTED, "KIIT requires 75% attendance, recorded in the student portal."),
+        verdict(ClaimStatus.NOT_REVIEWED, "The myCampus app warns parents by SMS below the threshold."),
+        answer="KIIT requires 75% attendance, recorded in the student portal. The myCampus app also warns parents by SMS below 75%.",
+    )
+    fa = build_final_answer(rep, [], 1, ATT_Q)
+    assert "myCampus" not in fa.answer and "SMS" not in fa.answer, fa.answer
+    assert "75%" in fa.answer and "student portal" in fa.answer, fa.answer
+
+
+def test_an_answer_wholely_made_of_unread_particulars_falls_back_to_the_ledger():
+    """Nothing in the curator's prose is in anything we read: the answer is then the claim the ledger
+    settled, in the ledger's words -- not the invented sentences, and not a confident blank."""
+    rep = report(
+        verdict(ClaimStatus.SUPPORTED, "KIIT requires 75% attendance, recorded in the student portal."),
+        answer="The myCampus app enforces 75% attendance. WhatsApp alerts go to parents through ParentTrack.",
+    )
+    fa = build_final_answer(rep, [], 1, ATT_Q)
+    assert "myCampus" not in fa.answer and "ParentTrack" not in fa.answer and "WhatsApp" not in fa.answer, fa.answer
+    assert "75%" in fa.answer, fa.answer
+
+
+def test_a_grounded_answer_is_left_exactly_as_it_was():
+    rep = report(
+        verdict(ClaimStatus.SUPPORTED, "KIIT requires 75% attendance, recorded in the student portal."),
+        answer="Yeah -- KIIT requires 75% attendance, recorded in the student portal.",
+    )
+    assert build_final_answer(rep, [], 1, ATT_Q).answer.count("75%") >= 1
+    from backend.research.lint import ungrounded_specifics
+
+    assert ungrounded_specifics("KIIT requires 75% attendance in the student portal.", "portal kiit 75% attendance") == []
+    assert ungrounded_specifics("The myCampus app warns parents.", "portal kiit 75% attendance") == ["mycampus"]

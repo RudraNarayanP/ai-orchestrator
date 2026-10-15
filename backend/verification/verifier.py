@@ -36,7 +36,7 @@ from backend.models import (
 )
 from backend.research.router import addresses_question, future_year
 from backend.research.legislation_frame import apply_uk_iss_age_temporal_frame
-from backend.research.lint import covers_part, evidence_report, is_what_do_we_know, lint_answer, question_parts
+from backend.research.lint import covers_part, evidence_report, is_what_do_we_know, lint_answer, question_parts, ungrounded_specifics
 from backend.research.style import (
     ANSWER_CONTRACT,
     BANNED_PHRASES,
@@ -1726,6 +1726,44 @@ def answer_the_asked_question(state: str, report: VerifierReport, question: str)
     return new_state, report.model_copy(update={"answer": best.claim.strip().rstrip(".") + "."})
 
 
+def ground_answer(report: VerifierReport, question: str) -> VerifierReport:
+    """Every named thing and figure in the answer has to be in something we read, or the sentence goes.
+
+    Live defect this closes: a follow-up asked about an app, a threshold and a consequence, and the answer
+    recited all three although no page anyone opened contained them. Provider agreement is not a source. If
+    nothing in the prose survives, the answer is rebuilt from the settled claim that best matches the
+    question -- ledger wording, never new content.
+    """
+    from backend.research.style import _key_terms, split_sentences  # noqa: PLC0415
+
+    answer = (report.answer or "").strip()
+    parts = [p.strip() for p in split_sentences(answer) if p.strip()]
+    # Only prose with more than one sentence is judged here. A one-sentence answer carries its own yes/no
+    # lead ("No. The minimum age is 13..."), and replacing that with a claim would delete the polarity the
+    # user asked about; an answer that is nothing but unread particulars is caught by the state machinery,
+    # which builds the lead from the settled claims.
+    if len(parts) < 2:
+        return report
+    judged = {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED, ClaimStatus.REFUTED, ClaimStatus.CONTESTED}
+    corpus = " ".join(
+        [v.claim for v in report.verdicts if v.verdict in judged]
+        + [f"{s.title or ''} {s.snippet or ''} {s.url or ''}" for s in report.sources]
+    )
+    kept = [p for p in parts if not ungrounded_specifics(p, corpus)]
+    if len(kept) == len(parts):
+        return report
+    if kept:
+        return report.model_copy(update={"answer": " ".join(kept)})
+    best = max(
+        (v for v in report.verdicts if v.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED} and not _is_page_claim(v.claim)),
+        key=lambda v: len(_key_terms(question) & _key_terms(v.claim)),
+        default=None,
+    )
+    if best is None:
+        return report
+    return report.model_copy(update={"answer": best.claim.strip().rstrip(".") + "."})
+
+
 def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int, question: str = "") -> FinalAnswer:
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
@@ -1733,6 +1771,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
     report = report.model_copy(update={"answer": lead_with_the_present(report, question)}) if question else report
     report = report.model_copy(update={"answer": lead_with_the_named_law(report, question)}) if question else report
     report = report.model_copy(update={"answer": present_first(report, question)}) if question else report
+    report = ground_answer(report, question) if question else report
     ledger_state = state
     state = premise_state(state, question, lint_answer(report.answer, question=question).text) if state else state
     state, report = answer_the_asked_question(state, report, question)

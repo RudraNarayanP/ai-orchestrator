@@ -159,6 +159,38 @@ def _cap(s: str) -> str:
     return s[:1].upper() + s[1:] if s else s
 
 
+def specifics(text: str) -> set[str]:
+    """The named things and figures a sentence stands on: proper names (not the sentence opener),
+    brand-style names written inside a word ("myCampus"), and numbers."""
+    from backend.research.memory import entities_in  # noqa: PLC0415 -- memory builds on this module
+
+    out = {name.lower() for name in entities_in(text, skip_first=True)}
+    out |= {m.group(0).lower() for m in re.finditer(r"[A-Za-z]*[a-z][A-Z][A-Za-z]+", text or "")}
+    out |= {num.strip() for num in re.findall(r"\d[\d.,]*\s*%?", text or "")}
+    return out
+
+
+def ungrounded_specifics(sentence: str, corpus: str) -> list[str]:
+    """The names and figures this sentence asserts that appear nowhere in the material we fetched.
+
+    A provider can answer "does the campus app enforce 75%?" with an app name, a threshold and a
+    consequence that no page it opened contains. Agreement is not a source: what a sentence stands on has
+    to be in a claim the ledger confirmed or in a page we read. Comparison ignores spelling noise, so
+    "RTU Riga" matches a page that writes "rturiga", and "75%" matches "75 percent".
+    """
+    hay = re.sub(r"[^a-z0-9.]", "", (corpus or "").lower())
+    if not hay:
+        return []
+    bad: list[str] = []
+    for spec in specifics(sentence):
+        key = re.sub(r"[^a-z0-9.]", "", spec)
+        if not key or key in ("", "."):
+            continue
+        if key not in hay:
+            bad.append(spec)
+    return bad
+
+
 def lint_answer(
     text: str, *, question: str = "", unknowns: list[str] | tuple[str, ...] = (), settled: list[str] | tuple[str, ...] = ()
 ) -> LintResult:

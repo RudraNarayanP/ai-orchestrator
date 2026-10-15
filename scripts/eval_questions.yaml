@@ -159,7 +159,7 @@ questions:
   - id: cur-spacex-public
     category: current-status
     kind: answer
-    question: "Is SpaceX publicly traded?"
+    question: "Are you sure? I thought SpaceX was still a private company."
     turns:
       - "Is SpaceX publicly traded?"
       - "Are you sure? I thought SpaceX was still a private company."
@@ -179,13 +179,14 @@ questions:
   - id: thr-rtu-kiit-attendance
     category: current-status
     kind: answer
-    question: "What is the attendance requirement for students?"
+    question: "and what about class attendance?"
     turns:
       - "Can students of RTU Riga and KIIT Bhubaneswar use the swimming pool at their own campus, and is it open to outsiders?"
       - "and what about class attendance?"
     primary_domains: [rtu.lv, kiit.ac.in]
     expect:
       idk_ok: true
+      clarify_ok: true
     notes: >
       The second message names no institution: it has to be rewritten as a standalone question, and if the
       system cannot tell which one the user means it asks one clarifying question rather than answering for

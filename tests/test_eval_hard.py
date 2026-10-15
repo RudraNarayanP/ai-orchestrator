@@ -79,9 +79,14 @@ def test_the_question_file_is_valid_and_covers_every_trap_type_and_category():
     data = yaml.safe_load((ROOT / "scripts" / "eval_questions.yaml").read_text(encoding="utf-8"))["questions"]
     assert len({d["id"] for d in data}) == len(data), "ids must be unique"
     assert {d["kind"] for d in data} == {"answer", "false_premise", "myth", "unanswerable"}
-    assert {d["category"] for d in data} == {"uk-law", "ua-law", "university", "research", "trivial"}
+    assert {d["category"] for d in data} == {"uk-law", "ua-law", "university", "research", "trivial", "current-status"}
     for d in data:
         assert d["question"].strip() and d.get("expect") is not None and d.get("notes")
+        turns = d.get("turns")
+        if turns:
+            assert all(isinstance(t, str) and t.strip() for t in turns), d["id"]
+            # the judgement is made on the last turn, so that is the question the entry answers
+            assert turns[-1].strip() == d["question"].strip(), (d["id"], turns[-1], d["question"])
 
 
 def test_markdown_report_has_a_table_row_per_question():
@@ -139,3 +144,12 @@ def test_an_academic_year_label_is_not_a_figure():
     assert eval_hard.unsupported_figures("UCL's 2026\u201327 procedure.", "the 2026-27 academic misconduct procedure") == []
     # a real figure beside it is still checked
     assert "27" in eval_hard.figures_in("The 2026\u201327 procedure has 27 grounds.")
+
+def test_a_clarifying_question_is_credited_for_an_ambiguous_thread():
+    """A follow-up that names no subject is answered by one short question. The harness must not read that
+    as a failure to answer, and must not read a blended answer about both institutions as one either."""
+    q_ = q(kind="answer", expect={"idk_ok": True, "clarify_ok": True})
+    asked = dict(answer="Which one do you mean -- RTU Riga or KIIT Bhubaneswar?", primary_cited=[])
+    rec = eval_hard.analyse(q_, snapshot(**{**dict(answer=asked["answer"]), "evidence": [], "sources": []}), 5)
+    assert rec["judgement"]["verdict"] == "PASS", rec["judgement"]
+    assert any("clarify_ok" in r for r in rec["judgement"]["reasons"]), rec["judgement"]["reasons"]
