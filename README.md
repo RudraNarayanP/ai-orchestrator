@@ -185,8 +185,9 @@ lists what each signed-in provider offers (read-only).
 
 Honest status, because "it should work" is not a status:
 
-**Verified by automated tests (422 passing: 395 offline + 27 that drive a real headless
-Chrome against local fixtures; none contacts a chat site or a real model):**
+**Verified by automated tests (1176 passing offline, 2026-10-16, plus 57 that drive a real
+headless Chrome against local fixtures; none contacts a chat site or a real model. Two
+measured intermittencies are listed honestly below rather than skipped):**
 - Escalation architecture, tests A–F from the spec: trivial questions answer at
   level 0 with **zero** browser sessions and zero verifier calls; a primary
   researcher with two confirmed independent sources stops without spawning a
@@ -289,11 +290,12 @@ shows evidence attachment is weak when providers return no links.
 **Not yet verified:**
 - Any provider answering from a **signed-in** account (never tried; not needed for the
   providers above).
-- The LLM verifier and model-assisted claim extraction **against a real model**. Needs
-  Ollama / LM Studio / an OpenRouter key. The offline tests above prove our parsing,
-  fallback and overruling logic with scripted replies; they say nothing about how a
-  real model behaves. Without a model the deterministic evidence ledger still runs,
-  and says so in the caveats.
+- The LLM verifier **against a real model** is partly exercised: the curator review, the
+  more-room retry and the missing-verdict recovery have run over real OpenRouter free
+  models against stored claims. What is *not* established is answer quality — the
+  offline tests prove our parsing, fallback and ledger-overruling logic with scripted
+  replies, and say nothing about how well a model reasons. Without a model the
+  deterministic evidence ledger still runs, and says so in the caveats.
 - The vision fallback against a real vision model or a real site; the refutation
   detector's precision on real pages (it is heuristic); review mining and follow-up
   detection on real review sites and real conversations (fixtures only).
@@ -301,8 +303,23 @@ shows evidence attachment is weak when providers return no links.
   Google AI were not visible before typing, so only their inputs are `probe`-verified).
 - The cancel test against a real streaming site (offline stubs and one fixture test
   cover the tab-close path; the live test may stop at an earlier checkpoint).
-- The CI workflow (`.github/workflows/ci.yml`) has never run: the repo has no remote.
-  The `browser` job is marked `continue-on-error` until it has been seen green.
+- The CI workflow (`.github/workflows/ci.yml`) has never run on a runner: the remote has
+  no CI history yet. The `browser` job is marked `continue-on-error` until it has been
+  seen green.
+- **Two measured intermittencies, kept visible rather than skipped.** In the offline gate,
+  `tests/test_compress_transcript.py::test_compress_summarises_the_whole_thread_and_the_next_message_continues_the_fresh_chat`
+  failed in 1 of 3 full runs on 2026-10-16 and passes in isolation — it asserts that after a
+  thread compression each provider's next message continues the chat opened for it, and
+  `compress` primes providers concurrently while activating one segment, so this is a race
+  surface in a shipping feature, not test noise. In the browser suite,
+  `tests/test_vision.py::test_exhausted_attempts_keep_the_terminal_status_not_launching` has
+  failed with a `ConnectionResetError` from the fixture's HTTP server under load. Neither is
+  xfail'd, skipped or re-ordered; both are open.
+- **The dominant failure mode left in the product**, named from the 2026-10-16 full legal run
+  (12 PASS / 17 WARN / 8 FAIL): in 6 of the 8 FAILs the answer's substance is right and its
+  lead agrees with a premise the substance denies — "Yeah, you're right. … the Copyright
+  Office will not register an AI-only work". The fix is in the lead-polarity rules and needs
+  its own careful pass, not a late-night edit.
 - `start.bat` first-run path (creating `.venv` and installing) on a clean machine.
 - Copilot, Meta AI, Le Chat, Pi, Qwen, DeepSeek selectors against today's builds of
   those pages. Marked `guess`/`prior` until probed; the candidate-scoring layer is

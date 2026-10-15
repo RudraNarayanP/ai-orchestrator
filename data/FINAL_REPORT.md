@@ -335,3 +335,148 @@ Stray "?" at the end of answers: not a bug; it is the intended emoji, mis-render
 - "No primary source cited" on many answers although primary pages were opened (the final sources favour other pages).
 - 9 answerable questions ended "couldn't verify" or "sources disagree".
 - Typical time is still 100-230 s, above the 2-minute target.
+
+## 16. The 2026-10-16 legal re-run: the statute reader works live, and the lead family is now the dominant failure
+
+Run: `.venv\Scripts\python.exe scripts/eval_hard.py --questions scripts/eval_legal_questions.yaml --timeout 900`,
+started 02:38 IST, 37/37 questions, `data/eval/eval_20261016_023801.md`/`.json`, log `data/legal37_20261016.txt`.
+The focus gate passed before launch and one run held the browser for the whole pass. Exit code 1 is the script's
+own signal that at least one question FAILed (`eval_hard.py:494`), not a crash.
+
+**Tally: PASS 12, WARN 17, FAIL 8** against **13/13/11** for the same 37 rows on 2026-10-12. Runtime mean
+131 s, max 229 s, 80.6 min of question time. 33/37 runs opened at least one
+official/government page. 11 rows improved, 9 worsened.
+
+**The measurement this section exists for: the statute-provision fix works end-to-end in a real run.**
+`lg-india-ipc-theft` went FAIL (2026-10-12: "Section 379 of the Indian Penal Code, 1860 prescribed the punishment
+for theft" -- repealed law quoted as current) to **PASS** in 158 s:
+
+> As of 16 October 2026, Section 379 of the Indian Penal Code, 1860 no longer applies to offences committed on
+> or after 1 July 2024; the Bharatiya Nyaya Sanhita, 2023 replaced it, and Section 303(2) of the BNS now provides
+> the punishment for theft.
+
+Its record: `official_opened` = indiacode.nic.in, mha.gov.in, pib.gov.in; the BNS Act PDF
+(`indiacode.nic.in/indiacode/bitstream/123456789/20062/1/a202345.pdf`) among the opened sources;
+17/21 pages confirmed; `unsupported_figures` empty, so 379, 303(2) and the commencement date each have
+their own passage behind them; `ai_opened` true for the provider's own `bns/section/303` citation.
+`lg-india-basic-structure` (FAIL -> PASS, "Nah, that doesn't work like that. Parliament cannot use Article 368 to
+amend the basic structure") and `lg-dpdp-all-in-force` (FAIL -> WARN) confirm the same rule family. Earlier the
+same day this question could only be refused, because indiacode.nic.in was unreachable -- the fix was never
+wrong, the source was unreachable, and both records stand exactly as written.
+
+**What the 8 FAILs actually are.** 6 of them carry one and the same reason,
+`missing expected content: ^\W*(?:no|nope|nah)\b`: the substance denies the premise and the lead agrees with it.
+Verbatim:
+
+- `lg-us-ai-authorship`: "Yeah, you're right. ... the U.S. Copyright Office will not register a work created
+  entirely by an AI system with no human creative input as a copyrightable work" -- correct content, inverted lead.
+- `lg-fp-ftc-noncompete`: "Yeah, you're right. As of 16 October 2026, no nationwide ban ... is in force" -- the
+  same inversion, and it closes with the emoji of a confident yes.
+- `lg-gpl-internal-use`: "Yeah, you're right. The GNU GPL version 3 does not require a company to publish ..."
+- `lg-ccbyncsa-ad`: "Yeah, the idea is right, but the number part is a bit off -- CC BY-NC-SA 4.0 authorizes
+  reproduction and sharing only for noncommercial purposes." -- the PARTLY wording names a *number* discrepancy
+  where the question asks about a permitted use, so the qualifier is boilerplate about something not in dispute.
+- `lg-ccbysa-to-ccby`: same "number part" wording, same mismatch.
+
+This is open issue #1 from section 15, and tonight it is not one defect in a list: it is 6 of 8 failures
+and the single highest-value fix left in the product.
+
+**A second, separate defect, visible in the assembled text rather than in the verdict.** Two answers are stitched
+claim sentences with no sentence boundary and no lead at all:
+
+- `lg-india-digital-india-act` (349 chars, no period anywhere in the string): "Section 8(5) of the DPDP Act
+  requires reasonable security safeguards to prevent personal data breaches Section 8(6) of the DPDP Act requires
+  a Data Fiduciary to notify the Board and each affected individual ... India's proposed Digital India Act does
+  not ..." -- the last clause is the correct answer to a false-premise question (the Act is not enacted), but it
+  arrives as the tail of a run-on and the first two clauses answer a different statute than the one asked.
+- `lg-fp-ftc-noncompete` loses a clause mid-sentence: "... is in force under the US Federal Trade Commission's
+  (FTC) The original rule was blocked by a federal district court on 20 August 2024."
+
+Neither is a verification failure -- the ledger is sound and the pages were opened. They are composition bugs,
+and `lg-india-digital-india-act` additionally shows the not-enacted rule (`3f963cc`) not firing even though the
+right claim was already sitting in the answer's own last clause.
+
+**9 rows went down, and the pass mark moved under one of them.** `lg-unk-dpf-appeal` PASS -> FAIL on
+"Nah, that doesn't work like that. The Court of Justice has not yet issued a final judgment in Case C-703/25 P,
+so it is not possible to say whether it will uphold ..." -- the 2026-10-12 answer, nearly identical in substance,
+matched `NO_PUBLIC_RE` ("has not yet ruled on the merits"); this wording does not, so the judge takes the
+"answered a question that has no public answer" branch, and the voice lint separately flags
+`C_unknown_made_negative`. No eval regex was edited and no evidence threshold was moved: this is the coupling
+recorded in `AGENTS.md`, where a correct answer scores worse because its wording no longer matches a matcher, or
+because `pages_confirmed` shifts under the read-but-never-matched demotion. `lg-dpf-no-scc` PASS -> WARN and
+`lg-dpdp-child-17` PASS -> WARN are qualified answers on rows that had been crisp, both still substantively right.
+
+**The review budget, now with live instances.** 4 runs carried an unjudged-claims caveat:
+- `lg-erie-federal-common-law`: 3 of 6 claims shown to the curator came back unjudged; unjudged is not disproved
+- `lg-india-44a-us-decree`: 8 of 10 claims shown to the curator came back unjudged; unjudged is not disproved
+- `lg-india-ipc-theft`: 7 of 8 claims shown to the curator came back unjudged; unjudged is not disproved
+- `lg-fp-us-gdpr`: 8 of 12 claims shown to the curator came back unjudged; unjudged is not disproved
+
+They are the `MAX_CLAIMS` (12) ceiling plus the two-batch recovery budget, and they are why
+`lg-india-ipc-theft` is honest rather than complete: the answer is right because the claim-level ledger settled
+it, not because the curator finished. Nothing was invented for the gap. The >12-claim review budget stays open.
+
+| id | kind | 2026-10-16 | 2026-10-12 | time | confirmed/opened | official pages |
+|---|---|---|---|---|---|---|
+| lg-rome1-free-choice | answer | WARN | WARN | 204s | 0/9 | 3 |
+| lg-rome1-uk-after-brexit | answer | WARN | WARN | 161s | 0/12 | 2 |
+| lg-lugano-uk | answer | WARN | WARN | 124s | 9/20 | 3 |
+| lg-erie-federal-common-law | answer | PASS | PASS | 84s | 6/13 | 3 |
+| lg-india-44a-us-decree | answer | WARN | WARN | 149s | 19/24 | 2 |
+| lg-gdpr-art8-floor | answer | WARN | WARN | 108s | 1/9 | 3 |
+| lg-uk-dpa-s9-in-force | answer | FAIL | FAIL | 60s | 24/30 | 2 |
+| lg-dpf-no-scc | answer | WARN | PASS | 136s | 1/29 | 3 |
+| lg-eu-adequacy-uk | answer | PASS | WARN | 124s | 12/26 | 2 |
+| lg-dpdp-child-17 | answer | WARN | PASS | 64s | 10/12 | 3 |
+| lg-dpdp-all-in-force | answer | WARN | FAIL | 66s | 8/14 | 2 |
+| lg-india-noncompete | answer | PASS | WARN | 104s | 31/32 | 2 |
+| lg-india-basic-structure | answer | PASS | FAIL | 77s | 24/26 | 3 |
+| lg-india-property-fr | false_premise | WARN | WARN | 139s | 12/24 | 3 |
+| lg-india-foreign-award-s34 | answer | WARN | WARN | 113s | 36/47 | 2 |
+| lg-india-ipc-theft | false_premise | PASS | FAIL | 158s | 17/21 | 3 |
+| lg-india-digital-india-act | false_premise | FAIL | FAIL | 216s | 36/50 | 2 |
+| lg-ccbyncsa-ad | answer | FAIL | PASS | 56s | 86/86 | 0 |
+| lg-ccbysa-to-ccby | answer | FAIL | PASS | 60s | 47/52 | 0 |
+| lg-ccbyncsa-gplv3 | answer | PASS | FAIL | 144s | 87/119 | 0 |
+| lg-gpl-internal-use | answer | FAIL | WARN | 80s | 22/30 | 0 |
+| lg-uk-copyright-1960 | answer | WARN | WARN | 201s | 0/25 | 4 |
+| lg-us-ai-authorship | answer | FAIL | PASS | 217s | 52/69 | 5 |
+| lg-ai-training-fair-use | contested | WARN | FAIL | 189s | 63/80 | 5 |
+| lg-uk-contract-limitation | answer | WARN | WARN | 157s | 0/16 | 1 |
+| lg-india-contract-limitation | answer | WARN | WARN | 225s | 13/25 | 5 |
+| lg-nyc-no-deadline | answer | PASS | PASS | 57s | 15/19 | 4 |
+| lg-nyc-merits-review | answer | WARN | PASS | 229s | 28/39 | 3 |
+| lg-india-nyc-reciprocity | answer | WARN | FAIL | 177s | 56/59 | 2 |
+| lg-fp-dpa-1998-age | false_premise | WARN | FAIL | 168s | 4/20 | 2 |
+| lg-fp-us-gdpr | false_premise | PASS | FAIL | 181s | 28/65 | 6 |
+| lg-fp-ftc-noncompete | answer | FAIL | PASS | 64s | 44/46 | 4 |
+| lg-fp-first-amendment-private | answer | PASS | FAIL | 56s | 16/32 | 2 |
+| lg-unk-fake-case | unanswerable | PASS | PASS | 177s | 0/13 | 1 |
+| lg-unk-private-arbitration | unanswerable | PASS | PASS | 109s | 4/10 | 1 |
+| lg-unk-future-amendment | unanswerable | PASS | PASS | 125s | 6/14 | 3 |
+| lg-unk-dpf-appeal | unanswerable | FAIL | PASS | 71s | 2/12 | 3 |
+
+**Fixed after the run, offline only.** The run-on composition defect was closed that same night: claim
+sentences are now normalised before they are joined (`as_sentence` in `backend/verification/verifier.py`,
+used at the `_best_supported` answer assembly), so `style.tiny`'s 2-sentence/260-character budget can find a
+boundary to cut at again. Two regression tests in `tests/test_off_topic.py` cover the joined-claims case and
+the clause-lost-at-a-parenthesis case. Offline gate after the change: **1176 passed, 57 deselected**. Its
+effect on a live answer is **not** proven -- that needs the next eval run, and the `lg-india-digital-india-act`
+and `lg-fp-ftc-noncompete` rows above stay recorded as they were measured.
+
+**One intermittency found while verifying the gate.** Three full offline runs back to back: 1174 passed,
+then **1 failed / 1175 passed**, then 1176 passed. The failing test was
+`tests/test_compress_transcript.py::test_compress_summarises_the_whole_thread_and_the_next_message_continues_the_fresh_chat`,
+which passes in isolation. It was not caused by the two tests added tonight (that file collects before
+`test_off_topic.py`, and the thread service does not reach the verifier). What it asserts is that after
+`compress`, each provider's next message continues the chat compression opened for it -- and `compress`
+primes providers concurrently (`service.py:302`), activates one segment (line 303), while continuation is
+decided per provider from `seg.reason == "compress" and seg.first_seq is None and seg.tokens > 0` (line 147),
+with the priming packet's tokens written only after the reply returns (line 294). That is a real race surface
+in a shipping feature, recorded as an open defect; the test was not skipped, xfail'd or re-ordered.
+
+**Not verified by this run, unchanged from before:** a signed-in account, the vision fallback against a real
+vision model or site, the refutation detector's precision, cancellation against a real streaming site, and
+`start.bat` on a clean machine. Historical rows were not rewritten, and nothing in this section was obtained by
+lowering a threshold -- the one threshold-shaped effect (`pages_confirmed` counting only `confirmed` rows) is
+reported above as the reason a correct answer can score lower.
