@@ -7,6 +7,8 @@ test_architecture.py). The curator may ask for more, but does not get to keep as
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 
 from backend.evidence.sources import SourceTier
@@ -332,3 +334,34 @@ async def test_high_stakes_with_sufficient_evidence_and_no_conflict_goes_to_the_
     net.confirm(URL9, tier=SourceTier.PRIMARY_OFFICIAL)
     job, log = await _run_spec(HEDGE, 0)
     assert all(c["round"] == 1 for c in log), [(c["provider"], c["round"]) for c in log]
+
+
+async def test_a_slow_stable_knowledge_hint_never_holds_the_job(monkeypatch):
+    import time
+    from types import SimpleNamespace
+    import backend.orchestrator.runner as R
+    from backend.models import ResearchMode
+
+    class Slow:
+        def __init__(self, *_):
+            pass
+
+        async def complete_json(self, *a, **k):
+            await asyncio.sleep(5)
+            return {"can_answer": True, "answer": "x"}, None
+
+    monkeypatch.setattr(R, "LLMClient", Slow)
+    runner = R.ResearchRunner.__new__(R.ResearchRunner)
+    runner.analysis_endpoint = SimpleNamespace(enabled=True)
+    runner.settings = SimpleNamespace(research=SimpleNamespace(classify_cap_s=0.1))
+    t0 = time.monotonic()
+    analysis = await runner._analyze("Is GDPR Article 8 still in force in the EU?", ResearchMode.STANDARD, ["chatgpt", "gemini"])
+    assert time.monotonic() - t0 < 2 and analysis.classifier_source != "llm"
+
+
+async def test_no_sequential_re_ask_while_second_opinions_are_already_running(net):
+    """2026-10-15 dpf/IPC: a same-chat follow-up (~40 s) ran while copilot was still answering in parallel."""
+    net.confirm(URL9, tier=SourceTier.PRIMARY_OFFICIAL)
+    job, log = await _run_spec(HEDGE, 0.4)
+    chat = [c for c in log if c["provider"] == "chatgpt"]
+    assert not any(c.get("continue") for c in chat[1:2]) or len(chat) == 1, [(c["provider"], c["round"], c.get("continue")) for c in log]

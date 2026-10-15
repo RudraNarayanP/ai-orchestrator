@@ -359,7 +359,10 @@ class ResearchRunner:
         if agreed:
             await self._emit("assessment", f"{len({r.provider for r in responses})} researchers agree with no material conflict -- no re-ask round",
                              round_no=round_no, job=job, sufficient=assessment.sufficient)
-        if not assessment.sufficient and not partly_settled and not agreed:
+        # Other researchers already working (deferred second opinions)? Then the open question goes to them in parallel;
+        # a sequential re-ask of the primary first only adds a minute (2026-10-15 dpf and IPC: ~40 s each).
+        others_running = bool(self.__dict__.get("_late"))
+        if not assessment.sufficient and not partly_settled and not agreed and not others_running:
             before = len(job.responses)
             (round_no, responses, claims, evidence, disagreements, assessment) = await self._thread_follow_up(
                 job, analysis, primary, round_no, responses, claims, evidence, disagreements, assessment
@@ -797,13 +800,19 @@ class ResearchRunner:
         follow_up = memory.is_follow_up(question, prior)
         if endpoint and endpoint.enabled and not follow_up and not _obviously_arithmetic(question):
             client = LLMClient(endpoint)
-            parsed, reply = await client.complete_json(
-                [
-                    {"role": "system", "content": STABLE_KNOWLEDGE_ASK},
-                    {"role": "user", "content": f"Question: {question}"},
-                ],
-                temperature=0.0,
-            )
+            # The stable-knowledge hint is optional; it must never hold the job (2026-10-15 dpf: 32 s before any AI was asked).
+            cap = float(getattr(getattr(getattr(self, "settings", None), "research", None), "classify_cap_s", 0) or 0)
+            try:
+                call = client.complete_json(
+                    [
+                        {"role": "system", "content": STABLE_KNOWLEDGE_ASK},
+                        {"role": "user", "content": f"Question: {question}"},
+                    ],
+                    temperature=0.0,
+                )
+                parsed, reply = await (asyncio.wait_for(call, cap) if cap > 0 else call)
+            except asyncio.TimeoutError:
+                parsed = None
             if parsed and parsed.get("can_answer") and str(parsed.get("answer") or "").strip():
                 hint = str(parsed["answer"]).strip()
         analysis = router.classify(question, mode=mode, enabled=enabled, llm_stable_answer=hint, history=history or ())
