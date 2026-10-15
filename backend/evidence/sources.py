@@ -197,6 +197,26 @@ def extract_date(page_html: str, text: str = "") -> str | None:
     return None
 
 
+_MAIN_REGION_RE = re.compile(r"(?is)<(main|article)\b[^>]*>(.*?)</\1\s*>")
+_CHROME_FIRST_WORDS = ("skip to main content", "sign in", "log in", "search", "menu", "cookie")
+
+
+def _main_region(html: str) -> str:
+    """The page's own main or article element, when it has one and it holds real content.
+
+    Live (2026-10-16, SpaceX IPO): the Nasdaq newsroom page that settled the question gave body text beginning
+    "Skip to main content / Products / Featured Products / By Objective ..." -- the mega-menu, not the story. The
+    12,000-character body was all navigation, so check_support never saw the sentence the claim rested on, the row
+    attached to no claim, and a run that had the right page refused the question.
+    """
+    best = ""
+    for match in _MAIN_REGION_RE.finditer(html or ""):
+        inner = match.group(2)
+        if len(inner) > len(best):
+            best = inner
+    return best
+
+
 def _html_to_text(html: str) -> str:
     html = re.sub(r"(?is)<(script|style|noscript|svg|head)[^>]*>.*?</\1>", " ", html or "")
     html = re.sub(r"(?is)<!--.*?-->", " ", html)
@@ -215,7 +235,7 @@ def _html_to_text(html: str) -> str:
     return text.strip()
 
 
-def pdf_to_text(data: bytes, *, max_chars: int = 12000, max_pages: int = 40) -> str:
+def pdf_to_text(data: bytes, *, max_chars: int = 12000, max_pages: int = 40, until: Any | None = None) -> str:
     """Text of a PDF's first pages, or "" when it cannot be read (pypdf missing, scanned image, encrypted).
 
     Official sources are often PDFs (the original Act, a university's regulations). Reading them as text gave an
@@ -231,11 +251,15 @@ def pdf_to_text(data: bytes, *, max_chars: int = 12000, max_pages: int = 40) -> 
             return ""
         parts: list[str] = []
         total = 0
-        for page in list(reader.pages)[:max_pages]:
+        for index, page in enumerate(list(reader.pages)[:max_pages]):
             chunk = page.extract_text() or ""
             parts.append(chunk)
             total += len(chunk)
             if total >= max_chars * 2:
+                break
+            # an Act is read for the provisions asked about: stop once every one has been reached twice (its entry in
+            # the arrangement of sections and its text), so a 300-page statute costs seconds, not the whole document
+            if until and index and index % 6 == 5 and until("\n".join(parts)):
                 break
         return re.sub(r"[ \t]+", " ", re.sub(r"\n\s*\n+", "\n\n", "\n".join(parts))).strip()
     except Exception:  # noqa: BLE001
@@ -261,12 +285,76 @@ def point_in_time_date(url: str) -> str | None:
     return m.group(1) + "T00:00:00+00:00"
 
 
+_PROVISION_RE = re.compile(
+    r"\b(?:section|sections|article|articles|clause|clauses|regulation|regulations|paragraph)\s+(No\.?|s\.?)?\s*(\d+[A-Za-z]?)(?![\d.])", re.I
+)
+_SHORT_PROVISION_RE = re.compile(r"\b(?:s|ss|art|cl|reg)\.\s*(\d+[A-Za-z]?)(?![\d.])", re.I)
+
+
+def provision_numbers(*texts: str) -> list[str]:
+    """The provision numbers a set of sentences names: "Section 303", "Article 45(3)", "s.116".
+
+    Order preserved, de-duplicated, capped: this steers which parts of a long official document get read, so a claim
+    set that quotes thirty sections cannot make us read thirty windows.
+    """
+    out: list[str] = []
+    for text in texts:
+        for rx in (_PROVISION_RE, _SHORT_PROVISION_RE):
+            for m in rx.finditer(text or ""):
+                number = next((g for g in m.groups() if g and any(ch.isdigit() for ch in g)), "")
+                if number and number not in out:
+                    out.append(number)
+    return out[:8]
+
+
+def statute_body(full: str, max_chars: int, numbers: list[str]) -> str:
+    """The identification head of a long official document plus the passages that hold the provisions asked about.
+
+    A 380-section Act is not loaded into context to read one section -- but reading only its first 12,000 characters
+    means the section is never in the text at all. Live (2026-10-16, IPC theft): we opened the India Code PDF of the
+    Bharatiya Nyaya Sanhita and kept its long title and arrangement of clauses, so "theft is Section 303" could not be
+    confirmed by anything we read, and the run refused an answerable question.
+    """
+    if not full or len(full) <= max_chars or not numbers:
+        return full[:max_chars]
+    head_len = min(1500, max(200, max_chars // 6))  # the head must not eat the budget the provisions are read with
+    head = full[:head_len]
+    per = max(300, (max_chars - head_len) // (2 * len(numbers)))
+    parts = [head]
+    # A provision is followed by running text before the next numbered heading; an entry in the Act's own table of
+    # contents ("303. Theft. 304. Shaving.") is not. Confirming "303 punishes theft" from the contents page would
+    # report the list of section titles as if it were the section.
+    headings = [m.start() for m in re.finditer(r"(?<![\d.])\d{1,4}\.\s+[A-Z(]", full[head_len:])]
+    for number in numbers:
+        taken = 0
+        candidates = []
+        for m in re.finditer(r"(?<!\d)" + re.escape(number.strip()) + r"(?!\d)", full[head_len:]):
+            nxt = next((h for h in headings if h > m.start()), len(full))
+            candidates.append((nxt - m.start(), m.start()))
+        # longest-running text first: the section itself, then its contents entry
+        chosen: list[int] = []
+        for _, pos in sorted(candidates, reverse=True):
+            if any(abs(pos - earlier) < per // 2 for earlier in chosen):
+                continue  # the same passage again, reached from a neighbouring occurrence
+            start = head_len + max(0, pos - per // 3)
+            window = re.sub(r"\s+", " ", full[start : start + per]).strip()
+            if len(window) < 40:
+                continue
+            chosen.append(pos)
+            parts.append(window)
+            taken += 1
+            if taken >= 2:
+                break
+    return "\n\n".join(parts)[:max_chars]
+
+
 async def fetch_page(
     url: str,
     *,
     timeout_s: int = 30,
     max_chars: int = 12000,
     browser_fetch: Any | None = None,
+    provisions: list[str] | None = None,
 ) -> FetchedPage:
     """httpx first (cheap), the real browser second (JS-heavy pages)."""
     host = (urlparse(url).netloc or "").lower()
@@ -284,10 +372,25 @@ async def fetch_page(
         is_pdf = "pdf" in ctype or urlparse(url).path.lower().endswith(".pdf") or response.content[:5] == b"%PDF-"
         if is_pdf and status < 400:
             html = ""
-            text = pdf_to_text(response.content, max_chars=max_chars)
+            if provisions:
+                # a statute PDF is read at the provisions the claims name, so extract far more than the body keeps
+                def reached(text: str, needed=provisions) -> bool:
+                    return all(len(re.findall(r"(?<!\d)" + re.escape(n) + r"(?!\d)", text)) >= 2 for n in needed)
+
+                extracted = pdf_to_text(response.content, max_chars=max(60000, max_chars * 20), max_pages=300, until=reached)
+                text = statute_body(extracted, max_chars, provisions)
+            else:
+                text = pdf_to_text(response.content, max_chars=max_chars)
         else:
             html = response.text or ""
             text = _html_to_text(html)
+            # Read the page's own main region first when the document opens with navigation: the body budget is small,
+            # and on a site with a big menu the article falls outside it. Nothing is discarded -- the rest of the page
+            # still follows the main region.
+            main = _html_to_text(_main_region(html))
+            opens_with_chrome = text[:220].lower().lstrip().startswith(_CHROME_FIRST_WORDS)
+            if len(main) >= 600 and opens_with_chrome and text.lower().find(main[:120].lower()) != 0:
+                text = f"{main}\n\n{text}"
         page = FetchedPage(
             url=url,
             final_url=str(response.url),
@@ -774,12 +877,15 @@ async def gather_from_links(
         if url.startswith("http") and url not in unique:
             unique[url] = link
     items = list(unique.values())[:max_pages]
+    provisions = provision_numbers(
+        *[text for _, text in (attribute_to or [])], *[link.get("claim_text") or "" for link in items]
+    )
 
     async def one(link: dict[str, Any]) -> list[Evidence]:
         url = link.get("href") or link.get("url")
         async with sem:
             try:
-                fetch = fetch_page(url, browser_fetch=browser_fetch, max_chars=max_chars)
+                fetch = fetch_page(url, browser_fetch=browser_fetch, max_chars=max_chars, provisions=provisions)
                 cap = timeout_s or _settings_fetch_cap()
                 page = await (asyncio.wait_for(fetch, cap) if cap > 0 else fetch)
             except asyncio.TimeoutError:
@@ -809,8 +915,13 @@ async def gather_from_links(
             if not page.ok and (BLOCK_HINT_RE.search((page.text or "")[:3000]) or "gate" in " ".join(page.notes)):
                 # A security page is not an unreadable server: say which one it was.
                 status = SourceCheckStatus.BLOCKED
+            elif page.ok:
+                # Nothing was checked against this page, so it confirms nothing: "we read it" is not "it says so".
+                # Live (2026-10-16): two such rows were counted as confirming pages for the SpaceX IPO claim, and the
+                # answer's own "why" said pages we opened state what nothing had been matched to.
+                status = SourceCheckStatus.NOT_CHECKED
             else:
-                status = SourceCheckStatus.CONFIRMED if page.ok else SourceCheckStatus.UNREACHABLE
+                status = SourceCheckStatus.UNREACHABLE
             check = {
                 "status": status,
                 "coverage": None,

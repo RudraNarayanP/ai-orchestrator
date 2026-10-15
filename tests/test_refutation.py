@@ -84,7 +84,7 @@ def test_year_and_negation_conflicts():
 def pages(monkeypatch):
     table: dict[str, FetchedPage] = {}
 
-    async def fake_fetch(url, *, timeout_s=30, max_chars=12000, browser_fetch=None):
+    async def fake_fetch(url, *, timeout_s=30, max_chars=12000, browser_fetch=None, provisions=None):
         return table.get(url) or FetchedPage(url=url, ok=False, error="timeout")
 
     monkeypatch.setattr(sources, "fetch_page", fake_fetch)

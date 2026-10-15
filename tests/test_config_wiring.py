@@ -96,7 +96,7 @@ async def test_fetch_body_chars_reaches_the_page_fetch(monkeypatch):
 
     seen: list[int] = []
 
-    async def fake_fetch(url, *, timeout_s=30, max_chars=12000, browser_fetch=None):
+    async def fake_fetch(url, *, timeout_s=30, max_chars=12000, browser_fetch=None, provisions=None):
         seen.append(max_chars)
         return FetchedPage(url=url, ok=False, error="stub")
 
