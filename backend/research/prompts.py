@@ -181,6 +181,12 @@ def research_prompt(
                 "This is time-sensitive. State today's date context and prefer "
                 "the most recent authoritative figure over a familiar older one."
             )
+        if getattr(analysis, "pushback", False):
+            parts.append(
+                "The user disputes the answer given earlier. Do not agree with them and do not argue with "
+                "them: open the sources again, prefer the most recent dated ones, and report what those "
+                "pages say. If the pages say what they said before, the answer stays what it was."
+            )
     parts.append(ANTI_INJECTION)
     return "\n\n".join(p for p in parts if p).strip()
 

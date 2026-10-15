@@ -16,11 +16,13 @@ from fastapi.testclient import TestClient
 from backend.api import app as api_app
 from backend.models import (
     Claim,
+    ClaimStatus,
     ConversationTurn,
     EscalationLevel,
     Job,
     JobStatus,
     ResearchMode,
+    SourceCheckStatus,
     SourceTier,
     StakesDomain,
 )
@@ -339,3 +341,54 @@ async def test_api_loads_the_thread_history_into_the_job(client, net):
     assert thread["conversation_id"] == "conv_x"
     assert [t["question"] for t in thread["turns"]] == ["Who built the Acme Bolt?"]
     assert client.get("/api/conversations/conv_unknown").json()["turns"] == []
+
+# ------------------------------------------------------ pushback: a dispute is re-checked, never conceded
+
+DISPUTED = ConversationTurn(
+    job_id="job_prior",
+    question="Is SpaceX publicly traded?",
+    answer="No -- SpaceX is a privately held company.",
+    confirmed_claims=["SpaceX is a privately held company."],
+    confidence="moderate",
+)
+
+
+def test_a_disputed_answer_routes_as_a_pushback():
+    analysis = router.classify("Actually, it IPO'd in June 2026 -- it is listed as SPCX now.", history=[DISPUTED])
+    assert analysis.pushback and analysis.follow_up, (analysis.pushback, analysis.follow_up)
+    assert analysis.needs_current_data, "a disputed present-status fact has to go to dated sources"
+
+    for text in ("are you sure about that?", "that's wrong, check again", "I don't believe it", "isn't it listed now?",
+                 "no, it went public in June"):
+        assert router.classify(text, history=[DISPUTED]).pushback, text
+    for text in ("Is SpaceX publicly traded?", "Who is the current CEO of SpaceX?", "What is the weather in Austin?"):
+        assert not router.classify(text, history=[DISPUTED]).pushback, text
+    assert not memory.is_pushback("are you sure?", None), "with no earlier turn there is nothing to dispute"
+
+
+def test_the_pushback_prompt_asks_for_the_pages_not_for_agreement():
+    analysis = router.classify("actually, it IPO'd in June 2026", history=[DISPUTED])
+    prompt = " ".join(research_prompt("SpaceX is publicly traded now?", provider="chatgpt", analysis=analysis, history=[DISPUTED]).split())
+    for needle in ("Do not agree with them and do not argue with", "open the sources again", "the answer stays what it was"):
+        assert needle in prompt, needle
+
+
+async def test_a_pushback_with_no_new_evidence_leaves_the_verdict_where_the_pages_put_it(settings, net):
+    """The providers cave -- all three now say the shares trade. Not one of the pages they cite says it, so
+    nothing was established, and the answer must not report the reversal as a finding."""
+    net.fail("https://www.chipblog.example/spcx", status=SourceCheckStatus.MISMATCH)
+    scripts = {
+        "chatgpt": {"answer": "KEY CLAIMS\n1. SpaceX is publicly traded on Nasdaq under the ticker SPCX.",
+                    "citations": [{"url": "https://www.chipblog.example/spcx", "title": "SpaceX (SPCX) on Nasdaq"}]},
+        "gemini": {"answer": "KEY CLAIMS\n1. You are right, SpaceX is publicly traded now.",
+                   "citations": [{"url": "https://www.chipblog.example/spcx", "title": "SpaceX SPCX"}]},
+        "search": {"answer": "r", "citations": []},
+    }
+    job, adapters = await _run_turn(settings, net, "Actually, it IPO'd in June 2026 -- is SpaceX publicly traded now?", scripts, history=[DISPUTED])
+
+    assert job.analysis.pushback, [c["prompt"][:80] for c in adapters["chatgpt"].calls]
+    flipped = [c for c in job.claims if "publicly traded" in c.claim]
+    assert flipped and all(c.status not in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED} for c in flipped), [
+        (c.claim, c.status) for c in flipped
+    ]
+    assert "SPCX" not in job.final.answer or "couldn" in job.final.answer.lower(), job.final.answer

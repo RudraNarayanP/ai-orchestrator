@@ -31,6 +31,15 @@ _NOT_ENTITY = {
 }
 _ENTITY_RE = re.compile(r"\b[A-Z][A-Za-z0-9.'-]{1,}(?:\s+[A-Z][A-Za-z0-9.'-]{1,})*\b")
 IDK_RE = re.compile(r"^\s*i (don'?t know|couldn'?t verify)", re.I)
+PUSHBACK_RE = re.compile(
+    r"\b(are you (?:sure|certain|right|positive)|really\?|you(?:'re| are)? (?:wrong|mistaken|incorrect|off)"
+    r"|that(?:'s| is) (?:wrong|not right|incorrect|false|outdated|old)|that can'?t be right"
+    r"|that'?s not (?:right|correct)|i (?:don'?t|do not) believe|i think you(?:'re| are)"
+    r"|check again|double.?check|look again|try again|re-?check|search again"
+    r"|isn'?t it (?:true|the case|now|listed|public)|didn'?t (?:it|they|he|she|we) (?:ipo|go public|merge|acquire|repeal|change|happen|come)"
+    r"|actually[ ,]+(?:it|the|no|they|he|she|we|that)|no[ ,]+(?:it|that|this|the|they))\b",
+    re.I,
+)
 
 
 def entities_in(text: str, *, skip_first: bool = False) -> list[str]:
@@ -69,6 +78,18 @@ def is_follow_up(question: str, prior: ConversationTurn | None) -> bool:
     if WEAK_REFERENT_RE.search(text) and len(words) <= 8:
         return True
     return len(words) <= 3
+
+
+def is_pushback(question: str, prior: ConversationTurn | None) -> bool:
+    """True when the user disputes the earlier answer instead of asking something new.
+
+    Consumer AIs agree with a confident user; this system must not. A disputed answer is re-checked
+    against opened pages, and the disagreement alone changes nothing -- so the turn has to be
+    recognised as a challenge, not as a fresh question.
+    """
+    if prior is None:
+        return False
+    return bool(PUSHBACK_RE.search(question or ""))
 
 
 def _shorten(text: str, limit: int) -> str:

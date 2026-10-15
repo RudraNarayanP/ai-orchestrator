@@ -221,6 +221,8 @@ def classify(
     turns = list(history or [])
     prior = turns[-1] if turns else None
     follow_up = memory.is_follow_up(text, prior) and not CHITCHAT_RE.search(text)
+    pushback = memory.is_pushback(text, prior) and not CHITCHAT_RE.search(text)
+    follow_up = follow_up or pushback
     signal_text = f"{prior.question} {text}" if follow_up and prior else text
 
     computed, expr = try_arithmetic(text)
@@ -280,6 +282,7 @@ def classify(
     analysis.capabilities = [name for name, pattern in CAPABILITY_PATTERNS.items() if pattern.search(signal_text)]
     if follow_up and prior is not None:
         analysis.follow_up = True
+        analysis.pushback = pushback
         analysis.inherited_entities = memory.inherited_entities(prior)
         analysis.standalone_question = memory.standalone_question(text, prior)
         analysis.key_entities = list(dict.fromkeys(analysis.key_entities + analysis.inherited_entities))[:10]

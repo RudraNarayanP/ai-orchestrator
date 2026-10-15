@@ -498,6 +498,10 @@ class QuestionAnalysis(BaseModel):
     classifier_source: str = "heuristic"
     """heuristic | llm | user -- records how the routing decision was made"""
 
+    pushback: bool = False
+    """The user is disputing the answer we gave earlier in this thread. It is a follow-up that must be
+    re-checked against opened pages: disagreeing with the user is not evidence and neither is agreeing."""
+
     follow_up: bool = False
     """True when the question only makes sense against an earlier turn of the thread"""
 
