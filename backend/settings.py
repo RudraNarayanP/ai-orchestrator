@@ -244,6 +244,8 @@ class SearchConfig(BaseModel):
 
     per_query_timeout_s: int = 18
     fetch_timeout_s: float = 18.0
+    official_sources: bool = True
+    """When the question names a law, provision or case, also search its official publishers and read the top hits."""
     """Hard cap per page fetch+check (2026-10-14 profile: one slow page held source checking for 32 s). A page over the cap
     is recorded as not checked -- never as confirmed."""
 

@@ -133,6 +133,10 @@ def tier_for(url: str) -> SourceTier:
         return SourceTier.UNKNOWN
     if AI_SOURCE_RE.search(host):
         return SourceTier.AI_UNSOURCED
+    from backend.evidence.official import is_official_host  # noqa: PLC0415
+
+    if is_official_host(host):
+        return SourceTier.PRIMARY_OFFICIAL  # the official publisher of the legal text itself
     if GOV_RE.search(host) or REGULATOR_RE.search(host):
         # A regulator's own filing is primary evidence about the filing.
         return SourceTier.GOVERNMENT

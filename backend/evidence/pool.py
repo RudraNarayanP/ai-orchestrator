@@ -373,6 +373,12 @@ async def build_pool(
                     )
 
     links = _rank_links(raw_links + searched, claims)[:budget]
+    # Official text of the law the question names, read in parallel with the cited pages (see backend/evidence/official.py).
+    official_trace: list[dict[str, Any]] = []
+    official_task = (
+        asyncio.ensure_future(_official_evidence(job_id, question, claims, links, settings, round_no, official_trace, emit))
+        if round_no == 1 and getattr(settings.search, "official_sources", True) else None
+    )
     evidence = await gather_from_links(
         job_id,
         links,
@@ -405,6 +411,13 @@ async def build_pool(
                 require_names=subject_names(question),
             )
         )
+
+    if official_task is not None:
+        try:
+            seen = {e.url for e in evidence}
+            evidence.extend(e for e in await official_task if e.url not in seen)
+        except Exception as exc:  # noqa: BLE001 -- the official lookup is extra; it never fails the round
+            official_trace.append({"error": type(exc).__name__})
 
     # keep provenance the fetch layer does not carry
     by_url = {l.get("href"): l for l in links}
@@ -442,6 +455,7 @@ async def build_pool(
         "queries": queries,
         "discovery": discovery,
         "counter_queries": counter_trace,
+        "official": official_trace,
         "refuting": sum(1 for e in evidence if e.polarity == "refute"),
     }
     return evidence, trace
@@ -533,3 +547,41 @@ def _rank_links(links: list[dict[str, Any]], claims: list[Claim]) -> list[dict[s
 
 async def _noop(*args: Any, **kwargs: Any) -> None:
     return None
+
+
+async def _official_evidence(
+    job_id: str, question: str, claims: list[Claim], links: list[dict[str, Any]], settings: Settings, round_no: int,
+    trace: list[dict[str, Any]], emit: Callable[..., Awaitable[None]],
+) -> list[Evidence]:
+    """Search the official publishers for the law the question names and read the top hits (http only: no extra tabs)."""
+    from backend.evidence.official import official_link, official_queries  # noqa: PLC0415
+    from backend.evidence.search_http import search as http_search  # noqa: PLC0415
+
+    queries = official_queries(question)
+    if not queries:
+        return []
+    timeout = settings.search.per_query_timeout_s
+
+    async def one(q: str) -> Any:
+        return await asyncio.wait_for(http_search(q, engines=settings.search.engines, limit=6, timeout_s=timeout), timeout + 2)
+
+    results = await asyncio.gather(*(one(q) for q in queries), return_exceptions=True)
+    already = {l.get("href") for l in links}
+    picked: list[dict[str, Any]] = []
+    for q, res in zip(queries, results):
+        if isinstance(res, BaseException):
+            trace.append({"query": q[:90], "error": type(res).__name__})
+            continue
+        items = [i for i in res[0] if official_link(i, question) and i.get("href") not in already]
+        trace.append({"query": q[:90], "results": len(res[0]), "official": len(items)})
+        for item in items[:3]:
+            already.add(item.get("href"))
+            picked.append({**item, "origin": "search", "cited_by": "official text lookup", "polarity": "support"})
+    if not picked:
+        return []
+    await emit("evidence", f"reading {len(picked)} official page(s) for the law the question names", None, round_no)
+    return await gather_from_links(
+        job_id, picked, max_pages=len(picked), concurrency=6, browser_fetch=None, round_no=round_no, origin="search",
+        max_chars=settings.search.fetch_body_chars, attribute_to=[(c.id, c.claim) for c in _rank_claims(claims)[:12]],
+        require_names=subject_names(question),
+    )
