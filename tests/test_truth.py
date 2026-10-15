@@ -559,6 +559,39 @@ def test_an_off_point_citation_problem_does_not_turn_the_answer_into_a_date_comp
     assert "standard contractual clauses" in fa.answer, fa.answer
 
 
+# ---- 2026-10-15 dpf live run: a "without" question refused although a settled claim stated the absence
+
+def test_a_negative_question_is_answered_by_the_claim_that_states_the_absence():
+    """Replayed from job_261015233138_8d47c46f (live, WARN "said it could not answer an answerable question").
+    Four claims were supported on pages two independent official sites opened, one of them naming the absence the
+    question asked about. The curator's lead sentence was about certification, so the negative-question guard had
+    no way to agree and returned "Couldn't verify that one." for a settled answer."""
+    rep = report(
+        verdict(ClaimStatus.SUPPORTED, "The US recipient must have an active DPF certification that covers the organisation and the data being transferred."),
+        verdict(ClaimStatus.SUPPORTED, "Under an adequacy decision, personal data can flow freely from the EU to the certified third-country destination "
+                                      "without any additional transfer safeguards."),
+        verdict(ClaimStatus.SUPPORTED, "Standard contractual clauses are an alternative transfer mechanism used only when an adequacy decision does not apply."),
+        verdict(ClaimStatus.PARTIALLY_SUPPORTED, "The EU-US DPF adequacy decision permits qualifying transfers without SCCs.", problems=["single_source"]),
+        answer="The US recipient must have an active DPF certification that covers the organisation and the data being transferred.",
+    )
+    fa = build_final_answer(rep, [], 1, DPF_Q)
+    assert fa.truth_state == "LIKELY", fa.truth_state
+    assert "Couldn't verify" not in fa.answer, fa.answer
+    assert "without any additional transfer safeguards" in fa.answer, fa.answer
+
+
+def test_a_negative_question_still_refuses_when_no_claim_states_the_absence():
+    """The fix must not turn a "without X" question into a yes off shared words alone: nothing here says the
+    safeguards are unnecessary, so the honest answer stays the refusal."""
+    rep = report(
+        verdict(ClaimStatus.SUPPORTED, "The European Commission adopted an adequacy decision covering personal data transfers to certified US companies."),
+        verdict(ClaimStatus.SUPPORTED, "A company in the EU can send personal data to a certified US company under the Data Privacy Framework."),
+        answer="The adequacy decision was adopted by the European Commission.",
+    )
+    fa = build_final_answer(rep, [], 1, DPF_Q)
+    assert fa.answer == TRUTH_UNVERIFIED, fa.answer
+
+
 def test_a_thin_claim_that_happens_to_carry_a_year_names_no_aspect():
     """"The date part is a bit off" is a finding about a date. A claim downgraded only because one source
     states it says nothing of the kind, so no aspect is available and the answer must not invent one."""

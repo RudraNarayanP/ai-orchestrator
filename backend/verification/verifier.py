@@ -1646,6 +1646,18 @@ def lead_with_the_named_law(report: VerifierReport, question: str) -> str:
     return answer
 
 
+_ASKED_ABSENCE_RE = re.compile(r"\b(?:without|no|not|none|nothing|never|nor|neither)\b", re.I)
+
+
+def _asked_absence(text: str) -> set[str]:
+    return {m.lower() for m in _ASKED_ABSENCE_RE.findall(text or "")}
+
+
+def states_the_asked_absence(claim: str, markers: set[str]) -> bool:
+    """Does the claim say, in the question's own words, that the thing it asked about is absent?"""
+    return bool(markers) and bool(markers & _asked_absence(claim))
+
+
 def answer_the_asked_question(state: str, report: VerifierReport, question: str) -> tuple[str, VerifierReport]:
     """The headline of a yes/no answer must answer THE question asked, with the polarity of the settled claims.
 
@@ -1718,7 +1730,15 @@ def answer_the_asked_question(state: str, report: VerifierReport, question: str)
     question_denies = bool(_DENIAL_RE.search(main) or re.search(r"\b(?:no|without|nothing|none)\b", main, re.I))
     claim_denies = bool(_DENIAL_RE.search(_head_clause(best.claim)))
     if question_denies:
-        # a negative question: agreement is not readable off word polarity; never guess a "yeah"
+        # a negative question: agreement is not readable off shared words, so a yes needs the settled claim to
+        # state the asked absence itself, in the question's own words. Live (2026-10-15, dpf): four supported
+        # claims, one of them "personal data can flow freely to the certified destination without any additional
+        # transfer safeguards", and the whole answer was "Couldn't verify that one." because the curator's lead
+        # sentence was off-point and this path could not answer a "without" question at all. Where no claim says
+        # the absence, the refusal below still stands.
+        if not claim_denies and states_the_asked_absence(best.claim, _asked_absence(main)):
+            return ("PARTLY" if state == "PARTLY" else "LIKELY"), report.model_copy(
+                update={"answer": best.claim.strip().rstrip(".") + "."})
         return ("PARTLY" if state == "PARTLY" else "UNVERIFIED"), report
     new_state = "FALSE" if claim_denies else ("PARTLY" if state == "PARTLY" else "TRUE")
     if new_state == "TRUE" and state == "FALSE":
