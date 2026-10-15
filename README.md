@@ -562,15 +562,31 @@ One command re-runs it (starts its own server on a free port, trimmed provider s
 .venv\Scripts\python.exe scripts/eval_hard.py                       # all questions in scripts/eval_questions.yaml
 .venv\Scripts\python.exe scripts/eval_hard.py --only uk-dpa-age,res-ten-percent-brain
 .venv\Scripts\python.exe scripts/eval_hard.py --category uk-law --limit 2
+.venv\Scripts\python.exe scripts/eval_hard.py --questions scripts/eval_legal_questions.yaml
 ```
+
+`--questions` defaults to `eval_questions.yaml`, so the 37-question legal set only runs if you pass that
+flag; a "full legal run" launched without it silently measures the other file. A thread in the question
+file is asked turn by turn in one conversation (`turns:`), so the second message is judged on what the
+first established.
+
+A live run is gated: `scripts/live_focus_check.py` runs first and the eval refuses to start if a short
+silent pass would change your foreground window (`--skip-focus-gate` only if you know why). One run may
+drive the browser at a time — a second one used to close the first one's tabs.
 
 Results land in `data/eval/eval_<timestamp>.md` and `.json`: the final answer, whether
 primary sources (legislation.gov.uk, zakon.rada.gov.ua, university pages) were opened
 and cited, refutation counts, figures in the answer that no opened page contains,
-voice compliance, and runtime. The question set covers UK Acts, Ukrainian laws,
+voice compliance, and which official-tiered pages the run actually reached (reported,
+never accepted in place of the source the question named). The question set covers UK Acts, Ukrainian laws,
 university regulations, PhD-level research, false premises, myths and unanswerable
-questions (the right answer there is "I don't know." with a reason). Each question
-takes 3-10 minutes on live sites, so use `--only` for batches.
+questions (the right answer there is "I don't know." with a reason).
+
+**Cost, measured rather than promised:** each question takes 3-10 minutes on live sites, so use `--only`
+for batches. The 2026-10-12 full legal run took 83 minutes of question time across 37 questions
+(mean 135 s, max 233 s); questions since then have run 150-484 s. That is the price of asking nine
+browser AIs in real sessions and reading their pages back, and it is accepted as the cost of this build —
+not a target to be bought down by cutting verification rounds.
 
 ## Voice
 
