@@ -16,3 +16,7 @@ data/eval/console_*.txt
 data/tmp_*
 data/*.db-shm
 data/*.db-wal
+
+# scratch run logs: stdout/stderr of one-off live runs and gate attempts, superseded by data/eval/*.md
+data/*.txt
+data/*.err
