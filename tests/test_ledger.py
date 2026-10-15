@@ -279,6 +279,60 @@ def test_malformed_arithmetic_is_refused_not_evaluated():
         assert computed is None, evil
 
 
+# ------------------------------------------------- undated is not the same as outdated
+
+SCC_CLAIM = "Transfers covered by that decision do not require SCCs or another Article 46 GDPR transfer mechanism."
+
+
+def _pages(*, published: str | None, domains: tuple[str, ...]) -> list[Evidence]:
+    return [
+        Evidence(
+            job_id="j", claim_id="clm_scc", url=f"https://{d}/adequacy", domain=d,
+            tier=SourceTier.GOVERNMENT if i == 0 else SourceTier.JOURNALISM,
+            check_status=SourceCheckStatus.CONFIRMED, published=published,
+        )
+        for i, d in enumerate(domains)
+    ]
+
+
+def _ledger():
+    from backend.models import Claim
+
+    verifier = Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)
+    claim = Claim(job_id="j", claim=SCC_CLAIM, kind="fact", provider_sources=["chatgpt"])
+    return verifier, claim
+
+
+def test_a_confirming_page_with_no_date_is_not_demoted_as_outdated():
+    """Live (2026-10-15, dpf): the EDPB page that states transfers need no SCCs prints no date, and a
+    2021 Commission page for the same claim was filed outdated. "No date" was read as "old", so the one
+    claim answering the question never reached SUPPORTED and the run said "Couldn't verify that one."
+    Reporting a weakness the evidence does not show is as much a lie as hiding one."""
+    verifier, claim = _ledger()
+    old_row = Evidence(
+        job_id="j", claim_id="clm_scc", url="https://commission.europa.eu/eu-us-data-transfers",
+        domain="commission.europa.eu", tier=SourceTier.GOVERNMENT,
+        check_status=SourceCheckStatus.OUTDATED, published="2021-12-17T10:19:13+01:00",
+    )
+    v = verifier._verdict_for(claim, _pages(published=None, domains=("www.edpb.europa.eu", "privacy-regulation.eu")) + [old_row])
+    assert v.verdict == ClaimStatus.SUPPORTED, (v.verdict, v.problems)
+    assert "outdated" not in v.problems, v.problems
+
+
+def test_a_claim_whose_confirming_pages_are_all_known_old_still_loses_a_grade():
+    """The safety this keeps: when every page that confirms it is dated and old, that is a stated
+    weakness, not an invented one."""
+    verifier, claim = _ledger()
+    old_row = Evidence(
+        job_id="j", claim_id="clm_scc", url="https://old.example/x", domain="old.example",
+        tier=SourceTier.GOVERNMENT, check_status=SourceCheckStatus.OUTDATED, published="2015-01-01",
+    )
+    aged = _pages(published="2024-06-01", domains=("a.example", "b.example"))
+    v = verifier._verdict_for(claim, aged + [old_row])
+    assert v.verdict == ClaimStatus.PARTIALLY_SUPPORTED, (v.verdict, v.problems)
+    assert "outdated" in v.problems, v.problems
+
+
 async def _run(settings, scripts, question, *, max_rounds=3):
     adapters = adapters_from(scripts, settings)
     runner = ResearchRunner(settings, adapters, engine=None)

@@ -242,6 +242,43 @@ def test_a_body_match_is_filed_only_under_the_claim_it_actually_supports(monkeyp
 
 # ------------------------------------------------ refutation is a finding, not a gap
 
+DPF_Q = ("Can a company in the EU transfer personal data to a US company that is certified under the EU-US Data Privacy "
+         "Framework without also using standard contractual clauses?")
+EDPB_FAQ = "https://www.edpb.europa.eu/documents/other-guidance/eu-us-data-privacy-framework-faq-for-european-businesses_en"
+COMMISSION = "https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/eu-us-data-transfers_en"
+DECISION_PAGE = "https://www.privacy-regulation.eu/eu-commission-implementing-decision-2023-1795_en"
+
+
+async def test_the_official_pages_that_state_the_rule_answer_the_question(net):
+    """Live (2026-10-15, dpf, refused in two runs out of four): the EDPB FAQ and the text of the adequacy
+    decision both state that a certified US company needs no standard contractual clauses, and neither page
+    prints a date. Those undated confirmations were counted as outdated beside a 2021 Commission page, so the
+    one claim answering the question never reached supported and the run said "Couldn't verify that one."
+    """
+    from tests.test_ledger_adjudication import ask
+
+    net.confirm(EDPB_FAQ, tier=SourceTier.GOVERNMENT, published=None, excerpt="transfers may rely on the adequacy decision")
+    net.confirm(DECISION_PAGE, tier=SourceTier.JOURNALISM, published=None, excerpt="shall not require any specific authorisation")
+    net.fail(COMMISSION, status=SourceCheckStatus.OUTDATED, tier=SourceTier.GOVERNMENT, published="2021-12-17T10:19:13+01:00")
+
+    said = ("KEY CLAIMS\n1. A company in the EU can transfer personal data to a US company certified under the "
+            "EU-US Data Privacy Framework without standard contractual clauses.")
+    # the cited chip carries the claim's own wording, which is how the page gets attached to it here
+    chip = "A company in the EU can transfer personal data to a US company certified under the EU-US Data Privacy Framework without standard contractual clauses"
+    scripts = {
+        "chatgpt": {"answer": said, "citations": [{"url": EDPB_FAQ, "title": chip}]},
+        "gemini": {"answer": said, "citations": [{"url": COMMISSION, "title": chip}]},
+        "copilot": {"answer": said, "citations": [{"url": DECISION_PAGE, "title": chip}]},
+        "search": {"answer": "results", "citations": [{"url": EDPB_FAQ, "title": chip}]},
+    }
+    job = await ask(base_settings(), scripts, question=DPF_Q, max_rounds=2)
+
+    settled = [c for c in job.claims if "standard contractual clauses" in c.claim]
+    assert settled, [(c.claim, c.status) for c in job.claims]
+    assert settled[0].status == ClaimStatus.SUPPORTED, (settled[0].claim, settled[0].status, settled[0].rationale)
+    assert not job.final.answer.lower().startswith(("couldn't verify", "i don't know", "i couldn't verify")), job.final.answer
+    assert "standard contractual clauses" in job.final.answer, job.final.answer
+
 
 def _report(verdicts, confidence: Confidence) -> VerifierReport:
     return VerifierReport(job_id="j", round=1, verdicts=verdicts, confidence=confidence, answer="", why="")

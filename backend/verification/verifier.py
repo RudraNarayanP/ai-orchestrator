@@ -684,7 +684,14 @@ class Verifier:
         elif supporting and len(domains) >= self.min_independent_sources and any(
             TIER_WEIGHT.get(e.tier, 0) >= 0.72 for e in supporting
         ):
-            if stale and not any(freshness(e.published)["verdict"] == "fresh" for e in supporting):
+            # Age is a weakness only when we know the pages are old. A confirming page with no
+            # printed date is undated, not outdated -- demoting it invented a defect the evidence
+            # never showed and cost the answer its claim (2026-10-15 dpf: the EDPB page that states
+            # transfers need no SCCs carries no date, so the claim answering the question was
+            # "partly supported: outdated" and the run refused to answer).
+            if stale and not any(freshness(e.published)["verdict"] == "fresh" for e in supporting) and all(
+                freshness(e.published)["verdict"] in {"aging", "outdated"} for e in supporting
+            ):
                 verdict, confidence = ClaimStatus.PARTIALLY_SUPPORTED, Confidence.MODERATE
                 problems.append("outdated")
             else:
