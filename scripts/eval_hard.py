@@ -177,6 +177,14 @@ def domain_matches(domain: str, wanted: list[str]) -> bool:
     return any(d == w or d.endswith("." + w) for w in wanted)
 
 
+OFFICIAL_TIERS = {"primary_official", "government"}
+
+
+def _tier_of(url: str, evidence: list[dict]) -> str:
+    """The tier the product filed for the page at this URL, if we opened it."""
+    return next((str(e.get("tier") or "") for e in evidence if (e.get("url") or "") == url), "")
+
+
 def analyse(q: dict[str, Any], snapshot: dict[str, Any], runtime_s: float) -> dict[str, Any]:
     """Turn one job snapshot into the evaluation record."""
     live = snapshot.get("live") or snapshot
@@ -213,6 +221,10 @@ def analyse(q: dict[str, Any], snapshot: dict[str, Any], runtime_s: float) -> di
         "primary_domains": wanted,
         "primary_opened": [e.get("url") for e in opened if e.get("url")][:6],
         "primary_cited": cited_primary,
+        # What the product itself filed as an official publisher, reported beside the named domains and never in
+        # place of them: a Government press release is not the text of the Act, so the pass mark stays the user's.
+        "official_opened": sorted({str(e.get("domain")) for e in evidence if (e.get("tier") or "") in OFFICIAL_TIERS and e.get("domain")}),
+        "official_cited": [u for u in cited_urls if _tier_of(u, evidence) in OFFICIAL_TIERS],
         "pages_opened": len([e for e in evidence if e.get("check_status") not in (None, "not_checked")]),
         "pages_confirmed": len([e for e in evidence if e.get("check_status") == "confirmed"]),
         "refutation": {
@@ -309,6 +321,7 @@ def render_markdown(stamp: str, records: list[dict[str, Any]], meta: dict[str, A
             f"- why: {r['why'] or '-'}",
             f"- confidence: {r['confidence']}; rounds {r['rounds']}; used {r['providers_used']}; failed {r['providers_failed']}",
             f"- primary sources opened: {r['primary_opened'] or 'none'}; cited: {r['primary_cited'] or 'none'}",
+            f"- official-tiered domains we opened: {r.get('official_opened') or 'none'}; cited: {r.get('official_cited') or 'none'}",
             f"- refutation: {r['refutation']}",
             f"- reasons: {'; '.join(r['judgement']['reasons']) or 'none'}",
             f"- caveats: {r['caveats']}",
@@ -459,6 +472,7 @@ def main() -> int:
             except Exception as exc:  # noqa: BLE001
                 rec = {"id": q["id"], "category": q["category"], "kind": q["kind"], "question": turns[-1], "answer": "", "why": None,
                        "confidence": None, "caveats": [], "sources": [], "primary_domains": [], "primary_opened": [], "primary_cited": [],
+                       "official_opened": [], "official_cited": [],
                        "pages_opened": 0, "pages_confirmed": 0, "refutation": {}, "providers_used": [], "providers_failed": [], "rounds": 0,
                        "verifier_model": None, "unsupported_figures": [], "claim_text_len": 0, "voice": {"ok": False, "problems": ["no answer"]},
                        "runtime_s": 0, "turns": turns, "turn_answers": [],

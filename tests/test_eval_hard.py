@@ -153,3 +153,14 @@ def test_a_clarifying_question_is_credited_for_an_ambiguous_thread():
     rec = eval_hard.analyse(q_, snapshot(**{**dict(answer=asked["answer"]), "evidence": [], "sources": []}), 5)
     assert rec["judgement"]["verdict"] == "PASS", rec["judgement"]
     assert any("clarify_ok" in r for r in rec["judgement"]["reasons"]), rec["judgement"]["reasons"]
+
+
+def test_official_tiered_pages_are_reported_beside_the_named_domains_without_changing_the_verdict():
+    """A live IPC run cited a Government of India release while its named primary (indiacode.nic.in) was
+    unreachable from this PC. The record has to show both, and the pass mark stays the user's named domains --
+    reporting an official page is not the same as accepting it as the text of the Act."""
+    row = dict(ev("https://www.pib.gov.in/PressReleasePage.aspx?PRID=2115169", "www.pib.gov.in", "Bharatiya Nyaya Sanhita in place of Indian Penal Code"), tier="government")
+    snap = snapshot("Theft is BNS section 303 now.", evidence=[row], sources=["https://www.pib.gov.in/PressReleasePage.aspx?PRID=2115169"])
+    rec = eval_hard.analyse(q(primary_domains=["indiacode.nic.in"], expect={"must_match": [r"\b303\b"]}), snap, 5)
+    assert rec["official_opened"] == ["www.pib.gov.in"] and rec["official_cited"], rec
+    assert rec["primary_cited"] == [] and "no primary source cited" in " ".join(rec["judgement"]["reasons"])
