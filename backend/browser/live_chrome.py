@@ -968,7 +968,8 @@ class LiveChromeEngine:
             f"live Chrome driver: chrome-use answered `status`"
             + (f" -- but {problem}; the first tab will fail until that is fixed" if problem else "")
         )
-        await self.sweep_orphans()
+        # NOT called automatically: on 2026-10-15 a startup ``session stop`` for a session whose daemon had already exited made
+        # chrome-use raise a Chrome "Status" window over the user's game (focus gate failed twice). Never steal focus to tidy up.
 
     async def sweep_orphans(self, state_dir: "Path | None" = None) -> int:
         """At startup, stop OmniBrain sessions a previous (killed / interrupted) process left owning tabs.
