@@ -60,7 +60,11 @@ STABLE_KNOWLEDGE_RE = re.compile(
 
 CURRENT_RE = re.compile(
     r"\b(latest|recent|current|today|now|20\d{2}|price of|how much does|as of|news|just released"
-    r"|announced|upcoming|who (?:is|won|owns|leads)|version|score|election|weather|stock|market)\b",
+    r"|announced|upcoming|who (?:is|won|owns|leads)|version|score|election|weather|stock|market"
+    # a company's listing status, its ownership, and a rule's force are states of affairs: they change,
+    # and only a dated source can say which side of the change the question is on.
+    r"|publicly traded|publicly listed|listed on|go(?:es|ing)? public|\bipo\b|initial public offering"
+    r"|share price|market cap|merger|merged|merges|acquired|acquires|takeover|in force|still applies)\b",
     re.I,
 )
 

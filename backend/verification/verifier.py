@@ -99,6 +99,8 @@ PROBLEM_VOCAB = [
     "no_web_research",
     "single_source",
     "conflicting_primary_sources",
+    "superseded_by_newer_source",
+    "newer_source_confirms",
     "unverifiable",
 ]
 
@@ -661,7 +663,25 @@ class Verifier:
         best_sup = max((TIER_WEIGHT.get(e.tier, 0.3) for e in supporting), default=0.0)
         ref_domains = {e.domain for e in refuting if e.domain}
         contradiction = None
-        if refuting and supporting:
+        # For a state of affairs that can change, WHEN the page was written decides: a newer page that says
+        # the opposite documents the change, and the older page is not a competing opinion about now
+        # ("is X publicly traded", "is this law in force", "who is the current CEO"). A claim about what
+        # happened keeps the provenance comparison -- its date says nothing about which page to believe.
+        from backend.evidence.events import claim_ages  # noqa: PLC0415
+
+        def _newest(rows: list[Evidence]) -> int | None:
+            ages = [a for a in (freshness(e.published)["age_days"] for e in rows) if a is not None]
+            return min(ages) if ages else None
+
+        newest_ref, newest_sup = _newest(refuting), _newest(supporting)
+        if refuting and supporting and claim_ages(claim.claim) and newest_ref is not None and newest_sup is not None:
+            if newest_sup - newest_ref >= 540:
+                contradiction = "refuted"
+                problems.append("superseded_by_newer_source")
+            elif newest_ref - newest_sup >= 540:
+                contradiction = "outweighed"
+                problems.append("newer_source_confirms")
+        if contradiction is None and refuting and supporting:
             if best_ref >= 0.9 and best_ref >= best_sup + 0.2:
                 contradiction = "refuted"
             elif best_sup >= best_ref + 0.2:
@@ -669,7 +689,7 @@ class Verifier:
                 problems.append("contradicted_by_weaker_source")
             else:
                 contradiction = "contested"
-        elif refuting:
+        elif contradiction is None and refuting:
             contradiction = "refuted" if best_ref >= 0.6 else "weak"
 
         if contradiction == "refuted":

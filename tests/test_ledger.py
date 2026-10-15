@@ -339,3 +339,77 @@ async def _run(settings, scripts, question, *, max_rounds=3):
     job = Job(question=question, mode=ResearchMode.STANDARD, max_rounds=max_rounds)
     out = await runner.run(job)
     return out, adapters, runner
+
+
+# ---------------------------------------------- present-status questions: newest source wins
+
+def _rows(*spec) -> list[Evidence]:
+    out = []
+    for i, (domain, published, polarity, tier) in enumerate(spec):
+        out.append(Evidence(
+            job_id="j", claim_id="clm_status", url=f"https://{domain}/{i}", domain=domain, tier=tier,
+            check_status=SourceCheckStatus.CONFIRMED, polarity=polarity, published=published,
+        ))
+    return out
+
+
+def test_a_newer_page_saying_the_opposite_documents_the_change():
+    """A question about how things stand now is answered by the newest dated page. "SpaceX is privately
+    held" read from a 2024 article is not a competing opinion about 2026 once a 2026 page documents the
+    listing; the ledger's tier comparison alone would have called that a tie or let the older primary win."""
+    from backend.models import Claim
+
+    verifier = Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)
+    claim = Claim(job_id="j", claim="SpaceX is a privately held company.", kind="fact", provider_sources=["chatgpt", "gemini"])
+    rows = _rows(
+        ("www.reuters.com", "2024-03-01", "support", SourceTier.JOURNALISM),
+        ("www.cnbc.com", "2024-05-01", "support", SourceTier.JOURNALISM),
+        ("www.sec.gov", "2026-06-15", "refute", SourceTier.GOVERNMENT),
+    )
+    v = verifier._verdict_for(claim, rows)
+    assert v.verdict == ClaimStatus.REFUTED, (v.verdict, v.problems)
+    assert "superseded_by_newer_source" in v.problems, v.problems
+
+
+def test_a_newer_page_supporting_the_claim_beats_the_older_refutation():
+    from backend.models import Claim
+
+    verifier = Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)
+    claim = Claim(job_id="j", claim="SpaceX is publicly traded on Nasdaq.", kind="fact", provider_sources=["chatgpt"])
+    rows = _rows(
+        ("www.oldblog.example", "2023-01-01", "refute", SourceTier.JOURNALISM),
+        ("www.nasdaq.com", "2026-07-01", "support", SourceTier.PRIMARY_OFFICIAL),
+        ("www.sec.gov", "2026-08-01", "support", SourceTier.GOVERNMENT),
+    )
+    v = verifier._verdict_for(claim, rows)
+    assert v.verdict == ClaimStatus.SUPPORTED, (v.verdict, v.problems)
+    assert "newer_source_confirms" in v.problems, v.problems
+
+
+def test_the_dates_only_decide_a_claim_that_could_have_changed():
+    """"The Tower was completed in 1887" is not settled by which page is newer: a claim about what happened
+    keeps the provenance comparison, and a newer low-tier page must not overturn a primary source."""
+    from backend.models import Claim
+
+    verifier = Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)
+    claim = Claim(job_id="j", claim="The Eiffel Tower was completed on 31 March 1889.", kind="fact", provider_sources=["chatgpt"])
+    rows = _rows(
+        ("www.toureiffel.paris", "2019-01-01", "support", SourceTier.PRIMARY_OFFICIAL),
+        ("www.blogger.example", "2026-09-01", "refute", SourceTier.JOURNALISM),
+    )
+    v = verifier._verdict_for(claim, rows)
+    assert "superseded_by_newer_source" not in v.problems, v.problems
+    assert v.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.CONTESTED, ClaimStatus.PARTIALLY_SUPPORTED}, v.verdict
+
+
+def test_pages_of_the_same_vintage_are_a_conflict_not_a_change():
+    from backend.models import Claim
+
+    verifier = Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)
+    claim = Claim(job_id="j", claim="The company is publicly traded.", kind="fact", provider_sources=["chatgpt"])
+    rows = _rows(
+        ("www.a.example", "2026-05-02", "support", SourceTier.JOURNALISM),
+        ("www.b.example", "2026-05-01", "refute", SourceTier.JOURNALISM),
+    )
+    v = verifier._verdict_for(claim, rows)
+    assert v.verdict == ClaimStatus.CONTESTED, (v.verdict, v.problems)

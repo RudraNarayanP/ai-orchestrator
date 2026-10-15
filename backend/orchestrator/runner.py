@@ -1252,7 +1252,6 @@ class ResearchRunner:
         )
         no_sources = [r.provider for r in job.responses if r.status.value == "completed" and not r.citations and not r.superseded]
         mismatch = [e for e in evidence if e.check_status in {SourceCheckStatus.MISMATCH, SourceCheckStatus.HALLUCINATED, SourceCheckStatus.BROKEN_URL}]
-        stale = [e for e in evidence if e.check_status == SourceCheckStatus.OUTDATED]
         unanswered = _unanswered_subquestions(analysis, claims)
         weak_only = bool(confirmed) and not has_primary and analysis.high_stakes
         material_conflicts = [d for d in disagreements if d.severity == "material"]
@@ -1379,9 +1378,9 @@ class ResearchRunner:
         if analysis.high_stakes and not has_primary:
             recommends = EscalationLevel.DEEP
             reasons.append("high-stakes question with no primary source yet")
-        if stale and not any(fresh_enough(e) for e in confirmed) and analysis.needs_current_data:
+        if confirmed and analysis.needs_current_data and not any(fresh_enough(e) for e in confirmed):
             recommends = max(recommends, EscalationLevel.PARALLEL, key=int)
-            reasons.append("only aging sources so far for a current question")
+            reasons.append("nothing dated within the last year answers a question about how things stand now")
 
         if sufficient:
             reason = f"evidence sufficient after {focus}: {len(established) or len(confirmed)} confirmed claim(s) across {len(domains)} domain(s), no material conflict"
@@ -1918,9 +1917,15 @@ def _unanswered_subquestions(analysis: Any, claims: list[Claim]) -> list[str]:
 
 
 def fresh_enough(evidence: Evidence) -> bool:
+    """A question about how things stand now is answered by a page dated in the present.
+
+    An undated page is not "old" -- but it cannot establish that something is true *now*, because it
+    never says when it was true. That is a statement about what the evidence can carry, not a claim
+    that the page is wrong.
+    """
     from backend.evidence.sources import freshness
 
-    return freshness(evidence.published)["verdict"] in {"fresh", "unknown"}
+    return freshness(evidence.published)["verdict"] == "fresh"
 
 
 def _obviously_arithmetic(question: str) -> bool:

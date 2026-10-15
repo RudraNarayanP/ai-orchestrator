@@ -308,3 +308,55 @@ async def test_the_exempt_follow_up_round_stays_outside_the_configured_budget(se
     assert "max rounds (1)" in job.stop_reason, job.stop_reason
     assert "max rounds (2)" not in job.stop_reason, job.stop_reason
     assert "1 follow-up round granted on top" in job.stop_reason, job.stop_reason
+
+
+# ------------------------------------------- a question about now needs a source dated in the present
+
+SPACEX_Q = "Is SpaceX publicly traded?"
+PRE_IPO = "https://www.bloomberg.com/news/articles/2024-02-11/spacex-remains-private"
+TICKER = "https://www.nasdaq.com/market-activity/stocks/spcx"
+FILING = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=SPCX"
+FAQ = "https://www.spaceX.com/company-FAQ"
+ANSWERED = ("KEY CLAIMS\n1. SpaceX is a privately held company, so its shares are not traded on any exchange.")
+
+
+async def test_undated_pages_do_not_close_a_question_about_now(settings, net):
+    """An undated page is not an old page -- but it never says when it was true, so it cannot settle that
+    something is true *now*. A "is X publicly traded" question answered from undated pages has to go on
+    looking, not stop after one researcher."""
+    net.confirm(PRE_IPO, tier=SourceTier.JOURNALISM, published=None)
+    net.confirm(FAQ, tier=SourceTier.PRIMARY_OFFICIAL, published=None)
+    scripts = {
+        "chatgpt": {
+            "answer": ANSWERED,
+            "citations": [{"url": PRE_IPO, "title": "SpaceX remains a private company"}, {"url": FAQ, "title": "SpaceX company FAQ"}],
+        },
+        "gemini": {"answer": ANSWERED, "citations": [{"url": PRE_IPO, "title": "SpaceX remains a private company"}]},
+        "copilot": {"answer": ANSWERED, "citations": [{"url": FAQ, "title": "SpaceX company FAQ"}]},
+        "search": {"answer": "results", "citations": []},
+    }
+    job, adapters, _ = await run_job(settings, scripts, SPACEX_Q, max_rounds=2)
+
+    assert chat_researchers(adapters) != {"chatgpt"}, "an undated primary answer must not end the search for a current fact"
+    assert any("dated" in (r.reason or "").lower() for r in job.escalation_log), [r.reason for r in job.escalation_log]
+
+
+async def test_a_dated_recent_source_closes_it_without_a_swarm(settings, net):
+    """The other half of the rule: two independent pages dated in the present close it. The demand is for
+    evidence that can carry a present-tense claim; once it can, no swarm is called."""
+    net.confirm(TICKER, tier=SourceTier.PRIMARY_OFFICIAL, published="2026-06-14")
+    net.confirm(FILING, tier=SourceTier.GOVERNMENT, published="2026-06-02")
+    scripts = {
+        "chatgpt": {
+            "answer": "KEY CLAIMS\n1. SpaceX is publicly traded on Nasdaq under the ticker SPCX.",
+            "citations": [{"url": TICKER, "title": "SpaceX (SPCX) quoted on Nasdaq"},
+                          {"url": FILING, "title": "SpaceX prospectus, listed as SPCX on Nasdaq"}],
+        },
+        "gemini": {"answer": "must not be asked", "citations": []},
+        "copilot": {"answer": "must not be asked", "citations": []},
+        "search": {"answer": "results", "citations": []},
+    }
+    job, adapters, _ = await run_job(settings, scripts, SPACEX_Q, max_rounds=2)
+
+    assert chat_researchers(adapters) == {"chatgpt"}, [r.provider for r in job.responses]
+    assert "SPCX" in job.final.answer, job.final.answer
