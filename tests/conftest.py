@@ -233,3 +233,14 @@ def _no_model_cooldown_leaks():
     reset_cooldowns()
     yield
     reset_cooldowns()
+
+
+@pytest.fixture(autouse=True)
+def _no_live_model_list(monkeypatch):
+    """Tests never read OpenRouter's /models list: an unknown list keeps every configured model."""
+    from backend.verification import llm as _llm
+
+    async def _unknown(base_url, *, force=False):
+        return frozenset()
+
+    monkeypatch.setattr(_llm, "refresh_model_pool", _unknown)

@@ -365,7 +365,14 @@ def _make_app(settings: Settings | None = None) -> FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):  # type: ignore[no-untyped-def]
+        # refresh the free-model pools once at startup (drops models the server no longer lists); never blocks startup
+        from backend.verification.llm import refresh_model_pool
+
+        bases = {str(getattr(getattr(settings, k, None), "base_url", "") or "") for k in ("verifier", "analysis")}
+        pool_tasks = [asyncio.ensure_future(refresh_model_pool(b)) for b in bases if b.startswith("http")]
         yield
+        for t in pool_tasks:
+            t.cancel()
         await manager.shutdown()
 
     app = FastAPI(title="OmniBrain", version="0.1.0", lifespan=lifespan)

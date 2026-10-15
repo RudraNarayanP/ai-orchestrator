@@ -162,23 +162,22 @@ class Verifier:
         base = self.endpoint.base_url
         models = [m for m in models if not model_cooling(base, m)] + [m for m in models if model_cooling(base, m)]
         last = LLMReply(text="", ok=False, error="curator not tried", model=self.endpoint.model)
-        for index, model in enumerate(models):
+        # The client races the pool itself (next model at once on 429/404, a second one beside a model silent for 10 s);
+        # an answer that does not parse sends that model to the back for one more race. All under the curator's deadline.
+        for _attempt in range(2):
             left = self._deadline - time.monotonic()
-            if left < self.MIN_LEFT_S:
+            if left < self.MIN_LEFT_S or not models:
                 break
-            share = left if index == len(models) - 1 else min(left, max(self.FIRST_SHARE_MIN_S, self.time_cap_s * 0.55))
-            client = LLMClient(dataclasses.replace(self.endpoint, model=model, fallback_models=()))
+            client = LLMClient(dataclasses.replace(self.endpoint, model=models[0], fallback_models=tuple(models[1:])))
             try:
-                parsed, reply = await asyncio.wait_for(
-                    client.complete_json(messages, temperature=self.endpoint.temperature, fail_fast=index < len(models) - 1), timeout=share
-                )
+                parsed, reply = await asyncio.wait_for(client.complete_json(messages, temperature=self.endpoint.temperature), timeout=left)
             except asyncio.TimeoutError:
-                cool_model(base, model, COOLDOWN_TIMEOUT_S)
-                last = LLMReply(text="", ok=False, error=f"curator {model} gave no answer in {share:.0f}s", model=model)
-                continue
+                last = LLMReply(text="", ok=False, error=f"curator gave no answer in {left:.0f}s", model=models[0])
+                break
             if parsed is not None or reply.fatal:
                 return parsed, reply
             last = reply
+            models = [m for m in models if m != reply.model] + [reply.model]
         return None, last
 
     # ------------------------------------------------------------- main entry

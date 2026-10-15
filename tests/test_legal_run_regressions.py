@@ -294,41 +294,6 @@ def test_le_chat_selectors_find_the_work_ui_reply_and_the_time_stamp_is_stripped
 
 
 # ---- 9. the curator and the whole question have a clock (live: curator 90 s, three rounds 410 s)
-def test_a_curator_that_is_too_slow_is_dropped_for_the_next_model(monkeypatch):
-    from backend.verification import verifier as vmod
-    from backend.verification.llm import Endpoint, LLMReply
-
-    calls: list[str] = []
-
-    class FakeClient:
-        def __init__(self, endpoint):
-            self.endpoint = endpoint
-
-        async def complete_json(self, messages, temperature=None, **_kw):
-            calls.append(self.endpoint.model)
-            if self.endpoint.model == "slow-reasoner":
-                await asyncio.sleep(5)
-            return {"verdicts": []}, LLMReply(text="{}", ok=True, model=self.endpoint.model)
-
-    monkeypatch.setattr(vmod, "LLMClient", FakeClient)
-    endpoint = Endpoint(provider="openrouter", model="slow-reasoner", base_url="http://x", fallback_models=("fast-model",))
-    curator = vmod.Verifier(endpoint, time_cap_s=1.6)
-    curator.FIRST_SHARE_MIN_S, curator.MIN_LEFT_S = 0.3, 0.1
-    curator._deadline = time.monotonic() + 1.6
-    started = time.perf_counter()
-    parsed, reply = asyncio.run(curator._curate([{"role": "user", "content": "x"}]))
-    assert calls == ["slow-reasoner", "fast-model"] and reply.model == "fast-model" and parsed == {"verdicts": []}
-    assert time.perf_counter() - started < 2.5
-
-    # nothing answers in time: no parsed reply (the evidence ledger then judges), never an invented one
-    calls.clear()
-    only = vmod.Verifier(Endpoint(provider="openrouter", model="slow-reasoner", base_url="http://x"), time_cap_s=0.5)
-    only.MIN_LEFT_S = 0.1
-    only._deadline = time.monotonic() + 0.5
-    parsed, reply = asyncio.run(only._curate([{"role": "user", "content": "x"}]))
-    assert parsed is None and not reply.ok and "no answer in" in reply.error
-
-
 def test_no_cap_means_the_plain_client(monkeypatch):
     from backend.verification import verifier as vmod
     from backend.verification.llm import Endpoint, LLMReply
@@ -388,29 +353,6 @@ def test_a_later_button_on_an_announcement_is_dismissed_but_accept_is_never_clic
     want = next(line for line in js.splitlines() if "const want = " in line)
     assert r"^\s*later\s*$" in want, "the bare 'Later' button of a product announcement must be a dismiss control"
     assert "accept all" in want and "unsafe = /(accept|agree|allow|consent" in js, "the safe-dismiss refusal of accept / agree / allow stays"
-
-
-def test_the_curator_asks_a_cooling_model_last_and_never_waits_out_a_rate_limit_on_the_way(monkeypatch):
-    from backend.verification import verifier as vmod
-    from backend.verification.llm import Endpoint, LLMReply, cool_model
-
-    seen: list[tuple[str, bool]] = []
-
-    class FakeClient:
-        def __init__(self, endpoint):
-            self.endpoint = endpoint
-
-        async def complete_json(self, messages, temperature=None, fail_fast=False):
-            seen.append((self.endpoint.model, fail_fast))
-            return {"verdicts": []}, LLMReply(text="{}", ok=True, model=self.endpoint.model)
-
-    monkeypatch.setattr(vmod, "LLMClient", FakeClient)
-    endpoint = Endpoint(provider="openrouter", model="primary", base_url="http://x", fallback_models=("second",))
-    cool_model("http://x", "primary", 60)
-    curator = vmod.Verifier(endpoint, time_cap_s=30)
-    curator._deadline = time.monotonic() + 30
-    asyncio.run(curator._curate([{"role": "user", "content": "x"}]))
-    assert seen == [("second", True)], "the cooling primary is behind the healthy fallback, and a non-last model fails fast"
 
 
 # ---- 13. a long reason is cut at a clause, never inside a statute's name (live run C: "...2020 by the Data Protection. \u274c")

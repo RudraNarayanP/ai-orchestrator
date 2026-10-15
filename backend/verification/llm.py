@@ -10,6 +10,7 @@ clearly-labelled fallback, not a crashed research job and not a silent lie.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -118,6 +119,43 @@ def cool_model(base_url: str, model: str, seconds: float) -> None:
 
 def reset_cooldowns() -> None:
     _COOLING.clear()
+    _LISTED.clear()
+    _DEAD.clear()
+
+
+# Free OpenRouter models come and go (2026-10-15: apodex and qwen3.8 404'd on every call). The /models list is read once
+# (no key needed) and a model that is not on it, or that answered 404, is never asked again in this process.
+_LISTED: dict[str, frozenset[str]] = {}
+_DEAD: set[tuple[str, str]] = set()
+HEDGE_AFTER_S = 10.0
+"""A model still silent after this long gets a second model racing it; the first usable answer wins."""
+
+
+async def refresh_model_pool(base_url: str, *, force: bool = False) -> frozenset[str]:
+    """The ids the server lists right now; empty when unknown (then nothing is dropped)."""
+    base = (base_url or "").rstrip("/")
+    if base in _LISTED and not force:
+        return _LISTED[base]
+    ids: frozenset[str] = frozenset()
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(f"{base}/models")
+            if response.status_code == 200:
+                ids = frozenset(str(m.get("id")) for m in (response.json().get("data") or []) if m.get("id"))
+    except Exception:  # noqa: BLE001 -- unknown list: keep every configured model
+        ids = frozenset()
+    _LISTED[base] = ids
+    if ids:
+        _log.info("model pool %s: %d models listed", base, len(ids))
+    return ids
+
+
+def live_models(base_url: str, models: list[str]) -> list[str]:
+    """Drop models that 404'd or are not listed; never drop them all (an empty pool would be worse than a stale one)."""
+    base = (base_url or "").rstrip("/")
+    listed = _LISTED.get(base) or frozenset()
+    kept = [m for m in models if (base, m) not in _DEAD and (not listed or m in listed)]
+    return kept or models
 
 
 class LLMClient:
@@ -145,20 +183,47 @@ class LLMClient:
         reply = LLMReply(text="", ok=False, error="no model tried", model=self.endpoint.model)
         base = self.endpoint.base_url
         # Models that are cooling go last: still tried (a cooled model may have recovered) but only when nothing else answers.
+        if self.endpoint.provider == "openrouter" and base.rstrip("/") not in _LISTED:
+            await refresh_model_pool(base)
+        models = live_models(base, models)
         order = [m for m in models if not model_cooling(base, m)] + [m for m in models if model_cooling(base, m)]
-        for index, model in enumerate(order):
-            # With another model to turn to, a rate limit is not waited out: the next model is asked at once.
-            t0 = time.monotonic()
-            reply = await self._complete_with(model, messages, temperature, max_tokens, retries, fail_fast=fail_fast or index < len(order) - 1)
-            _log.info("llm %s: %s in %.1fs%s", model, "ok" if reply.ok else f"failed ({(reply.error or '')[:80]})", time.monotonic() - t0,
-                      " (truncated)" if reply.truncated else "")
-            if reply.ok or reply.fatal:
-                _COOLING.pop((base, model), None)
-                return reply
-            if reply.status == 429:
-                cool_model(base, model, COOLDOWN_429_S)
-            elif (reply.error or "").startswith("timeout"):
-                cool_model(base, model, COOLDOWN_TIMEOUT_S)
+        # Staggered race: the next model starts as soon as the running ones have all failed (429 / 404 / empty: no waiting
+        # out a rate limit) or HEDGE_AFTER_S after the last start; the first usable answer wins and the rest are cancelled.
+        running: dict[asyncio.Task, tuple[str, float]] = {}
+        pending = list(order)
+
+        def launch() -> None:
+            model = pending.pop(0)
+            fast = fail_fast or bool(pending)
+            task = asyncio.ensure_future(self._complete_with(model, messages, temperature, max_tokens, retries, fail_fast=fast))
+            running[task] = (model, time.monotonic())
+
+        launch()
+        try:
+            while running:
+                done, _ = await asyncio.wait(list(running), timeout=HEDGE_AFTER_S if pending else None, return_when=asyncio.FIRST_COMPLETED)
+                if not done:
+                    launch()  # the running model is slow: race the next one
+                    continue
+                for task in done:
+                    model, t0 = running.pop(task)
+                    reply = task.result()
+                    _log.info("llm %s: %s in %.1fs%s", model, "ok" if reply.ok else f"failed ({(reply.error or '')[:80]})", time.monotonic() - t0,
+                              " (truncated)" if reply.truncated else "")
+                    if reply.ok or reply.fatal:
+                        _COOLING.pop((base, model), None)
+                        return reply
+                    if reply.status == 404:
+                        _DEAD.add((base.rstrip("/"), model))
+                    elif reply.status == 429:
+                        cool_model(base, model, COOLDOWN_429_S)
+                    elif (reply.error or "").startswith("timeout"):
+                        cool_model(base, model, COOLDOWN_TIMEOUT_S)
+                if not running and pending:
+                    launch()
+        finally:
+            for task in running:
+                task.cancel()
         return reply
 
     async def _complete_with(self, model: str, messages: list[dict[str, str]], temperature: float | None, max_tokens: int | None, retries: int, fail_fast: bool = False) -> LLMReply:
