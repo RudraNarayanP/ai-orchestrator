@@ -1491,6 +1491,19 @@ def _lint_headline_answer(text: str, *, question: str, state: str, unknowns: lis
     return lint_answer(text, question=question, unknowns=unknowns).text
 
 
+def names_successor_provision(claim: str, asked_instruments: set[str]) -> bool:
+    """A numbered provision of an instrument the question did not name -- the regime that applies now.
+
+    "Section 303 of the Bharatiya Nyaya Sanhita, 2023 contains the punishment for theft" states what the
+    current law is without using the word "current"; when the question asks which section applies now and
+    names only the repealed code, that claim is the present-tense answer.
+    """
+    cited = {i.strip().lower() for i in _ACT_RE.findall(claim or "")}
+    from backend.research.style import reference_anchors  # noqa: PLC0415
+
+    return bool(cited - asked_instruments) and bool(reference_anchors(claim))
+
+
 def lead_with_the_present(report: VerifierReport, question: str) -> str:
     """The answer to a question about the law NOW leads with the settled claim about now.
 
@@ -1499,6 +1512,11 @@ def lead_with_the_present(report: VerifierReport, question: str) -> str:
     ledger had overruled -- in the past tense and never named the law in force. General rule: when the question asks about the
     present and a SUPPORTED claim answers the present, an answer that does not contain that claim's named provision gets the
     claim as its first sentence. Nothing unsettled is ever added.
+
+    A claim the ledger holds as partly supported *only for evidence strength* (one source, an old or undated page) may name
+    the provision too: the pages we opened state it, and the question asked which provision applies -- leaving the section
+    number out of the answer is a gap in what we said, not a hedge. A partial with a substantive problem (a mismatch, an
+    exaggeration, a contradiction) still never gets promoted.
     """
     from backend.research.style import _NOW_CLAIM_RE, _NOW_Q_RE, reference_anchors  # noqa: PLC0415
 
@@ -1506,17 +1524,85 @@ def lead_with_the_present(report: VerifierReport, question: str) -> str:
     if not answer or not question or not _NOW_Q_RE.search(question):
         return answer
     low = answer.lower()
-    for v in report.verdicts:
-        if v.verdict != ClaimStatus.SUPPORTED or _is_page_claim(v.claim) or not _NOW_CLAIM_RE.search(v.claim):
-            continue
+    strength_only = {"single_source", "outdated", "unverifiable", "contradicting_claim_had_no_usable_source"}
+    asked_instruments = {i.strip().lower() for i in _ACT_RE.findall(question)}
+    settled = [
+        v for v in report.verdicts
+        if not _is_page_claim(v.claim)
+        and (_NOW_CLAIM_RE.search(v.claim) or names_successor_provision(v.claim, asked_instruments))
+        and (v.verdict == ClaimStatus.SUPPORTED
+             or (v.verdict == ClaimStatus.PARTIALLY_SUPPORTED and set(v.problems) <= strength_only))
+    ]
+    settled.sort(key=lambda v: 0 if v.verdict == ClaimStatus.SUPPORTED else 1)
+    for v in settled:
         anchors = reference_anchors(question)
         if anchors and not anchors & reference_anchors(v.claim):
             continue
-        names = re.findall(r"\b(?:section|article|rule|regulation)\s+\d+[a-z]?\b|\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4}\b", v.claim)
-        if names and not any(n.lower() in low for n in names):
-            lead = v.claim.strip().rstrip(".") + "."
-            return f"{lead} {answer}"
+        # Already stated? Judged on the provision the claim names, because the answer can mention the new
+        # code (from the repeal) while still never naming the section the question asked for
+        # (job_261014231527: "replaced by the Bharatiya Nyaya Sanhita, 2023" with no "303" anywhere).
+        cited = reference_anchors(v.claim)
+        if cited:
+            if cited & reference_anchors(answer):
+                continue
+        else:
+            names = re.findall(r"\b(?:section|article|rule|regulation)\s+\d+[a-z]?\b|\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4}\b", v.claim)
+            if names and any(n.lower() in low for n in names):
+                continue
+        lead = v.claim.strip().rstrip(".") + "."
+        return f"{lead} {answer}"
     return answer
+
+
+_CHANGED_RE = re.compile(
+    r"\b(?:repealed|replaced|superseded|substituted|no longer|not (?:currently )?in force|ceased|came into force|"
+    r"is now|now (?:the|in)|currently|current (?:law|provision|general provision))\b", re.I)
+
+
+def present_first(report: VerifierReport, question: str) -> str:
+    """For a question about the law NOW, the sentence about what changed or applies now leads -- on every path.
+
+    Live (2026-10-15, IPC theft, two AIs agreed so no re-ask round): the curator wrote the past rule first ("Section 379 ...
+    prescribed ...") and the repeal / "Section 303 of the BNS is now the current provision" second; the short answer kept only
+    the first sentence. The now-sentence is taken from the answer, or from the curator's reasoning when a judged claim backs
+    its provision; nothing unjudged is added.
+    """
+    from backend.research.style import _NOW_Q_RE, reference_anchors, split_sentences  # noqa: PLC0415
+
+    answer = (report.answer or "").strip()
+    if not answer or not question or not _NOW_Q_RE.search(question):
+        return answer
+    parts = [p.strip() for p in split_sentences(answer) if p.strip()]
+    now = [p for p in parts if _CHANGED_RE.search(p)]
+    rest = [p for p in parts if p not in now]
+    ordered = now + rest
+    if ordered != parts:
+        # All of them go first, not just the first one found: the answer that survives the two-sentence
+        # budget has to be the repeal AND the provision that replaced it (job_261012211227 wrote
+        # "Section 379 prescribed...", "However, the IPC was repealed...", "Theft is now punished under
+        # Section 303..." in that order, and the short answer kept the wrong two).
+        return _without_lead_connective(" ".join(ordered))
+    asked = reference_anchors(question)
+    backed: set[str] = set()
+    for v in report.verdicts:
+        if v.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED} and not _is_page_claim(v.claim):
+            backed |= reference_anchors(v.claim)
+    for sent in split_sentences(report.why or ""):
+        sent = sent.strip()
+        if not sent or not _CHANGED_RE.search(sent):
+            continue
+        if (reference_anchors(sent) - asked) & backed:
+            return f"{_without_lead_connective(sent)} {answer}".strip()
+    return answer
+
+
+def _without_lead_connective(text: str) -> str:
+    """A sentence promoted to the front must not start on a connective -- it was written
+    mid-paragraph, and "However, the IPC was repealed ..." as the first line reads as a reply
+    to something the user never said. The next word takes the capital back."""
+    out = re.sub(r"^(?:however|but|and|so|then|also|yet|though|while|whereas|meanwhile)[,\s]+", "",
+                 (text or "").strip(), flags=re.I).strip()
+    return out[:1].upper() + out[1:] if out else out
 
 
 _ACT_RE = re.compile(r"\b((?:[A-Z][\w'-]*\s+){1,6}(?:Act|Code|Regulation|Sanhita|Bill)(?:,?\s+\d{4})?)")
@@ -1626,6 +1712,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
     state = truth_state(report, question) if question and (report.verdicts or report.confidence == Confidence.NONE) else ""
     report = report.model_copy(update={"answer": lead_with_the_present(report, question)}) if question else report
     report = report.model_copy(update={"answer": lead_with_the_named_law(report, question)}) if question else report
+    report = report.model_copy(update={"answer": present_first(report, question)}) if question else report
     ledger_state = state
     state = premise_state(state, question, lint_answer(report.answer, question=question).text) if state else state
     state, report = answer_the_asked_question(state, report, question)

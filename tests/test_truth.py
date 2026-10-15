@@ -570,3 +570,95 @@ def test_a_thin_claim_that_happens_to_carry_a_year_names_no_aspect():
     )
     assert _aspect(thin) == "", _aspect(thin)
     assert _aspect(report(verdict(ClaimStatus.PARTIALLY_SUPPORTED, "The fine is 4,500.", problems=["exaggeration"]))) == "number"
+
+
+# ---- 2026-10-15 IPC theft: the outdated/replaced-law rule must reach the answer on every path
+IPC_Q = "Which section of the Indian Penal Code, 1860 currently punishes theft?"
+
+
+def test_the_repeal_sentence_leads_even_when_the_curator_wrote_it_second():
+    from backend.verification.verifier import present_first
+
+    rep = report(verdict(ClaimStatus.SUPPORTED, "Section 303 of the Bharatiya Nyaya Sanhita, 2023 is the current provision on theft."),
+                 answer="Section 379 of the Indian Penal Code, 1860 prescribed up to three years for theft. It was repealed on 1 July 2024 "
+                        "and Section 303 of the Bharatiya Nyaya Sanhita now punishes theft.")
+    out = present_first(rep, IPC_Q)
+    assert out.startswith("It was repealed") and "Section 379" in out
+
+
+def test_a_repeal_sentence_from_the_reasoning_is_promoted_only_when_a_judged_claim_backs_it():
+    from backend.verification.verifier import present_first
+
+    why = "Section 379 was the IPC rule. Section 303 of the BNS is now the current general provision on theft."
+    backed = report(verdict(ClaimStatus.SUPPORTED, "Section 303 of the BNS covers theft."), answer="Section 379 of the IPC prescribed three years.")
+    backed = backed.model_copy(update={"why": why})
+    assert present_first(backed, IPC_Q).startswith("Section 303 of the BNS is now")
+    unbacked = report(verdict(ClaimStatus.SUPPORTED, "Section 379 of the IPC prescribed three years."), answer="Section 379 of the IPC prescribed three years.")
+    unbacked = unbacked.model_copy(update={"why": why})
+    assert present_first(unbacked, IPC_Q) == "Section 379 of the IPC prescribed three years."
+
+
+def test_a_promoted_sentence_does_not_start_on_a_connective():
+    """The sentence was written mid-paragraph in the curator's reasoning; as the first line of an answer
+    "However, the IPC was repealed..." replies to something the user never said."""
+    from backend.verification.verifier import present_first
+
+    why = "Section 379 was the old rule. However, Section 303 of the Bharatiya Nyaya Sanhita, 2023 replaced it on 1 July 2024."
+    rep = report(verdict(ClaimStatus.SUPPORTED, "Section 303 of the BNS covers theft."), answer="Section 379 of the IPC prescribed three years.")
+    rep = rep.model_copy(update={"why": why})
+    out = present_first(rep, IPC_Q)
+    assert out.startswith("Section 303 of the Bharatiya Nyaya Sanhita, 2023 replaced it"), out
+
+
+def test_a_question_not_about_now_is_left_alone():
+    from backend.verification.verifier import present_first
+
+    rep = report(answer="Section 379 punished theft. It was repealed in 2024.")
+    assert present_first(rep, "Which IPC section punished theft in 1990?") == "Section 379 punished theft. It was repealed in 2024."
+
+
+def test_the_current_section_is_named_even_when_only_one_page_states_it():
+    """Replayed from job_261014231527_6ff5d39e: the repeal was supported, and "Section 303 of the Bharatiya
+    Nyaya Sanhita, 2023 contains the general offence and punishment provisions for theft" was partly
+    supported -- the answer stated the repeal and never named the section the user asked for. A provision
+    the pages we opened state is named; a partial with a real problem (a mismatch) is not."""
+    from backend.verification.verifier import lead_with_the_present
+
+    thin = report(
+        verdict(ClaimStatus.SUPPORTED, "As of October 14, 2026, the Indian Penal Code, 1860 has been officially repealed and replaced "
+                                       "by the Bharatiya Nyaya Sanhita, 2023."),
+        verdict(ClaimStatus.PARTIALLY_SUPPORTED, "Section 303 of the Bharatiya Nyaya Sanhita, 2023 contains the general offence and "
+                                                 "punishment provisions for theft.", problems=["single_source"]),
+        answer="The Indian Penal Code, 1860 has been repealed and replaced by the Bharatiya Nyaya Sanhita, 2023.",
+    )
+    out = lead_with_the_present(thin, IPC_Q)
+    assert out.startswith("Section 303 of the Bharatiya Nyaya Sanhita"), out
+
+    broken = thin.model_copy(update={"verdicts": [
+        thin.verdicts[0],
+        verdict(ClaimStatus.PARTIALLY_SUPPORTED, "Section 303 of the Bharatiya Nyaya Sanhita (BNS) deals with punishment for theft.",
+                problems=["mismatch", "single_source"]),
+    ]})
+    assert lead_with_the_present(broken, IPC_Q) == broken.answer
+
+
+def test_every_now_sentence_leads_so_the_short_answer_keeps_the_replacement():
+    """Replayed from job_261012211227_2a32bef4: the curator wrote the old IPC rule, then the repeal, then
+    "Theft is now punished under Section 303 of the Bharatiya Nyaya Sanhita, 2023." The two-sentence answer
+    kept the first and dropped the last -- so it named no current provision. Moving *every* sentence about
+    what changed up front keeps the repeal and its replacement inside the budget, and the promoted line
+    does not start on "However,"."""
+    from backend.verification.verifier import present_first
+
+    rep = report(
+        verdict(ClaimStatus.SUPPORTED, "Section 303 of the Bharatiya Nyaya Sanhita addresses theft under the current criminal law."),
+        answer="Section 379 of the Indian Penal Code, 1860 prescribed the punishment for theft as imprisonment of either description "
+               "for a term extending to three years, or with fine, or with both. However, the Indian Penal Code, 1860 was repealed by "
+               "the Bharatiya Nyaya Sanhita, 2023, which came into force on 1 July 2024. Theft is now punished under Section 303 of "
+               "the Bharatiya Nyaya Sanhita, 2023.",
+    )
+    out = present_first(rep, IPC_Q)
+    first_two = " ".join(split_sentences(out)[:2])
+    assert first_two.startswith("The Indian Penal Code, 1860 was repealed"), out
+    assert "Section 303" in first_two, first_two
+    assert "379" in out, "the historical rule is not deleted, only moved behind what applies now"

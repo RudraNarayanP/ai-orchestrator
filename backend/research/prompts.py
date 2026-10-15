@@ -52,7 +52,13 @@ own page, the original paper or dataset, the official statement) over articles
 about them, then OPEN the pages and read them before you answer. Report which
 pages you actually opened and which you only saw mentioned. If you do not have web
 access, or you did not use it, say "NO WEB ACCESS" on the first line -- do not
-substitute memory for research and do not make an unsourced answer look sourced."""
+substitute memory for research and do not make an unsourced answer look sourced.
+
+If the question asks what the law, rule or status is NOW, establish whether the provision or body it
+names still applies: an amendment, a replacement or a repeal changes the answer. Answer with what
+applies now and name the instrument and provision that took its place. A repealed provision is not
+the current answer however many sources describe it, and a page that quotes the old text is evidence
+of what the text said, not of what is in force."""
 
 PROVIDER_HINTS: dict[str, str] = {
     "chatgpt": (

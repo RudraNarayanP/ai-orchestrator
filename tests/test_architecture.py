@@ -352,6 +352,22 @@ def test_every_research_prompt_tells_the_ai_to_use_its_own_web_search():
         assert needle in esc, needle
 
 
+def test_every_research_prompt_asks_whether_the_named_law_still_applies():
+    """Live (2026-10-15 IPC theft): two AIs agreed on IPC s.379, so no re-ask round happened and the
+    repeal was never researched by anyone but the official lookup. Whether the provision still applies is
+    part of answering a question about the law now, so it belongs in the first ask, not in an extra round."""
+    from backend.research.prompts import escalation_prompt, research_prompt
+
+    for text in (
+        " ".join(research_prompt("Which section of the IPC currently punishes theft?", provider="chatgpt").split()),
+        " ".join(escalation_prompt("Q?", provider="qwen", primary="chatgpt", established=[],
+                                   unresolved=["Section 379 of the IPC punishes theft"], contradictions=[],
+                                   sources=[]).split()),
+    ):
+        for needle in ("asks what the law, rule or status is NOW", "still applies", "repealed provision is not the current answer"):
+            assert needle in text, needle
+
+
 def test_omnibrain_does_not_run_its_own_web_discovery_by_default():
     from backend.settings import Settings
 
