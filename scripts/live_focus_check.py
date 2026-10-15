@@ -68,11 +68,30 @@ CONSOLE_IMAGES = {"conhost.exe", "cmd.exe", "powershell.exe", "pwsh.exe", "windo
 EXPLORER_WINDOW_CLASSES = {"CabinetWClass", "ExploreWClass"}
 
 
-def classify_owner(pid_name: str, cls: str, title: str = "") -> tuple[str, str]:
+def owned_browser_images(pinned: str | None) -> set[str]:
+    """Which browser processes the live driver could raise, given what it is pinned to.
+
+    The driver never falls back to another browser, so a window from a product it cannot reach is the person's own.
+    Live (2026-10-16): a run was blocked because the person's Edge window (playing a video) came to the front while
+    ``chrome_use_browser: chrome`` -- OmniBrain had no Edge session to raise. Unset or an unrecognisable value keeps
+    every Chromium product as a possible violation: the gate must not guess its way to a pass.
+    """
+    value = (pinned or "").strip().lower()
+    if "edge" in value:
+        return {"msedge.exe"}
+    if "chrome" in value:
+        return {"chrome.exe", "chromium.exe"}
+    return set(BROWSER_IMAGES)
+
+
+def classify_owner(pid_name: str, cls: str, title: str = "", owned: set[str] | None = None) -> tuple[str, str]:
     """("violation", why) when only OmniBrain could have raised that window, ("noise", why) otherwise."""
     name = (pid_name or "").lower()
+    reachable = BROWSER_IMAGES if owned is None else owned
+    if name in reachable:
+        return "violation", f"a browser window the driver could have raised came to the front ({name})"
     if name in BROWSER_IMAGES:
-        return "violation", f"a browser window came to the front ({name})"
+        return "noise", f"{name} is not the browser this driver is pinned to - the person's own window"
     if name in CONSOLE_IMAGES:
         return "violation", f"a console window came to the front ({name})"
     if cls in EXPLORER_WINDOW_CLASSES:
@@ -129,7 +148,8 @@ def chrome_titles() -> list[str]:
 
 
 class Monitor:
-    def __init__(self) -> None:
+    def __init__(self, owned: set[str] | None = None) -> None:
+        self.owned = owned  # the browser images the live driver could raise; None = judge every Chromium product
         self.events: list[dict] = []
         self._stop = threading.Event()
         self.start_fg = foreground()
@@ -143,7 +163,7 @@ class Monitor:
             h, pid, title = foreground()
             if h != last:
                 cls, name = window_class(h), process_name(pid)
-                kind, why = classify_owner(name, cls, title)
+                kind, why = classify_owner(name, cls, title, self.owned)
                 self.events.append({"t": round(time.monotonic() - self.t0, 3), "hwnd": h, "pid": pid,
                                     "process": name, "class": cls, "title": title[:80], "kind_verdict": kind, "why": why})
                 last = h
@@ -237,7 +257,16 @@ def main() -> int:
         print("Windows only")
         return 2
     names = [p.strip() for p in args.providers.split(",") if p.strip()]
-    with Monitor() as mon:
+    try:
+        from backend.settings import load_settings
+
+        pinned = load_settings().browser.chrome_use_browser
+    except Exception as exc:  # noqa: BLE001 -- no settings: judge every Chromium product, never fewer
+        print(f"(could not read browser.chrome_use_browser: {type(exc).__name__}; treating any Chromium window as ours)")
+        pinned = None
+    owned = owned_browser_images(pinned)
+    print(f"driver is pinned to browser {pinned or 'the extension default'} -> only these can be OmniBrain: {sorted(owned)}")
+    with Monitor(owned) as mon:
         try:
             asyncio.run(drive(names, args.ask, mon, args.raise_front))
         except Exception as exc:  # noqa: BLE001

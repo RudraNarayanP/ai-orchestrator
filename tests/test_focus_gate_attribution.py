@@ -68,3 +68,21 @@ def test_a_report_keeps_the_old_key_and_adds_the_verdicts():
     assert rep["violations"] == [] and rep["clean"] is True
     assert rep["never_changed"] is False, "the strict observation is still reported for the audit"
     assert len(rep["unrelated_changes"]) == 1
+
+
+def test_a_browser_the_driver_cannot_reach_is_not_attributed_to_it():
+    """Live (2026-10-16): a run was blocked because the person's Edge window -- a video they were watching -- came
+    to the front, while browser.chrome_use_browser says "chrome" and the driver never falls back to another
+    browser. Attributing that to OmniBrain both fails the run and hides what actually moved."""
+    assert gate.owned_browser_images("chrome") == {"chrome.exe", "chromium.exe"}
+    assert gate.owned_browser_images("edge") == {"msedge.exe"}
+    assert gate.owned_browser_images(None) == set(gate.BROWSER_IMAGES)  # unset: no excuse for a narrower gate
+    owned = gate.owned_browser_images("chrome")
+    kind, why = gate.classify_owner("msedge.exe", "Chrome_WidgetWin_1", "Resident Evil 9 - YouTube", owned)
+    assert kind == "noise", why
+    assert gate.classify_owner("chrome.exe", "Chrome_WidgetWin_1", "chatgpt.com", owned)[0] == "violation"
+
+
+def test_an_unreadable_owner_stays_a_violation_whatever_the_driver_is_pinned_to():
+    kind, _ = gate.classify_owner("", "Chrome_WidgetWin_1", "a provider page", gate.owned_browser_images("edge"))
+    assert kind == "violation"
