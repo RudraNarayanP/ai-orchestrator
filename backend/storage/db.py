@@ -36,9 +36,10 @@ CREATE TABLE IF NOT EXISTS responses (
 );
 CREATE INDEX IF NOT EXISTS responses_job ON responses(job_id, round);
 CREATE TABLE IF NOT EXISTS claims (
-  id TEXT PRIMARY KEY, job_id TEXT, round INTEGER, claim TEXT, kind TEXT, topic TEXT,
+  id TEXT, job_id TEXT, round INTEGER, claim TEXT, kind TEXT, topic TEXT,
   providers_json TEXT, web_json TEXT, supporting_json TEXT, contradicting_json TEXT,
-  status TEXT, confidence TEXT, rationale TEXT
+  status TEXT, confidence TEXT, rationale TEXT,
+  PRIMARY KEY (job_id, id)
 );
 CREATE INDEX IF NOT EXISTS claims_job ON claims(job_id);
 CREATE TABLE IF NOT EXISTS evidence (
@@ -92,6 +93,32 @@ class Store:
             if column not in have:
                 self._conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} {ddl}")
         self._conn.execute("CREATE INDEX IF NOT EXISTS jobs_conversation ON jobs(conversation_id, created_at)")
+        self._key_claims_per_job()
+
+    def _key_claims_per_job(self) -> None:
+        """Re-key a claims table whose primary key was the claim id alone.
+
+        Claim ids hash the claim text, so the same sentence in two jobs was one row: the second
+        job stored nothing (its verdicts and evidence then joined no claim) and its status
+        overwrote the first job's row. The rows are per job, so the key has to be (job_id, id).
+        """
+        existing = self._conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='claims'").fetchone()
+        if existing is None or "(job_id, id)" in (existing["sql"] or ""):
+            return
+        columns = """id, job_id, round, claim, kind, topic, providers_json, web_json,
+                    supporting_json, contradicting_json, status, confidence, rationale"""
+        self._conn.execute("ALTER TABLE claims RENAME TO claims_id_keyed")
+        self._conn.execute(
+            """CREATE TABLE claims (
+                 id TEXT, job_id TEXT, round INTEGER, claim TEXT, kind TEXT, topic TEXT,
+                 providers_json TEXT, web_json TEXT, supporting_json TEXT, contradicting_json TEXT,
+                 status TEXT, confidence TEXT, rationale TEXT,
+                 PRIMARY KEY (job_id, id)
+               )"""
+        )
+        self._conn.execute(f"INSERT INTO claims ({columns}) SELECT {columns} FROM claims_id_keyed")
+        self._conn.execute("DROP TABLE claims_id_keyed")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS claims_job ON claims(job_id)")
 
     def close(self) -> None:
         self._conn.close()
@@ -194,7 +221,7 @@ class Store:
                 """INSERT INTO claims (id, job_id, round, claim, kind, topic, providers_json, web_json,
                        supporting_json, contradicting_json, status, confidence, rationale)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-                   ON CONFLICT(id) DO UPDATE SET status=excluded.status, confidence=excluded.confidence,
+                   ON CONFLICT(job_id, id) DO UPDATE SET status=excluded.status, confidence=excluded.confidence,
                      rationale=excluded.rationale, providers_json=excluded.providers_json,
                      supporting_json=excluded.supporting_json, contradicting_json=excluded.contradicting_json""",
                 (
