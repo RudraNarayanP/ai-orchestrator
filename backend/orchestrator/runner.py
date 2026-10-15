@@ -1175,6 +1175,7 @@ class ResearchRunner:
             endpoint=self.analysis_endpoint if self.analysis_endpoint and self.analysis_endpoint.enabled else None,
             batch_size=self.settings.research.claim_batch_size,
             question=job.question,
+            cap_s=float(getattr(self.settings.research, "extract_cap_s", 0) or 0),
         )
         extracted = claim_ops.reconcile_with_prior(extracted, list(job.claims or []))
         job.claims = extracted

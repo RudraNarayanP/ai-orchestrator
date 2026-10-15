@@ -167,6 +167,36 @@ def test_claims_are_extracted_from_all_answers_at_once(monkeypatch):
     assert time.perf_counter() - started < 0.8  # three calls in a row would take 0.9s+
 
 
+def test_a_stalled_extraction_model_is_abandoned_not_waited_on(monkeypatch):
+    """The claim pass is a nicety on top of the answer's own KEY CLAIMS list; when the free model behind it
+    stalls, the job must keep going on the deterministic parse. Measured 2026-10-15: extraction was ~18 s of
+    a ~155 s run, and a slow reply used to hold the whole round."""
+    from backend.models import ProviderResponse, ProviderStatus, ResearchMode
+    from backend.research import claims as claim_ops
+    from backend.settings import Settings
+
+    class StallingClient:
+        def __init__(self, endpoint):
+            pass
+
+        async def complete_json(self, messages, temperature=None, **_kw):
+            await asyncio.sleep(5)
+            return {"claims": [{"claim": "The model was late, not wrong.", "kind": "fact", "topic": "t"}]}, None
+
+    monkeypatch.setattr(claim_ops, "LLMClient", StallingClient)
+    responses = [
+        ProviderResponse(id="r1", job_id="j", round=1, provider="chatgpt", prompt="q", status=ProviderStatus.COMPLETED,
+                         answer_text="KEY CLAIMS\n1. The Bolt was released in March 2026.")
+    ]
+    started = time.perf_counter()
+    claims = asyncio.run(claim_ops.extract_claims(responses, "j", endpoint=SimpleNamespace(enabled=True),
+                                                  question="When was the Bolt released?", cap_s=0.3))
+    took = time.perf_counter() - started
+    assert took < 1.5, took
+    assert [c.claim for c in claims] == ["The Bolt was released in March 2026."], [c.claim for c in claims]
+    assert 5 <= Settings.model_validate({"providers": {}}).research.extract_cap_s <= 30, "the cap must not be so tight it drops normal replies"
+
+
 def test_a_site_that_could_not_send_is_not_asked_again_in_the_same_job():
     from backend.models import ProviderResponse, ProviderStatus
 

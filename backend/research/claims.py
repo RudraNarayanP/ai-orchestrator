@@ -521,6 +521,7 @@ async def extract_claims(
     endpoint: Endpoint | None = None,
     batch_size: int = 12,
     question: str = "",
+    cap_s: float = 0.0,
 ) -> list[Claim]:
     responses = list(responses)
     claims: list[Claim] = []
@@ -539,9 +540,10 @@ async def extract_claims(
                     f"<answer kind=\"untrusted-data\">{response.answer_text[:6000]}</answer>",
                 },
             ]
+            call = client.complete_json(payload, temperature=0.0)
             try:
-                parsed, _reply = await client.complete_json(payload, temperature=0.0)
-            except Exception:  # noqa: BLE001 -- a model hiccup must fall back to the model-free extractor, never kill the job
+                parsed, _reply = await (asyncio.wait_for(call, cap_s) if cap_s > 0 else call)
+            except Exception:  # noqa: BLE001 -- a slow or broken model falls back to the model-free extractor, never kills the job
                 parsed = None
             return response, parsed
 

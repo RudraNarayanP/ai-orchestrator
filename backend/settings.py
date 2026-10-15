@@ -215,6 +215,10 @@ class ResearchConfig(BaseModel):
     speculation_grace_s: float = 10.0
     classify_cap_s: float = 8.0
     """After the primary answers, second opinions already started get this long to finish so one claim/source pass covers all."""
+    extract_cap_s: float = 12.0
+    """How long one answer's claim-extraction call may take before the deterministic parse of its own
+    KEY CLAIMS list is used instead (0 = wait). A free model that stalls must not hold the job: measured
+    2026-10-15, extraction was ~18 s of a ~155 s run, and the fallback path is already the tested one."""
     secondary_cap_s: float = 40.0
     secondary_hard_cap_s: float = 90.0
     """Even when nobody has answered yet, a parallel/targeted round ends this long after it started (live: one site took 214 s)."""
