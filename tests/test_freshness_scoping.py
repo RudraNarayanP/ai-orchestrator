@@ -23,12 +23,12 @@ ACT_PAGE_TEXT = (
 )
 
 
-def _gather(monkeypatch, *, text: str, published: str, claim_id: str, claim_text: str, title: str = "Data Protection Act 2018"):
-    async def fake_fetch(url, **kwargs):
-        return FetchedPage(url=ACT_URL, final_url=ACT_URL, status=200, title=title, text=text, published=published, ok=True)
+def _gather(monkeypatch, *, text: str, published: str, claim_id: str, claim_text: str, title: str = "Data Protection Act 2018", url: str = ACT_URL):
+    async def fake_fetch(u, **kwargs):
+        return FetchedPage(url=url, final_url=url, status=200, title=title, text=text, published=published, ok=True)
 
     monkeypatch.setattr(sources, "fetch_page", fake_fetch)
-    links = [{"href": ACT_URL, "title": title, "claim_id": claim_id, "claim_text": claim_text}]
+    links = [{"href": url, "title": title, "claim_id": claim_id, "claim_text": claim_text}]
     return asyncio.run(gather_from_links("j", links, attribute_to=[(claim_id, claim_text)], max_pages=1))
 
 
@@ -117,3 +117,72 @@ def test_an_old_page_is_still_treated_as_stale_for_a_present_state(monkeypatch):
     row = next(e for e in out if e.claim_id == "clm_price")
     assert row.check_status == SourceCheckStatus.OUTDATED, (row.check_status, row.check_notes)
     assert "days old" in (row.check_notes or ""), row.check_notes
+
+
+# ------------------------------------------------- what the law provides does not age
+
+RULE_TEXT = (
+    "The Data Protection Act 2018 provides that a controller must maintain a record of processing "
+    "activities and make it available to the supervisory authority on request."
+)
+
+
+def test_an_old_official_page_still_confirms_a_standing_rule(monkeypatch):
+    """Live (2026-10-15, dpf): the Commission's own EU-US transfers page, published 2021, was the only
+    official page read, and every row taken from it was voided as outdated -- so the claim stating what
+    the adequacy decision provides had no usable evidence left. A page that quotes the instrument is the
+    record of the rule; a newer source showing the rule changed is what displaces it, not the calendar."""
+    claim = "The Data Protection Act 2018 provides that a controller must maintain a record of processing activities."
+    out = _gather(
+        monkeypatch,
+        text=RULE_TEXT,
+        published="2021-12-17T10:19:13+01:00",
+        claim_id="clm_rule",
+        claim_text=claim,
+    )
+    row = next(e for e in out if e.claim_id == "clm_rule")
+    assert row.check_status == SourceCheckStatus.CONFIRMED, (row.check_status, row.check_notes)
+    assert "standing" in (row.check_notes or ""), row.check_notes
+
+
+def test_a_standing_rule_on_an_old_unofficial_page_still_ages(monkeypatch):
+    """The exemption is about the official publisher's own words. A law-firm post from 2021 describing
+    a rule is evidence of what it believed then, and stays age-sensitive."""
+    claim = "The Data Protection Act 2018 provides that a controller must maintain a record of processing activities."
+    out = _gather(
+        monkeypatch,
+        text=RULE_TEXT,
+        published="2021-12-17",
+        claim_id="clm_rule",
+        claim_text=claim,
+        url="https://www.blogs.example.com/dpa-2018-summary",
+    )
+    row = next(e for e in out if e.claim_id == "clm_rule")
+    assert row.check_status == SourceCheckStatus.OUTDATED, (row.check_status, row.check_notes)
+
+
+def test_a_rule_asked_about_in_force_still_ages_on_an_old_official_page(monkeypatch):
+    """Whether the instrument is still in force is a state of affairs: for that, age is exactly the point."""
+    claim = "The Data Protection Act 2018 remains in force."
+    out = _gather(
+        monkeypatch,
+        text="The Data Protection Act 2018 remains in force and most of its provisions commenced on 25 May 2018.",
+        published="2018-05-23",
+        claim_id="clm_force",
+        claim_text=claim,
+    )
+    row = next(e for e in out if e.claim_id == "clm_force")
+    assert row.check_status == SourceCheckStatus.OUTDATED, (row.check_status, row.check_notes)
+
+
+def test_the_standing_rule_predicate_asks_what_the_claim_asserts():
+    from backend.evidence.sources import standing_rule
+
+    assert standing_rule("Under the adequacy decision, transfers to certified US companies do not require standard contractual clauses.")
+    assert standing_rule("GDPR Article 45(1) provides that such a transfer shall not require any specific authorisation.")
+    assert standing_rule("The Data Protection Act 2018 provides that a controller must maintain a record of processing activities.")
+    assert not standing_rule("Section 379 of the IPC currently punishes theft.")
+    assert not standing_rule("The adequacy decision is still in force.")
+    assert not standing_rule("The fine is 4% of turnover.")
+    assert not standing_rule("Paris is a large city.")
+    assert not standing_rule("Keir Starmer is the Prime Minister."), "an officeholder is not a rule"

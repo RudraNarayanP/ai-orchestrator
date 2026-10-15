@@ -802,7 +802,11 @@ async def gather_from_links(
             for row in out:
                 if row.check_status != SourceCheckStatus.CONFIRMED:
                     continue
-                if claim_ages(texts.get(row.claim_id or "", "")):
+                ctext = texts.get(row.claim_id or "", "")
+                if claim_ages(ctext):
+                    if standing_official_rule(ctext, row.tier):
+                        row.check_notes = (row.check_notes or "") + f"; {fresh['age_days']} days old, the official publisher's standing statement of the rule"
+                        continue
                     row.check_status = SourceCheckStatus.OUTDATED
                     row.check_notes = (row.check_notes or "") + f"; {fresh['age_days']} days old"
                 else:
@@ -811,6 +815,40 @@ async def gather_from_links(
 
     gathered = await asyncio.gather(*(one(link) for link in items)) if items else []
     return [ev for group in gathered for ev in group]
+
+
+_INSTRUMENT_RE = re.compile(
+    r"\b(?:article|section|regulation|directive|decision|treaty|statute|act|code|sanhita|constitution|gdpr|"
+    r"adequacy decision|the law|implementing decision)\b",
+    re.I,
+)
+_RULE_VERB_RE = re.compile(
+    r"\b(?:provides?|requires?|require|shall|must|may not|is not required|do(?:es)? not require|permits?|"
+    r"prohibits?|punish(?:es|able)|sets? out|states?|allows?|bans?)\b",
+    re.I,
+)
+_TIME_BOUND_RE = re.compile(
+    r"\b(?:currently|current|still|as of|at present|today|now|latest|recent(?:ly)?|in force|remains?|price|costs?|rate|"
+    r"population|ranked|world record|record (?:high|low)|\d+(?:\.\d+)?\s*%)\b",
+    re.I,
+)
+_OFFICIAL_TIERS = {SourceTier.PRIMARY_OFFICIAL, SourceTier.GOVERNMENT}
+
+
+def standing_rule(claim: str) -> bool:
+    """A claim about what an instrument provides -- not about whether it is in force now, and not a figure that drifts."""
+    return bool(claim) and bool(_INSTRUMENT_RE.search(claim)) and bool(_RULE_VERB_RE.search(claim)) and not _TIME_BOUND_RE.search(claim)
+
+
+def standing_official_rule(claim: str, tier: SourceTier | None) -> bool:
+    """An official page stating what a law provides does not go stale with its publication date.
+
+    The page is the record of the instrument's own words; the thing that displaces it is a newer
+    source showing the rule changed (the counter-queries and the ledger's contradiction branch),
+    not the calendar. (2026-10-15 dpf: the Commission's own EU-US transfers page, "published" 2021,
+    was the only official page read for several claims and every row on it was voided as outdated.)
+    """
+    return tier in _OFFICIAL_TIERS and standing_rule(claim)
 
 
 def _attributed_copies(base: Evidence, page: FetchedPage, targets: list[tuple[str, str]], *, skip: str | None = None) -> list[Evidence]:
