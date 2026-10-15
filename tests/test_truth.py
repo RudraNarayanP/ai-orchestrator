@@ -509,3 +509,27 @@ def test_partly_stays_when_the_asked_point_itself_is_only_partly_supported():
     from backend.verification.verifier import answer_the_asked_question
 
     assert answer_the_asked_question("PARTLY", rep, q)[0] == "PARTLY"
+
+
+# ---- 2026-10-15 dpf: "the detail part is a bit off" when no detail was wrong, only thinly sourced
+DPF_Q = ("Can a company in the EU transfer personal data to a US company that is certified under the EU-US Data Privacy Framework "
+         "without also using standard contractual clauses?")
+
+
+def test_partial_only_for_evidence_strength_is_a_qualified_yes_not_a_detail_off():
+    rep = report(verdict(ClaimStatus.SUPPORTED, "The European Commission adopted an adequacy decision for the EU-US Data Privacy Framework on 10 July 2023."),
+                 verdict(ClaimStatus.PARTIALLY_SUPPORTED, "A company in the EU can transfer personal data to a certified US company without standard contractual clauses.", problems=["single_source"]),
+                 verdict(ClaimStatus.PARTIALLY_SUPPORTED, "US companies self-certify under the framework.", problems=["outdated"]),
+                 answer="The European Commission adopted an adequacy decision on 10 July 2023.")
+    fa = build_final_answer(rep, [], 1, DPF_Q)
+    assert fa.answer.startswith("Yeah, looks that way") and "bit off" not in fa.answer, fa.answer
+    assert "contractual clauses" in fa.answer
+
+
+def test_a_partial_with_a_real_problem_stays_partly():
+    rep = report(verdict(ClaimStatus.SUPPORTED, "The European Commission adopted an adequacy decision on 10 July 2023."),
+                 verdict(ClaimStatus.PARTIALLY_SUPPORTED, "A company in the EU can transfer personal data to a certified US company without standard contractual clauses.", problems=["exaggeration"]),
+                 answer="A company in the EU can transfer personal data to a certified US company without standard contractual clauses.")
+    from backend.verification.verifier import answer_the_asked_question
+
+    assert answer_the_asked_question("PARTLY", rep, DPF_Q)[0] != "LIKELY"

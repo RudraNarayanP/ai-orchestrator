@@ -541,7 +541,8 @@ def voice_report(answer: str) -> dict:
 
 # ------------------------------------------------------------------ truth states -> what the user reads
 # The state comes from the evidence ledger (verifier.truth_state). This is presentation only: tone never decides it.
-TRUTH_STATES = ("TRUE", "PARTLY", "FALSE", "CONFLICT", "UNVERIFIED", "OPEN")
+TRUTH_STATES = ("TRUE", "LIKELY", "PARTLY", "FALSE", "CONFLICT", "UNVERIFIED", "OPEN")
+TRUTH_LIKELY = "Yeah, looks that way \u2014 but I could only partly confirm it."
 TRUTH_TRUE = "Yeah, you're right."
 TRUTH_FALSE = "Nah, that doesn't work like that."
 TRUTH_CONFLICT = "Hmm, I'm not sure \u2014 the sources disagree."
@@ -739,6 +740,10 @@ def render_truth(state: str, *, question: str = "", answer: str = "", aspect: st
         base = TRUTH_TRUE[:-1] + bro + "."
         extra = fact if fact and len(fact) > 12 and fact.lower() not in {"it is.", "that is correct."} else ""
         return tiny(f"{base} {fit_fact(extra, 300 - len(base) - 1)}".strip(), max_sentences=2, max_chars=300)
+    if state == "LIKELY":
+        # nothing contradicts the yes, but part of it rests on one source or an older page: say yes, and say how sure
+        base = TRUTH_LIKELY
+        return tiny(f"{base} {fit_fact(fact, 300 - len(base) - 1)}".strip(), max_sentences=2, max_chars=300)
     if state == "FALSE":
         base = TRUTH_FALSE[:-1] + bro + "." if bro else TRUTH_FALSE
         return tiny(f"{base} {fit_fact(fact, 300 - len(base) - 1)}".strip(), max_sentences=2, max_chars=300)

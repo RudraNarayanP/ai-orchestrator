@@ -1549,6 +1549,18 @@ def answer_the_asked_question(state: str, report: VerifierReport, question: str)
     if len(asked) < 2:
         return state, report  # too short a question to judge relevance by words
     need = 1 if len(asked) < 4 else 2
+    # "PARTLY" says a detail is WRONG. When nothing is refuted or contested and the partial verdicts are partial only for
+    # evidence strength (one source, an older page), no detail was shown wrong: the lead is a qualified yes, not "a bit off"
+    # (2026-10-15 dpf: every partial verdict was single_source / outdated, shown as "the detail part is a bit off").
+    weak_only = {"single_source", "outdated", "unverifiable"}
+    partial = [v for v in report.verdicts if v.verdict == ClaimStatus.PARTIALLY_SUPPORTED]
+    if (state == "PARTLY" and partial and any(v.verdict == ClaimStatus.SUPPORTED for v in report.verdicts)
+            and not any(v.verdict in {ClaimStatus.REFUTED, ClaimStatus.CONTESTED} for v in report.verdicts)
+            and all(v.problems and set(v.problems) <= weak_only for v in partial)):
+        ranked = sorted((v for v in report.verdicts if v.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED}
+                         and not _is_page_claim(v.claim)), key=lambda v: -len(asked & _key_terms(v.claim)))
+        if ranked and len(asked & _key_terms(ranked[0].claim)) >= need and not _DENIAL_RE.search(_head_clause(ranked[0].claim)):
+            return "LIKELY", report.model_copy(update={"answer": ranked[0].claim.strip().rstrip(".") + "."})
     # The yes/no comes from the SETTLED CLAIMS, not from the curator's wording (2026-10-14 stability run: same evidence,
     # three runs, three different leads). The supported claim that best answers the question sets the polarity.
     from backend.research.style import premise_state  # noqa: PLC0415
