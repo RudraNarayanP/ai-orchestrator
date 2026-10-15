@@ -396,31 +396,35 @@ def figure_positions(text_lower: str, figure: str) -> list[int]:
     return sorted(set(out))
 
 
-def subject_figure_passage(text: str, figures: list[str], names: list[str], *, radius: int = 300) -> tuple[str, int] | None:
-    """The first stretch of page text that names a figure AND the claim's subject, with its offset.
+def figure_passage(text: str, figures: list[str], names: list[str], tokens: list[str] = (), *, radius: int = 300) -> str | None:
+    """The stretch of page text that holds the claim's figure AND speaks to the claim.
 
-    None when the figure appears only in text that is not about the subject -- which is what a page's navigation is
-    for a site that lists every section it covers. Live (2026-10-15, IPC theft): ipc2bns.in/section/ipc-379 "confirmed"
-    "Section 378 and Section 379 of the Indian Penal Code ... theft" from a Popular-IPC-Sections menu, and the excerpt
-    kept was "Skip to main content IPC2BNS Converter Shop Services ..."; the answer then asserted a section number no
-    passage of any page we opened actually stated about the subject.
+    Candidate windows are taken around every place the figure is written and the best one wins: all the claim's
+    subject names, else at least two of its distinctive words. None when no window says anything about the claim.
 
-    ("", -1) when the figure is on the page but nowhere near the subject; None when there is nothing to check or the
-    number is written in a form we cannot locate -- the caller must not demote on that, because the page-wide check
-    already accepted the figure somewhere.
+    Live (2026-10-15, IPC theft): the pages that confirmed "Section 378 and Section 379 of the Indian Penal Code
+    ... theft" kept "Skip to main content IPC2BNS Converter Shop Services ..." as their verbatim excerpt, because
+    the first place the number is written is a Popular-IPC-Sections menu. The figure was on the page; the record of
+    what it was said *about* was not, and the eval read the answer's section number as one no opened page carried.
     """
-    if not text or not figures or not names:
+    if not text or not figures:
         return None
     low = text.lower()
-    located = False
+    best: tuple[int, str] | None = None
     for fig in figures:
-        for pos in figure_positions(low, fig):
-            located = True
+        for pos in figure_positions(low, fig)[:40]:  # bounded: a long page is not searched occurrence by occurrence
             start, end = max(0, pos - radius), pos + radius
             window = _fold(text[start:end])
-            if all(n in window for n in names):
-                return re.sub(r"\s+", " ", text[start:end]).strip(), start
-    return ("", -1) if located else None
+            named = sum(1 for n in names if n in window)
+            shared = sum(1 for t in tokens if t and t in window)
+            rank = 2 if names and named == len(names) else (1 if shared >= 2 else 0)
+            if rank and (best is None or rank > best[0]):
+                best = (rank, re.sub(r"\s+", " ", text[start:end]).strip())
+            if best and best[0] == 2:
+                break
+        if best and best[0] == 2:
+            break
+    return best[1] if best else None
 
 
 def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) -> dict[str, Any]:
@@ -489,14 +493,6 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
     else:
         status = SourceCheckStatus.IRRELEVANT
 
-    # A figure the page only carries in text that is not about the claim's subject (a section menu, a table of
-    # links) does not confirm the claim, whatever else the page contains.
-    figures = [str(n) for n in (list(sig["numbers"][:6]) + list(sig["years"][:4]))]
-    passage = subject_figure_passage(page.text or "", figures, names) if names and figures else None
-    if passage is not None and not passage[0] and status == SourceCheckStatus.CONFIRMED:
-        missing.append("figure only in text that is not about " + ", ".join(names[:3]))
-        status = SourceCheckStatus.MISMATCH
-
     # Only a would-be confirmation needs an event role: this can demote a match, never
     # create one. "began in 1887 and was finished in 1889" must not confirm
     # "completed in 1887" (live: that is how the Eiffel Tower's start year was read as its
@@ -514,9 +510,12 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
             role_excerpt = role.get("segment")
 
     excerpt = role_excerpt[:600].strip() if role_excerpt else None
-    if excerpt is None and passage and passage[0]:
-        # the passage that names both the figure and the subject is the evidence we would cite for this claim
-        excerpt = passage[0][:600]
+    if excerpt is None and status == SourceCheckStatus.CONFIRMED:
+        # Which passage of the page stands behind the figure, so the record shows what the number was said about.
+        figures = [str(n) for n in (list(sig["numbers"][:6]) + list(sig["years"][:4]))]
+        passage = figure_passage(page.text or "", figures, names, tokens) if figures else None
+        if passage:
+            excerpt = passage[:600]
     if excerpt is None and hit:
         anchor = hit[0]
         idx = text_lower.find(anchor)

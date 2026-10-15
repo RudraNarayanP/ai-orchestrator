@@ -16,3 +16,21 @@ def test_excerpt_still_works_without_a_figure():
     page = FetchedPage(url="https://x.example/r", ok=True, status=200, text="Theft Act 1968. A person is guilty of theft if he dishonestly appropriates property belonging to another.")
     out = check_support("A person is guilty of theft if he dishonestly appropriates property belonging to another.", page)
     assert out["excerpt"] and "dishonestly" in out["excerpt"]
+
+def test_the_excerpt_is_the_passage_where_the_figure_is_about_the_subject_not_the_menu():
+    """Replayed from job_261015234541_22b1544d (live IPC theft): the stored verbatim excerpt for the rows that
+    "confirmed" Section 378 was "Skip to main content IPC2BNS Converter Shop Services ...", because the first
+    place the number is written is a Popular-IPC-Sections menu. The figure was on the page; what it was said
+    *about* was not in the record, and the eval read the answer's section number as one no opened page carried."""
+    chrome = (
+        "Skip to main content IPC2BNS Converter Shop Services Free Resources Donate Blog Legal Help "
+        "Popular IPC Sections Section 378 Section 379 Section 420 Section 304 "
+    )
+    body = (
+        "Section 378 of the Indian Penal Code, 1860 defines theft: whoever intending to take dishonestly any "
+        "movable property out of the possession of any person without that person's consent, moves that property."
+    )
+    page = FetchedPage(url="https://www.ipc2bns.in/section/ipc-379", ok=True, status=200, text=chrome + "x" * 400 + body)
+    out = check_support("Section 378 and Section 379 of the Indian Penal Code defined and punished theft.", page)
+    assert "Indian Penal Code" in out["excerpt"], out["excerpt"][:200]
+    assert "Skip to main content" not in out["excerpt"], out["excerpt"][:200]
