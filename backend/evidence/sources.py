@@ -12,6 +12,8 @@ hallucinated rather than merely unreachable.
 
 from __future__ import annotations
 
+import functools
+
 import asyncio
 import ipaddress
 import json
@@ -667,6 +669,17 @@ def freshness(published: str | None, *, now: datetime | None = None) -> dict[str
     return {"known": True, "age_days": age, "verdict": verdict, "parsed": parsed.isoformat()}
 
 
+@functools.lru_cache(maxsize=1)
+def _settings_fetch_cap() -> float:
+    """``search.fetch_timeout_s`` from the live settings (0 when unavailable)."""
+    try:
+        from backend.settings import load_settings  # noqa: PLC0415
+
+        return float(getattr(load_settings().search, "fetch_timeout_s", 0) or 0)
+    except Exception:  # noqa: BLE001
+        return 0.0
+
+
 async def gather_from_links(
     job_id: str,
     links: list[dict[str, Any]],
@@ -679,6 +692,7 @@ async def gather_from_links(
     max_chars: int = 12000,
     attribute_to: list[tuple[str, str]] | None = None,
     require_names: list[str] | None = None,
+    timeout_s: float = 0.0,
 ) -> list[Evidence]:
     """Fetch many cited pages without letting one slow server serialise us.
 
@@ -701,7 +715,12 @@ async def gather_from_links(
     async def one(link: dict[str, Any]) -> list[Evidence]:
         url = link.get("href") or link.get("url")
         async with sem:
-            page = await fetch_page(url, browser_fetch=browser_fetch, max_chars=max_chars)
+            try:
+                fetch = fetch_page(url, browser_fetch=browser_fetch, max_chars=max_chars)
+                cap = timeout_s or _settings_fetch_cap()
+                page = await (asyncio.wait_for(fetch, cap) if cap > 0 else fetch)
+            except asyncio.TimeoutError:
+                return []  # too slow for this question: not checked, never confirmed
         claim = link.get("claim_text")
         polarity = link.get("polarity", "support")
         refutation: dict[str, Any] | None = None

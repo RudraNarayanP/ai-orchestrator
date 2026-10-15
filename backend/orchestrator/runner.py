@@ -316,7 +316,10 @@ class ResearchRunner:
         verifier_enabled = self.verifier is not None and self.settings.verifier.provider != "disabled"
 
         settled_now = self._settled(assessment, disagreements) and not analysis.high_stakes
-        extra = await self._drop_speculation(speculative, keep_started=not settled_now and not assessment.sufficient)
+        # Second opinions still running after the grace are NOT waited for here (that cost a second claim/source pass, ~22 s):
+        # they keep running and join the next round's single pass; if no round follows, they are dropped.
+        await self._defer_speculation(speculative, keep_started=not settled_now and not assessment.sufficient)
+        extra: list[ProviderResponse] = []
         if extra:
             responses.extend(extra)
             job.responses.extend(extra)
@@ -414,6 +417,7 @@ class ResearchRunner:
                 job=job,
             )
             extra = await self._ask_many(secondaries, job, analysis, context, round_no, exclude=primary)
+            extra = extra + await self._collect_late(job)
             job.browser_sessions_used += len(extra)
             responses.extend(extra)
             job.responses = responses
@@ -1020,6 +1024,26 @@ class ResearchRunner:
                     got.append(r)
         return got
 
+    async def _defer_speculation(self, speculative: list[tuple[str, Any, dict[str, bool]]], *, keep_started: bool) -> None:
+        """Cancel speculative asks that have not started; with ``keep_started``, park the started ones for the next round."""
+        late = []
+        for name, t, flag in speculative:
+            if keep_started and flag["started"] and not t.cancelled():
+                late.append((name, t))
+            elif not t.done():
+                t.cancel()
+        self._late = late
+
+    async def _collect_late(self, job: Job) -> list[ProviderResponse]:
+        """The parked second opinions, capped like any round; joins the current round's single claim/source pass."""
+        late = self.__dict__.pop("_late", [])
+        if not late:
+            return []
+        done = await self._gather_capped([t for _, t in late], [n for n, _ in late], 1)
+        got = [r for r in done if isinstance(r, ProviderResponse) and r.status.value == "completed"]
+        job.browser_sessions_used += len({r.provider for r in got})
+        return got
+
     async def _drop_speculation(self, speculative: list[tuple[str, Any, dict[str, bool]]], *, keep_started: bool) -> list[ProviderResponse]:
         """Cancel speculative asks that have not started; with ``keep_started``, collect the ones that did (capped like any round)."""
         if not speculative:
@@ -1438,6 +1462,7 @@ class ResearchRunner:
 
         targeted = await self._targeted_round(job, follow_ups, chosen, round_no=next_round)
         job.browser_sessions_used += len({r.provider for r in targeted})
+        targeted = targeted + await self._collect_late(job)
         responses = responses + targeted
         job.responses = responses
         record.response_ids = [r.id for r in targeted]
@@ -1597,6 +1622,9 @@ class ResearchRunner:
         return report
 
     def _complete(self, job: Job, report: VerifierReport | None, responses: list[ProviderResponse], *, rounds: int, stop: str) -> Job:
+        for _, t in self.__dict__.pop("_late", []):  # deferred second opinions no round needed
+            if not t.done():
+                t.cancel()
         job.status = JobStatus.SYNTHESIZING
         open_parts: list[PartGap] = []
         if report is not None and report.reviewer_status == "INCOMPLETE":

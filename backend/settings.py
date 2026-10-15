@@ -242,7 +242,10 @@ class SearchConfig(BaseModel):
     refutation_queries: int = 3
     """Material claims per round that get a counter-query (claim + correction / rebuttal / contradicts / actually). 0 disables."""
 
-    per_query_timeout_s: int = 40
+    per_query_timeout_s: int = 18
+    fetch_timeout_s: float = 18.0
+    """Hard cap per page fetch+check (2026-10-14 profile: one slow page held source checking for 32 s). A page over the cap
+    is recorded as not checked -- never as confirmed."""
 
     own_discovery: bool = False
     """False (default): the AIs do the web research and OmniBrain only opens the URLs they cited,

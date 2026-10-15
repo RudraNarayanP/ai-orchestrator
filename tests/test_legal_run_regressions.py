@@ -527,3 +527,28 @@ def test_latency_defaults_keep_the_slowest_steps_bounded():
     s = Settings()
     assert 0 < s.research.secondary_cap_s <= 45
     assert 0 < s.verifier.time_cap_s <= 30
+
+
+def test_a_page_slower_than_the_fetch_cap_is_not_checked_and_does_not_stall_the_rest(monkeypatch):
+    import asyncio
+    import backend.evidence.sources as S
+
+    async def slow_or_fast(url, **_):
+        if "slow" in url:
+            await asyncio.sleep(5)
+        return S.FetchedPage(url=url, ok=True, text="The age is 13.", title="t") if hasattr(S, "FetchedPage") else None
+
+    monkeypatch.setattr(S, "fetch_page", slow_or_fast)
+    links = [{"href": "https://slow.example/a"}]
+    loop_t = asyncio.get_event_loop_policy().new_event_loop()
+    import time
+    t0 = time.monotonic()
+    out = loop_t.run_until_complete(S.gather_from_links("j", links, timeout_s=0.2))
+    loop_t.close()
+    assert out == [] and time.monotonic() - t0 < 2
+
+
+def test_fetch_cap_defaults_to_about_18_seconds():
+    from backend.settings import Settings
+
+    assert 15 <= Settings().search.fetch_timeout_s <= 20 and Settings().search.per_query_timeout_s <= 20

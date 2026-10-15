@@ -8,6 +8,7 @@ different objects in the ledger.
 """
 
 from __future__ import annotations
+import asyncio
 
 import re
 from typing import Any, Awaitable, Callable, Iterable
@@ -376,7 +377,7 @@ async def build_pool(
         job_id,
         links,
         max_pages=budget,
-        concurrency=min(6, max(2, settings.research.max_workers)),
+        concurrency=min(10, max(4, settings.research.max_workers)),
         browser_fetch=browser_fetch,
         round_no=round_no,
         max_chars=settings.search.fetch_body_chars,
@@ -396,7 +397,7 @@ async def build_pool(
                 job_id,
                 counter_links,
                 max_pages=len(counter_links),
-                concurrency=min(6, max(2, settings.research.max_workers)),
+                concurrency=min(10, max(4, settings.research.max_workers)),
                 browser_fetch=browser_fetch,
                 round_no=round_no,
                 origin="search",
@@ -466,17 +467,19 @@ async def _counter_links(
 
     already = {l.get("href") for l in taken}
     out: list[dict[str, Any]] = []
-    for claim, query in counter_targets(claims, question, limit=limit):
-        try:
-            items, info = await http_search(
-                query,
-                engines=settings.search.engines,
-                limit=settings.search.max_results,
-                timeout_s=settings.search.per_query_timeout_s,
-            )
-        except Exception as exc:  # noqa: BLE001
-            trace.append({"query": query[:80], "error": type(exc).__name__})
+    targets = list(counter_targets(claims, question, limit=limit))
+
+    async def _one(query: str) -> Any:
+        return await http_search(query, engines=settings.search.engines, limit=settings.search.max_results,
+                                 timeout_s=settings.search.per_query_timeout_s)
+
+    # the counter-queries run together, not one after another (each could take the full per-query timeout)
+    results = await asyncio.gather(*(_one(q) for _, q in targets), return_exceptions=True)
+    for (claim, query), result in zip(targets, results):
+        if isinstance(result, BaseException):
+            trace.append({"query": query[:80], "error": type(result).__name__})
             continue
+        items, info = result
         trace.append({"query": query[:80], "claim_id": claim.id, "results": len(items), "used": info.get("used")})
         kept = 0
         for item in items:
