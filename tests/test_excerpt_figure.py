@@ -34,3 +34,18 @@ def test_the_excerpt_is_the_passage_where_the_figure_is_about_the_subject_not_th
     out = check_support("Section 378 and Section 379 of the Indian Penal Code defined and punished theft.", page)
     assert "Indian Penal Code" in out["excerpt"], out["excerpt"][:200]
     assert "Skip to main content" not in out["excerpt"], out["excerpt"][:200]
+
+
+def test_every_figure_the_claim_stands_on_is_in_the_recorded_passage():
+    """A section-mapping page puts "IPC 378" and "IPC 379" on different lines. One window cannot hold both, and an
+    excerpt that carries only one leaves the other figure looking invented (the live IPC theft run, twice)."""
+    text = (
+        "Home / Sections / IPC 379 to BNS 303. IPC Section 379 (Theft) under the old Indian Penal Code 1860 is now "
+        "covered under Section 303 of the Bharatiya Nyaya Sanhita, 2023. " + "mapping table of offences. " * 12
+        + "IPC Section 378 defines theft: whoever intending to take dishonestly any movable property out of the "
+        "possession of any person. Indian Penal Code 1860, section 378 punishment three years."
+    )
+    page = FetchedPage(url="https://ipc2bns.example/section/ipc-379", ok=True, status=200, text=text)
+    out = check_support("Section 378 and Section 379 of the Indian Penal Code, 1860 defined and punished theft.", page)
+    for figure in ("378", "379", "1860"):
+        assert figure in (out["excerpt"] or ""), (figure, out["excerpt"][:200])

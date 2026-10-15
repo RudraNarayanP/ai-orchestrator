@@ -397,34 +397,43 @@ def figure_positions(text_lower: str, figure: str) -> list[int]:
 
 
 def figure_passage(text: str, figures: list[str], names: list[str], tokens: list[str] = (), *, radius: int = 300) -> str | None:
-    """The stretch of page text that holds the claim's figure AND speaks to the claim.
+    """The passage(s) of the page that carry the claim's figures, one per figure, so the record shows each number
+    the claim stands on was actually said -- and about what.
 
-    Candidate windows are taken around every place the figure is written and the best one wins: all the claim's
-    subject names, else at least two of its distinctive words. None when no window says anything about the claim.
+    For every figure the best window wins: one holding all the claim's subject names, else one sharing two or more
+    of its distinctive words, else the first place the number appears. A single window cannot do it: on ipc2bns.in
+    the mapping row for "IPC 378" and the row for "IPC 379" are different lines, and an excerpt centred on one
+    leaves the other unsupported-looking.
 
-    Live (2026-10-15, IPC theft): the pages that confirmed "Section 378 and Section 379 of the Indian Penal Code
+    Live (2026-10-15, IPC theft): the rows that confirmed "Section 378 and Section 379 of the Indian Penal Code
     ... theft" kept "Skip to main content IPC2BNS Converter Shop Services ..." as their verbatim excerpt, because
-    the first place the number is written is a Popular-IPC-Sections menu. The figure was on the page; the record of
+    the first place a number is written is a Popular-IPC-Sections menu. The figure was on the page; the record of
     what it was said *about* was not, and the eval read the answer's section number as one no opened page carried.
     """
     if not text or not figures:
         return None
     low = text.lower()
-    best: tuple[int, str] | None = None
+    per = max(160, 1000 // len(figures))  # every figure keeps its own passage; none is trimmed off the end
+    parts: list[str] = []
     for fig in figures:
-        for pos in figure_positions(low, fig)[:40]:  # bounded: a long page is not searched occurrence by occurrence
-            start, end = max(0, pos - radius), pos + radius
-            window = _fold(text[start:end])
+        positions = figure_positions(low, fig)[:40]  # bounded: a long page is not searched occurrence by occurrence
+        if not positions:
+            continue
+        best: tuple[int, int] | None = None
+        for pos in positions:
+            window = _fold(text[max(0, pos - radius) : pos + radius])
             named = sum(1 for n in names if n in window)
             shared = sum(1 for t in tokens if t and t in window)
             rank = 2 if names and named == len(names) else (1 if shared >= 2 else 0)
             if rank and (best is None or rank > best[0]):
-                best = (rank, re.sub(r"\s+", " ", text[start:end]).strip())
+                best = (rank, pos)
             if best and best[0] == 2:
                 break
-        if best and best[0] == 2:
-            break
-    return best[1] if best else None
+        pos = best[1] if best else positions[0]
+        chunk = re.sub(r"\s+", " ", text[max(0, pos - 90) : pos + per]).strip()
+        if chunk and not any(chunk[:120] in p or p[:120] in chunk for p in parts):
+            parts.append(chunk)
+    return " ... ".join(parts)[:1200] if parts else None
 
 
 def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) -> dict[str, Any]:
@@ -515,7 +524,7 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
         figures = [str(n) for n in (list(sig["numbers"][:6]) + list(sig["years"][:4]))]
         passage = figure_passage(page.text or "", figures, names, tokens) if figures else None
         if passage:
-            excerpt = passage[:600]
+            excerpt = passage  # already bounded inside figure_passage
     if excerpt is None and hit:
         anchor = hit[0]
         idx = text_lower.find(anchor)
