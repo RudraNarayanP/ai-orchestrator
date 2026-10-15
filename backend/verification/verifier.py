@@ -68,6 +68,17 @@ def stored_raw(text: str) -> str:
     return f"{text[:RAW_STORED_CHARS]}\n[stored copy trimmed by OmniBrain at {RAW_STORED_CHARS} of {len(text)} characters]"
 
 
+_SENT_TERMINAL = ".!?\u2026\"'\u201d\u2019"
+
+
+def as_sentence(text: str) -> str:
+    """A claim is a fragment, not a sentence. Live 2026-10-16: two supported claims joined raw read as
+    one 349-character run-on with no full stop, and a clause was lost mid-parenthesis -- `style.tiny`
+    bounds an answer by sentence, so text with no boundary is a text it cannot bound."""
+    s = (text or "").strip()
+    return s if not s or s[-1] in _SENT_TERMINAL else s + "."
+
+
 CONFIDENCE_LABEL = {
     Confidence.HIGH: "High confidence",
     Confidence.MODERATE: "Moderate confidence",
@@ -888,8 +899,8 @@ class Verifier:
             if u in by_url
         ][:6]
         if good:
-            lead = good[0].claim
-            answer = lead if len(good) == 1 else lead + (" " + " ".join(v.claim for v in good[1:3]) if good[1:] else "")
+            lead = as_sentence(good[0].claim)
+            answer = lead if len(good) == 1 else lead + " " + " ".join(as_sentence(v.claim) for v in good[1:3])
             confidence = max(
                 (v.confidence for v in good),
                 key={Confidence.HIGH: 3, Confidence.MODERATE: 2, Confidence.LOW: 1, Confidence.NONE: 0}.get,  # type: ignore[arg-type]

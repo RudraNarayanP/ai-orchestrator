@@ -93,6 +93,43 @@ def test_ledger_supported_claims_about_other_years_become_a_reasoned_dont_know()
     assert report.answer.startswith("I don't know.") and "2028" in report.answer and "hasn't happened yet" in report.answer
     assert not report.sources and report.confidence != Confidence.HIGH
 
+def test_two_supported_claims_join_as_sentences_not_a_run_on():
+    """Live 2026-10-16, `lg-india-digital-india-act`: the answer was 349 characters with no full stop
+    anywhere, because two supported claims were concatenated with a space. `style.tiny` bounds an answer
+    by sentence, so the missing boundary is also why the length budget never cut it."""
+    from backend.models import ClaimStatus, ClaimVerdict, Confidence, Evidence, SourceCheckStatus, SourceTier
+    from backend.research.style import split_sentences, tiny
+    from backend.verification.llm import Endpoint
+    from backend.verification.verifier import Verifier
+
+    q = "What penalty does India's Digital India Act impose for a personal data breach?"
+    url = "https://www.meity.gov.in/digital-india-act"
+    ev = Evidence(job_id="j", claim_id="c1", url=url, domain="www.meity.gov.in", tier=SourceTier.GOVERNMENT,
+                  check_status=SourceCheckStatus.CONFIRMED)
+    v1 = ClaimVerdict(claim_id="c1", claim="India's proposed Digital India Act does not currently impose a specific statutory penalty for a personal data breach",
+                      verdict=ClaimStatus.SUPPORTED, confidence=Confidence.HIGH, reasoning="r", strong_evidence=[url])
+    v2 = ClaimVerdict(claim_id="c2", claim="The DPDP Act requires a Data Fiduciary to notify the Board of a personal data breach",
+                      verdict=ClaimStatus.SUPPORTED, confidence=Confidence.MODERATE, reasoning="r", strong_evidence=[url])
+    best = Verifier(Endpoint(provider="disabled", model="none", base_url=""), min_independent_sources=2)._best_supported([], [v1, v2], [ev], q)
+    answer = best["answer"]
+    assert " breach " not in answer, f"a claim was spliced into the middle of a sentence: {answer}"
+    assert len(split_sentences(answer)) == 2, answer
+    assert tiny(answer) == answer, "the length budget can only bound text it can split"
+
+
+def test_a_supported_claim_that_ends_in_a_parenthesis_still_ends_a_sentence():
+    """Live 2026-10-16, `lg-fp-ftc-noncompete`: "... is in force under the US Federal Trade Commission's
+    (FTC) The original rule was blocked by a federal district court" -- a clause lost its ending and the
+    next one ran into it."""
+    from backend.verification.verifier import as_sentence
+
+    assert as_sentence("no ban is in force under the FTC") == "no ban is in force under the FTC."
+    assert as_sentence("no ban is in force under the FTC (2024)") == "no ban is in force under the FTC (2024)."
+    assert as_sentence("no ban is in force under the FTC.") == "no ban is in force under the FTC."
+    assert as_sentence("It is unclear whether the rule survives!") == "It is unclear whether the rule survives!"
+    assert as_sentence("") == ""
+
+
 def test_verifier_judges_at_most_twelve_claims_and_keeps_the_ones_with_pages():
     """Live: ~40 reworded claims made the verdict JSON outrun max_tokens and the run fell back to the model-free path."""
     from backend.models import Claim, Evidence, SourceCheckStatus
