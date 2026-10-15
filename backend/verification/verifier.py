@@ -1387,13 +1387,21 @@ def _ledger_state(report: VerifierReport, question: str = "") -> str:
 
 
 def _aspect(report: VerifierReport) -> str:
-    """Which detail is off, in a word, from the first claim that is not fully supported."""
+    """Which detail is off, in a word, from the first claim that is not fully supported.
+
+    Only a claim with a substantive problem names an aspect. A verdict downgraded for evidence
+    strength alone (one source, an old or undated page) says nothing is wrong with the detail, so it
+    must not be read as "the date part is a bit off" from a year that happens to sit in its text.
+    """
+    strength_only = {"single_source", "outdated", "unverifiable", "contradicting_claim_had_no_usable_source"}
     for v in report.verdicts:
         if _is_page_claim(v.claim):
             continue
         if v.verdict in (ClaimStatus.PARTIALLY_SUPPORTED, ClaimStatus.REFUTED):
             problems = " ".join(v.problems).lower()
             text = v.claim.lower()
+            if v.problems and all(p.lower() in strength_only for p in v.problems):
+                continue
             if "outdated" in problems or re.search(r"\b(19|20)\d\d\b|\b(january|february|march|april|may|june|july|august|september|october|november|december)\b", text):
                 return "date"
             if re.search(r"\d", text) or "exaggeration" in problems:
@@ -1555,18 +1563,23 @@ def answer_the_asked_question(state: str, report: VerifierReport, question: str)
     if len(asked) < 2:
         return state, report  # too short a question to judge relevance by words
     need = 1 if len(asked) < 4 else 2
-    # "PARTLY" says a detail is WRONG. When nothing is refuted or contested and the partial verdicts are partial only for
-    # evidence strength (one source, an older page), no detail was shown wrong: the lead is a qualified yes, not "a bit off"
-    # (2026-10-15 dpf: every partial verdict was single_source / outdated, shown as "the detail part is a bit off").
+    # "PARTLY" says a detail is WRONG. When nothing is refuted or contested and the claim that carries
+    # the answer is partial only for evidence strength (one source, an older page), no detail about the
+    # asked question was shown wrong: the lead is a qualified yes, not "a bit off". Judged on the
+    # answering claim -- an off-point side detail with a citation problem of its own must not force the
+    # answer into "the date part is a bit off" (2026-10-15 dpf: 8 single_source partials plus one
+    # unrelated "the Commission has issued an adequacy decision" mismatch, shown as a date complaint).
     weak_only = {"single_source", "outdated", "unverifiable"}
     partial = [v for v in report.verdicts if v.verdict == ClaimStatus.PARTIALLY_SUPPORTED]
     if (state == "PARTLY" and partial and any(v.verdict == ClaimStatus.SUPPORTED for v in report.verdicts)
-            and not any(v.verdict in {ClaimStatus.REFUTED, ClaimStatus.CONTESTED} for v in report.verdicts)
-            and all(v.problems and set(v.problems) <= weak_only for v in partial)):
+            and not any(v.verdict in {ClaimStatus.REFUTED, ClaimStatus.CONTESTED} for v in report.verdicts)):
         ranked = sorted((v for v in report.verdicts if v.verdict in {ClaimStatus.SUPPORTED, ClaimStatus.PARTIALLY_SUPPORTED}
                          and not _is_page_claim(v.claim)), key=lambda v: -len(asked & _key_terms(v.claim)))
-        if ranked and len(asked & _key_terms(ranked[0].claim)) >= need and not _DENIAL_RE.search(_head_clause(ranked[0].claim)):
-            return "LIKELY", report.model_copy(update={"answer": ranked[0].claim.strip().rstrip(".") + "."})
+        carrier = ranked[0] if ranked else None
+        if (carrier is not None and carrier.verdict == ClaimStatus.PARTIALLY_SUPPORTED
+                and carrier.problems and set(carrier.problems) <= weak_only
+                and len(asked & _key_terms(carrier.claim)) >= need and not _DENIAL_RE.search(_head_clause(carrier.claim))):
+            return "LIKELY", report.model_copy(update={"answer": carrier.claim.strip().rstrip(".") + "."})
     # The yes/no comes from the SETTLED CLAIMS, not from the curator's wording (2026-10-14 stability run: same evidence,
     # three runs, three different leads). The supported claim that best answers the question sets the polarity.
     from backend.research.style import premise_state  # noqa: PLC0415

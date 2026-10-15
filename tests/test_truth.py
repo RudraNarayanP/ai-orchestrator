@@ -533,3 +533,40 @@ def test_a_partial_with_a_real_problem_stays_partly():
     from backend.verification.verifier import answer_the_asked_question
 
     assert answer_the_asked_question("PARTLY", rep, DPF_Q)[0] != "LIKELY"
+
+
+# ---- 2026-10-15 dpf replay: an off-point detail must not rename the answer's weakness
+
+def test_an_off_point_citation_problem_does_not_turn_the_answer_into_a_date_complaint():
+    """Replayed from job_261015195856_33edb2da: eight claims were partial for resting on one source and
+    one unrelated side claim had a citation mismatch. The old gate demanded every partial row be weak-only
+    before it would call the answer a qualified yes, so the run said "the date part is a bit off" -- a
+    complaint about a date no verdict had questioned."""
+    from backend.verification.verifier import answer_the_asked_question
+
+    rep = report(
+        verdict(ClaimStatus.SUPPORTED, "Transfers covered by the decision do not require SCCs or another Article 46 GDPR transfer mechanism."),
+        verdict(ClaimStatus.PARTIALLY_SUPPORTED, "As of 15 October 2026, an EU company can transfer personal data to a US company certified under the "
+                                                "EU-US Data Privacy Framework without standard contractual clauses.", problems=["single_source"]),
+        verdict(ClaimStatus.PARTIALLY_SUPPORTED, "The European Commission has issued an adequacy decision for the EU-U.S. Data Privacy Framework.", problems=["mismatch"]),
+        answer="The European Commission adopted an adequacy decision on 10 July 2023.",
+    )
+    state, out = answer_the_asked_question("PARTLY", rep, DPF_Q)
+    assert state == "LIKELY", (state, out.answer)
+    assert "standard contractual clauses" in out.answer, out.answer
+    fa = build_final_answer(out, [], 2, DPF_Q)
+    assert "bit off" not in fa.answer, fa.answer
+    assert "standard contractual clauses" in fa.answer, fa.answer
+
+
+def test_a_thin_claim_that_happens_to_carry_a_year_names_no_aspect():
+    """"The date part is a bit off" is a finding about a date. A claim downgraded only because one source
+    states it says nothing of the kind, so no aspect is available and the answer must not invent one."""
+    from backend.verification.verifier import _aspect
+
+    thin = report(
+        verdict(ClaimStatus.SUPPORTED, "Parliament cannot use Article 368 to destroy the basic structure."),
+        verdict(ClaimStatus.PARTIALLY_SUPPORTED, "The Keshavananda Bharati case was decided on 24 April 1973.", problems=["single_source"]),
+    )
+    assert _aspect(thin) == "", _aspect(thin)
+    assert _aspect(report(verdict(ClaimStatus.PARTIALLY_SUPPORTED, "The fine is 4,500.", problems=["exaggeration"]))) == "number"
