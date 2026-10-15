@@ -383,6 +383,46 @@ def _find_digits(text_lower: str, digits: str) -> int:
     return m.start() if m else -1
 
 
+def figure_positions(text_lower: str, figure: str) -> list[int]:
+    """Every place a figure is written in the page, tolerating "3,000" / "3 000" for "3000"."""
+    digits = re.sub(r"[^0-9.]", "", str(figure))
+    if not digits:
+        return []
+    plain = re.escape(str(figure).strip())
+    out = [m.start() for m in re.finditer(r"(?<![0-9.])" + plain + r"(?![0-9])", text_lower)]
+    if len(digits) >= 3:
+        pattern = r"[,\s.]?".join(re.escape(ch) for ch in digits if ch != ".")
+        out += [m.start() for m in re.finditer(r"(?<!\d)" + pattern + r"(?!\d)", text_lower)]
+    return sorted(set(out))
+
+
+def subject_figure_passage(text: str, figures: list[str], names: list[str], *, radius: int = 300) -> tuple[str, int] | None:
+    """The first stretch of page text that names a figure AND the claim's subject, with its offset.
+
+    None when the figure appears only in text that is not about the subject -- which is what a page's navigation is
+    for a site that lists every section it covers. Live (2026-10-15, IPC theft): ipc2bns.in/section/ipc-379 "confirmed"
+    "Section 378 and Section 379 of the Indian Penal Code ... theft" from a Popular-IPC-Sections menu, and the excerpt
+    kept was "Skip to main content IPC2BNS Converter Shop Services ..."; the answer then asserted a section number no
+    passage of any page we opened actually stated about the subject.
+
+    ("", -1) when the figure is on the page but nowhere near the subject; None when there is nothing to check or the
+    number is written in a form we cannot locate -- the caller must not demote on that, because the page-wide check
+    already accepted the figure somewhere.
+    """
+    if not text or not figures or not names:
+        return None
+    low = text.lower()
+    located = False
+    for fig in figures:
+        for pos in figure_positions(low, fig):
+            located = True
+            start, end = max(0, pos - radius), pos + radius
+            window = _fold(text[start:end])
+            if all(n in window for n in names):
+                return re.sub(r"\s+", " ", text[start:end]).strip(), start
+    return ("", -1) if located else None
+
+
 def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) -> dict[str, Any]:
     """Does this page actually contain what the claim says it contains?
 
@@ -449,6 +489,14 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
     else:
         status = SourceCheckStatus.IRRELEVANT
 
+    # A figure the page only carries in text that is not about the claim's subject (a section menu, a table of
+    # links) does not confirm the claim, whatever else the page contains.
+    figures = [str(n) for n in (list(sig["numbers"][:6]) + list(sig["years"][:4]))]
+    passage = subject_figure_passage(page.text or "", figures, names) if names and figures else None
+    if passage is not None and not passage[0] and status == SourceCheckStatus.CONFIRMED:
+        missing.append("figure only in text that is not about " + ", ".join(names[:3]))
+        status = SourceCheckStatus.MISMATCH
+
     # Only a would-be confirmation needs an event role: this can demote a match, never
     # create one. "began in 1887 and was finished in 1889" must not confirm
     # "completed in 1887" (live: that is how the Eiffel Tower's start year was read as its
@@ -466,6 +514,9 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
             role_excerpt = role.get("segment")
 
     excerpt = role_excerpt[:600].strip() if role_excerpt else None
+    if excerpt is None and passage and passage[0]:
+        # the passage that names both the figure and the subject is the evidence we would cite for this claim
+        excerpt = passage[0][:600]
     if excerpt is None and hit:
         anchor = hit[0]
         idx = text_lower.find(anchor)
