@@ -1036,8 +1036,9 @@ class LiveChromeEngine:
         self._browser_lock = asyncio.Lock()
         self._browser_resolved = False
         self.driver_lock = DriverLock(
-            Path(tempfile.gettempdir()) / f"omnibrain-chrome-use-{cfg.chrome_use_session}.lock"
-        )  # keyed by the chrome-use session name: that is exactly what two runs collide on
+            Path(settings.storage.artifacts_dir).resolve().parent / f"omnibrain-chrome-use-{cfg.chrome_use_session}.lock"
+        )  # keyed by the chrome-use session name (what two runs collide on) inside THIS installation's data dir,
+        # so a test run or a second checkout is never gated by an unrelated live run
 
     def _note(self, message: str) -> None:
         line = f"{time.strftime('%H:%M:%S')} {message}"

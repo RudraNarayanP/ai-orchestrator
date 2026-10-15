@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -86,7 +87,10 @@ def fake(tmp_path, monkeypatch) -> Fake:
 
 def live_settings(artifacts: str | None = None, **browser) -> Settings:
     cfg = {"driver": "chrome_use", "settle_ms": 1, **browser}
-    extra = {"storage": {"artifacts_dir": artifacts}} if artifacts else {}
+    # every test gets its own data dir: the driver lock that keeps two RUNS out of one Chrome lives beside the
+    # artifacts, and a test suite must not be gated by a live run happening elsewhere on the machine
+    artifacts = artifacts or str(Path(tempfile.mkdtemp(prefix="ob-live-test-")) / "artifacts")
+    extra = {"storage": {"artifacts_dir": artifacts}}
     return base_settings(
         browser=cfg, providers={"chatgpt": {"enabled": True, "label": "ChatGPT", "url": "https://chatgpt.com/"}}, **extra
     )
