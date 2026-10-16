@@ -304,9 +304,10 @@ shows evidence attachment is weak when providers return no links.
   Google AI were not visible before typing, so only their inputs are `probe`-verified).
 - The cancel test against a real streaming site (offline stubs and one fixture test
   cover the tab-close path; the live test may stop at an earlier checkpoint).
-- The CI workflow (`.github/workflows/ci.yml`) has never run on a runner: the remote has
-  no CI history yet. The `browser` job is marked `continue-on-error` until it has been
-  seen green.
+- CI has run, and passed, on this repo: the `tests` workflow succeeded on the pushes of 2026-10-09 and
+  2026-10-10 (six green runs, ~7-8 min each, the last on `48b0a6f`). What was wrong in earlier notes here is
+  the claim that it "has never run" -- that was written while the working copy had no remote. The `browser`
+  job is still `continue-on-error` because it has not been *seen* green on a runner as a blocking gate.
 - **Two measured intermittencies, kept visible rather than skipped.** In the offline gate,
   `tests/test_compress_transcript.py::test_compress_summarises_the_whole_thread_and_the_next_message_continues_the_fresh_chat`
   failed in 1 of 3 full runs on 2026-10-16 and passes in isolation — it asserts that after a
