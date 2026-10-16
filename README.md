@@ -185,9 +185,10 @@ lists what each signed-in provider offers (read-only).
 
 Honest status, because "it should work" is not a status:
 
-**Verified by automated tests (1176 passing offline, 2026-10-16, plus 57 that drive a real
-headless Chrome against local fixtures; none contacts a chat site or a real model. Two
-measured intermittencies are listed honestly below rather than skipped):**
+**Verified by automated tests (1177 passing offline and 57 passing in the browser suite,
+both measured 2026-10-16; the browser tests drive a real headless Chrome against local
+fixtures. None contacts a chat site or a real model. Two measured intermittencies are
+listed honestly below rather than skipped):**
 - Escalation architecture, tests A–F from the spec: trivial questions answer at
   level 0 with **zero** browser sessions and zero verifier calls; a primary
   researcher with two confirmed independent sources stops without spawning a
@@ -311,10 +312,15 @@ shows evidence attachment is weak when providers return no links.
   failed in 1 of 3 full runs on 2026-10-16 and passes in isolation — it asserts that after a
   thread compression each provider's next message continues the chat opened for it, and
   `compress` primes providers concurrently while activating one segment, so this is a race
-  surface in a shipping feature, not test noise. In the browser suite,
+  surface in a shipping feature, not test noise. It reproduced: 300 repeats of one compression under CPU load
+  raised `AttributeError: 'NoneType' object has no attribute 'segment_id'` — `ThreadStore` shares one sqlite
+  connection and only its writers hold the lock, so a segment can be committed and then read back as nothing.
+  The crash handler is fixed and tested (`85615ee`); the locking is not, and `plan_turn` dereferences the same
+  `None` on the ordinary chat path. In the browser suite,
   `tests/test_vision.py::test_exhausted_attempts_keep_the_terminal_status_not_launching` has
-  failed with a `ConnectionResetError` from the fixture's HTTP server under load. Neither is
-  xfail'd, skipped or re-ordered; both are open.
+  failed with a `ConnectionResetError` from the fixture's HTTP server under load — but it did **not** recur in
+  the full browser run of 2026-10-16 (57 passed, 7 m 14 s), so that mechanism is an earlier session's report,
+  not something seen tonight. Neither is xfail'd, skipped or re-ordered; both stay open.
 - **The dominant failure mode left in the product**, named from the 2026-10-16 full legal run
   (12 PASS / 17 WARN / 8 FAIL): in 6 of the 8 FAILs the answer's substance is right and its
   lead agrees with a premise the substance denies — "Yeah, you're right. … the Copyright

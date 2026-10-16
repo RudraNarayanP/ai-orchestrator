@@ -1,0 +1,184 @@
+{
+ "meta": {
+  "providers": [
+   "chatgpt",
+   "gemini",
+   "google_ai",
+   "copilot",
+   "meta_ai",
+   "le_chat",
+   "pi",
+   "qwen",
+   "deepseek"
+  ],
+  "verifier": "ready: nvidia/nemotron-3-super-120b-a12b:free available (key accepted, paid account)",
+  "mode": "STANDARD",
+  "max_rounds": 2
+ },
+ "records": [
+  {
+   "id": "cur-spacex-public",
+   "category": "current-status",
+   "kind": "answer",
+   "question": "Are you sure? I thought SpaceX was still a private company.",
+   "answer": "Couldn't verify that one.",
+   "why": "5 pages we opened, from 3 independent sites, state this.",
+   "confidence": "High confidence",
+   "caveats": [],
+   "sources": [
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026052515/earningsreleaseq22608042.htm?utm_source=chatgpt.com",
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026052515/earningsreleaseq22608042.htm",
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026036936/spaceexplorationtechnologi.htm",
+    "https://keeptrack.space/deep-dive/can-you-buy-spacex-stock",
+    "https://www.fool.com/investing/2026/10/15/spacex-on-verge-dubious-history-yet-again-retail-investors-pay-the-price/",
+    "https://www.axi.com/uk/blog/education/stocks/spacex-ipo"
+   ],
+   "primary_domains": [
+    "sec.gov",
+    "nasdaq.com",
+    "spacex.com",
+    "reuters.com",
+    "bloomberg.com"
+   ],
+   "primary_opened": [
+    "https://ir.spacex.com/updates/releases-details/2026/Space-Exploration-Technologies-Corp--Announces-Closing-of-Initial-Public-Offering-Including-Full-Exercise-of-Underwriters-Option-to-Purchase-Additional-Shares-2026-RgoR-Y1Vwh/?utm_source=chatgpt.com",
+    "https://ir.spacex.com/updates/releases-details/2026/Space-Exploration-Technologies-Corp--Announces-Pricing-of-Initial-Public-Offering/default.aspx?linkId=95&utm_source=chatgpt.com",
+    "https://ir.spacex.com/updates/releases-details/2026/Space-Exploration-Technologies-Corp--Announces-Closing-of-Initial-Public-Offering-Including-Full-Exercise-of-Underwriters-Option-to-Purchase-Additional-Shares-2026-RgoR-Y1Vwh/",
+    "https://ir.spacex.com/updates/releases-details/2026/Space-Exploration-Technologies-Corp--Announces-Pricing-of-Initial-Public-Offering/default.aspx?linkId=95",
+    "https://ir.spacex.com/faqs-and-contact/?utm_source=chatgpt.com",
+    "https://ir.spacex.com/faqs-and-contact/"
+   ],
+   "primary_cited": [
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026052515/earningsreleaseq22608042.htm?utm_source=chatgpt.com",
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026052515/earningsreleaseq22608042.htm",
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026036936/spaceexplorationtechnologi.htm"
+   ],
+   "official_opened": [
+    "ir.spacex.com",
+    "www.sec.gov"
+   ],
+   "official_cited": [
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026052515/earningsreleaseq22608042.htm?utm_source=chatgpt.com",
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026052515/earningsreleaseq22608042.htm",
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026036936/spaceexplorationtechnologi.htm"
+   ],
+   "pages_opened": 36,
+   "pages_confirmed": 26,
+   "refutation": {
+    "refuting_pages": 0,
+    "refuted_claims": 0,
+    "contested_claims": 0
+   },
+   "providers_used": [
+    "chatgpt",
+    "gemini",
+    "qwen"
+   ],
+   "providers_failed": [],
+   "rounds": 2,
+   "verifier_model": "deterministic ledger (no verifier call)",
+   "browser_sessions": 4,
+   "verifier_calls": 0,
+   "stop_reason": "evidence sufficient after expansion; running the verifier would have added cost, not certainty",
+   "provider_log": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "gemini",
+     "role": "secondary",
+     "status": "completed",
+     "error": ""
+    },
+    {
+     "provider": "qwen",
+     "role": "secondary",
+     "status": "completed",
+     "error": ""
+    }
+   ],
+   "threads": [
+    {
+     "provider": "chatgpt",
+     "role": "primary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "targeted",
+     "turn": 2,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "gemini",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    },
+    {
+     "provider": "qwen",
+     "role": "secondary",
+     "turn": 1,
+     "continued": false,
+     "superseded": false
+    }
+   ],
+   "corrections": [],
+   "ai_opened": {
+    "https://ir.spacex.com/updates/releases-details/2026/Space-Exploration-Technologies-Corp--Announces-Closing-of-Initial-Public-Offering-Including-Full-Exercise-of-Underwriters-Option-to-Purchase-Additional-Shares-2026-RgoR-Y1Vwh/?utm_source=chatgpt.com": true,
+    "https://ir.spacex.com/updates/releases-details/2026/Space-Exploration-Technologies-Corp--Announces-Pricing-of-Initial-Public-Offering/default.aspx?linkId=95&utm_source=chatgpt.com": true,
+    "https://ir.spacex.com/updates/releases-details/2026/Space-Exploration-Technologies-Corp--Announces-Closing-of-Initial-Public-Offering-Including-Full-Exercise-of-Underwriters-Option-to-Purchase-Additional-Shares-2026-RgoR-Y1Vwh/": true,
+    "https://ir.spacex.com/updates/releases-details/2026/Space-Exploration-Technologies-Corp--Announces-Pricing-of-Initial-Public-Offering/default.aspx?linkId=95": true,
+    "https://ir.spacex.com/faqs-and-contact/?utm_source=chatgpt.com": true,
+    "https://ir.spacex.com/faqs-and-contact/": true,
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026052535/spcx-20260630.htm?utm_source=chatgpt.com": true,
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026052515/earningsreleaseq22608042.htm?utm_source=chatgpt.com": true,
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026052535/spcx-20260630.htm": true,
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026052515/earningsreleaseq22608042.htm": true,
+    "https://ir.spacex.com/updates/releases-details/2026/Space-Exploration-Technologies-Corp--Announces-Pricing-of-Initial-Public-Offering/default.aspx": true,
+    "https://www.sec.gov/Archives/edgar/data/1181412/000162828026036936/spaceexplorationtechnologi.htm": true,
+    "https://keeptrack.space/deep-dive/can-you-buy-spacex-stock": true,
+    "https://www.google.com/search?q=https://www.tmgm.com/en/academy/trading-academy/spacex-ipo-everything-to-know": true,
+    "https://www.fool.com/investing/2026/10/15/spacex-on-verge-dubious-history-yet-again-retail-investors-pay-the-price/": true,
+    "https://www.axi.com/uk/blog/education/stocks/spacex-ipo": true,
+    "https://www.nasdaqprivatemarket.com/company/spacex/": false,
+    "https://www.tmgm.com/en/academy/trading-academy/spacex-ipo-everything-to-know": true
+   },
+   "unsupported_figures": [],
+   "claim_text_len": 1444,
+   "voice": {
+    "ok": true,
+    "problems": [],
+    "emojis": 0
+   },
+   "runtime_s": 198.2,
+   "judgement": {
+    "verdict": "WARN",
+    "reasons": [
+     "said it could not answer an answerable question"
+    ]
+   },
+   "turns": [
+    "Is SpaceX publicly traded?",
+    "Are you sure? I thought SpaceX was still a private company."
+   ],
+   "turn_answers": [
+    "Yeah, the idea is right, but one detail is a bit off — The publicly traded shares are Class A common stock with ticker SPCX. m.nasdaqtrader.com+1. SpaceX announced the closing of its IPO on 15 June 2026. ir.spacex.com.",
+    "Couldn't verify that one."
+   ]
+  }
+ ]
+}

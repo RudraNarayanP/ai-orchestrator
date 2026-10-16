@@ -480,3 +480,45 @@ vision model or site, the refutation detector's precision, cancellation against 
 `start.bat` on a clean machine. Historical rows were not rewritten, and nothing in this section was obtained by
 lowering a threshold -- the one threshold-shaped effect (`pages_confirmed` counting only `confirmed` rows) is
 reported above as the reason a correct answer can score lower.
+
+## 17. After the run: gates, a reproduced race, and the SpaceX re-check splitting into a proof and a new bug
+
+- **Gates, measured.** Offline `pytest -q -m "not browser"`: **1177 passed, 57 deselected, 143 s** (12:42).
+  Browser `pytest -q -m browser`: **57 passed, 434 s** (12:50). The `test_vision`
+  `ConnectionResetError`-under-load flake reported by an earlier session did **not** recur in that full run,
+  so it stays recorded as an unproven mechanism, not as fixed and not as gone.
+- **The compress intermittency reproduced and has a named root cause.** 300 repeats of one `compress` with
+  8 busy threads raised `AttributeError: 'NoneType' object has no attribute 'segment_id'` at
+  `backend/thread/service.py:297` -- inside the handler whose comment says "one provider failing must not stop
+  the others". `ThreadStore` shares one sqlite connection (`check_same_thread=False`, `store.py:123`) with an
+  `RLock` that only writers hold; `open_segment` commits under the lock and re-reads the row outside it
+  (`store.py:179-187`) while `segment()`, `segments()`, `active_segment()` and `provider_ordinal()` read
+  unlocked, so a read concurrent with another thread's write can return nothing. `85615ee` fixes the handler
+  (the symptom becomes a reported per-provider failure, with a regression test). The locking is **not** fixed,
+  and `plan_turn`'s `_segment_for` dereferences the same `None` on the ordinary chat path: guarding the readers
+  changes the concurrency contract of the layer that stores the user's real conversation and needs its own
+  before/after repeat-run measurement.
+- **`cur-spacex-public` is still WARN, but for a different reason than the one being tracked.** Turn 1
+  ("Is SpaceX publicly traded?") answered correctly -- "The publicly traded shares are Class A common stock
+  with ticker SPCX ... SpaceX announced the closing of its IPO on 15 June 2026", 6 primary pages opened from
+  `ir.spacex.com` -- so the JS-heavy-page reading fix is live-proven at last. The WARN comes from the judged
+  pushback turn, and its record contradicts its own answer:
+
+  | field | value in the same row |
+  |---|---|
+  | answer | "Couldn't verify that one." |
+  | confidence | High confidence |
+  | pages opened / confirmed | 36 / 26 |
+  | why | "5 pages we opened, from 3 independent sites, state this." |
+  | stop reason | "evidence sufficient after expansion; running the verifier would have added cost, not certainty" |
+  | caveats | none |
+
+  A refusal the ledger disproves, carrying no reason, is the shape non-negotiable 5 exists to forbid. It is an
+  answer-layer/state bug on the recall-and-pushback path -- the evidence arrived and did not reach the answer
+  -- and it is the highest-value fix after the lead inversion. It reproduces in 198 s with
+  `--only cur-spacex-public`; it must not be "fixed" by making the answer confident, which would assert over a
+  contested premise, nor by deleting the `why` line, which is the correct half.
+- Remote state at this push: `origin/master` was `48b0a6f` (2026-10-10 10:43); every commit since is being
+  pushed in one fast-forward. Pre-push audit: the real OpenRouter key appears 0 times in the unpushed history,
+  the diff, and all tracked files; the eval artifacts added here contain no provider conversation URLs and no
+  local paths.
