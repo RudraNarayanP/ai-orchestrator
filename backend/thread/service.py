@@ -289,6 +289,12 @@ class ThreadService:
 
         async def prime(p: str) -> None:
             s = await asyncio.to_thread(self.store.open_segment, tid, p, "compress")
+            if s is None:
+                # open_segment reads the row back outside the store's lock, so a concurrent provider's
+                # transaction boundary can erase it (reproduced under CPU load, 2026-10-16). There is no
+                # segment to close: say this provider failed instead of crashing every provider's.
+                opened[p] = {"ok": False, "error": "segment not opened (store race)"}
+                return
             try:
                 reply = await ask(p, s.provider_key, opening, False)
                 await asyncio.to_thread(self.store.add_segment_tokens, s.segment_id, approx_tokens(opening) + approx_tokens(reply or ""))

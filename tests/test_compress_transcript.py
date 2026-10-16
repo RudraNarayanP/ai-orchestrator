@@ -165,3 +165,34 @@ def test_a_provider_that_fails_to_open_its_fresh_chat_does_not_stop_the_others()
     out = asyncio.run(go())
     assert not out["providers"]["qwen"]["ok"] and out["providers"]["chatgpt"]["ok"]
     assert svc.store.active_segment(tid).segment_id == out["providers"]["chatgpt"]["segment_id"]
+
+
+def test_a_segment_that_vanished_is_reported_not_deferenced():
+    """Reproduced under CPU load 2026-10-16 (300 repeats of this same compress): open_segment inserts the
+    row inside the store lock but reads it back outside it, on one shared sqlite connection, so a second
+    provider's transaction boundary can leave the first with nothing to read. prime() then did
+    `s.provider_key` on None, the except handler did `s.segment_id` on the same None, and the AttributeError
+    escaped compress -- one provider's lost row stopped every provider."""
+    svc = ThreadService(ThreadStore(":memory:"))
+    tid = svc.create_thread("t")
+    real = svc.store.open_segment
+
+    def flaky(t, provider, reason="start"):
+        return None if provider == "deepseek" else real(t, provider, reason)
+
+    async def ask(provider, key, prompt, cont):
+        return "Ready." if prompt.startswith("We are continuing") else "ok"
+
+    async def go():
+        await svc.chat(tid, "we decided to use Rust", "chatgpt", ask)
+        svc.store.open_segment = flaky
+        try:
+            return await svc.compress(tid, ["deepseek", "chatgpt"], ask)
+        finally:
+            svc.store.open_segment = real
+
+    out = asyncio.run(go())
+    assert out["providers"]["deepseek"]["ok"] is False, "the vanished row is a reported failure, not a crash"
+    assert "store race" in out["providers"]["deepseek"]["error"]
+    assert out["providers"]["chatgpt"]["ok"] is True
+    assert svc.store.active_segment(tid).segment_id == out["providers"]["chatgpt"]["segment_id"]
