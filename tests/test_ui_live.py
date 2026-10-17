@@ -15,6 +15,7 @@ import uvicorn
 from playwright.async_api import async_playwright
 
 from backend.api import app as api_app
+from backend.models import ProviderResponse, ProviderStatus
 from tests.conftest import base_settings
 from tests.test_history_export import finished_job
 
@@ -41,6 +42,12 @@ def server(tmp_path, monkeypatch):
     newer = finished_job("Is it safe to take ibuprofen with warfarin?")
     newer.created_at = older.created_at + 60
     newer.final.answer = "Not without medical advice. " + LONG
+    newer.responses = [
+        ProviderResponse(
+            job_id=newer.id, provider="chatgpt", prompt="What is the interaction?",
+            answer_text="Ibuprofen raises bleeding risk with warfarin.", status=ProviderStatus.COMPLETED, duration_s=12.0,
+        )
+    ]
     for job in (older, newer):
         store.save_job(job)
     port = _free_port()
@@ -100,6 +107,22 @@ async def test_export_links_download_the_markdown_and_json(page, server):
         await page.locator(".export-link", has_text="Markdown").click()
     download = (await info.value)
     assert download.suggested_filename == f"omnibrain-{server['newer'].id}.md"
+
+
+async def test_raw_research_panel_renders_rather_than_a_stringified_promise(page, server):
+    """The raw panel is built by an async function. Node.append() turns a non-node into a string,
+    so the panel used to read "[object Promise]" and the audit trail was simply not there."""
+    await page.click("#openHistory")
+    await page.locator(".history-item").first.click()
+    await page.wait_for_selector(".msg.ai .answer-text")
+    await page.locator("summary", has_text="Raw research").click()
+    await page.wait_for_selector(".raw-card")
+    body = await page.locator(".msg.ai").inner_text()
+    assert "[object Promise]" not in body
+    # the provider cards are collapsed <details>, so their text only exists once opened
+    await page.locator(".raw-card > summary", has_text="chatgpt").click()
+    body = await page.locator(".msg.ai").inner_text()
+    assert "Ibuprofen raises bleeding risk with warfarin." in body
 
 
 async def test_empty_history_says_so(tmp_path, monkeypatch):

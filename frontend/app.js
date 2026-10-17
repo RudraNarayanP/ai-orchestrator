@@ -899,14 +899,27 @@ function expander(title, build, open = false) {
   summary.textContent = title;
   details.append(summary);
   let built = false;
-  details.addEventListener("toggle", () => {
-    if (details.open && !built) {
-      built = true;
-      const body = build();
-      if (body) details.append(body);
+  const fill = () => {
+    if (built) return;
+    built = true;
+    const body = build();
+    // Node.append() stringifies anything that is not a node, and the raw-research builder is
+    // async -- so a Promise landed in the panel as the literal text "[object Promise]".
+    if (body && typeof body.then === "function") {
+      const pending = el("p", "meta", "loading…");
+      details.append(pending);
+      body.then(
+        (node) => pending.replaceWith(node || el("span")),
+        (err) => pending.replaceWith(el("p", "meta err", `could not load: ${err && err.message ? err.message : err}`)),
+      );
+      return;
     }
+    if (body) details.append(body);
+  };
+  details.addEventListener("toggle", () => {
+    if (details.open) fill();
   });
-  if (open) { const body = build(); if (body) details.append(body); built = true; }
+  if (open) fill();
   return details;
 }
 
