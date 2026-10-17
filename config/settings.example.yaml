@@ -53,33 +53,52 @@ verifier:
   # and if all fail the verdicts come from the evidence ledger and the caveats say so.
   # Alternative: provider: ollama, model: qwen3:14b, base_url: http://localhost:11434/v1
   # (provider: ollama | lm_studio | openrouter | openai_compatible | disabled)
+  #
+  # THIS POOL WAS MEASURED, NOT GUESSED (scripts/curator_bench.py, 2026-10-16, replaying the real
+  # curator prompt from stored jobs). What each :free model did with a 12-claim review:
+  #   nvidia/nemotron-3.5-super-vl    17-36s, every claim judged, valid JSON, real answer  <- primary
+  #   dots-studio/dots-3-note-preview 29s, every claim judged
+  #   cohere/north-mini-code          18s, 11 of 12 judged
+  #   nvidia/nemotron-3-super-120b    38s, only 8 of 12 judged
+  #   poolside/laguna-s-2.1           63-81s, the most careful reviewer, far too slow to lead with
+  #   google/gemma-4-26b / 31b         9s, reply never parsed at all
+  #   nvidia/nemotron-3.5-lightning, nemotron-3-ultra-550b   still nothing after 120s
+  #   poolside/laguna-xs-2.1           429 upstream;  thinkingmachines/inkling*  403, not offered
+  # A model that calls every claim "supported" is harmless here and is not a reason to prefer it:
+  # _reconcile refuses a promotion the ledger does not confirm. Latency is the tiebreaker.
   provider: openrouter
-  model: nvidia/nemotron-3-super-120b-a12b:free
+  model: nvidia/nemotron-3.5-super-vl:free
   base_url: https://openrouter.ai/api/v1
   api_key: ""                # never leaves the backend; empty -> OPENROUTER_API_KEY
   fallback_models:
+  - dots-studio/dots-3-note-preview:free
+  - cohere/north-mini-code:free
+  - nvidia/nemotron-3-super-120b-a12b:free
   - poolside/laguna-s-2.1:free
-  - google/gemma-4-26b-a4b-it:free
-  - google/gemma-4-31b-it:free
   headers:                   # optional OpenRouter attribution headers
     HTTP-Referer: http://localhost
     X-Title: OmniBrain
   temperature: 0.1
   max_tokens: 4096
   timeout_s: 240
+  time_cap_s: 45             # the measured worst for the primary is 36s; 30s made it time out every time
   deep_verification: true
   inspect_cited_sources: true
   max_sources_per_claim: 3
 
 analysis:
   # cheaper endpoint for question analysis / claim extraction / synthesis
+  # Measured on the same day as the curator pool above: this classify call took
+  # nvidia/nemotron-3.5-super-vl 1.3s, cohere/north-mini-code 2.2s, dots-3 10.3s, and
+  # nvidia/nemotron-3.5-lightning 82s -- which is why lightning is not in this pool any more.
   provider: openrouter
-  model: poolside/laguna-s-2.1:free
+  model: nvidia/nemotron-3.5-super-vl:free
   base_url: https://openrouter.ai/api/v1
   api_key: ""
   fallback_models:
-  - nvidia/nemotron-3.5-lightning:free
+  - cohere/north-mini-code:free
   - nvidia/nemotron-3-super-120b-a12b:free
+  - dots-studio/dots-3-note-preview:free
   headers:                   # optional OpenRouter attribution headers
     HTTP-Referer: http://localhost
     X-Title: OmniBrain
