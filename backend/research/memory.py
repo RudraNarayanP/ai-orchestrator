@@ -37,7 +37,13 @@ PUSHBACK_RE = re.compile(
     r"|that'?s not (?:right|correct)|i (?:don'?t|do not) believe|i think you(?:'re| are)"
     r"|check again|double.?check|look again|try again|re-?check|search again"
     r"|isn'?t it (?:true|the case|now|listed|public)|didn'?t (?:it|they|he|she|we) (?:ipo|go public|merge|acquire|repeal|change|happen|come)"
-    r"|actually[ ,]+(?:it|the|no|they|he|she|we|that)|no[ ,]+(?:it|that|this|the|they))\b",
+    r"|actually[ ,]+(?:it|the|no|they|he|she|we|that)|no[ ,]+(?:it|that|this|the|they)"
+    # A dispute is a dispute whatever its manners. Live (2026-10-17, a real thread the user pasted):
+    # "shut up kipsala opens at like nov 6 ... tf you talkkg about" is the user correcting a wrong
+    # answer, and none of the polite patterns above match it -- so the never-concede, re-check-the-
+    # pages path never engaged and the system treated a challenge as a fresh question.
+    r"|shut up|what(?:'s| are| is)? you (?:talking|saying|on about)|tf (?:are )?you (?:talking|saying)"
+    r"|you (?:don'?t|do not) know|stop talking|what are you on about)\b",
     re.I,
 )
 
@@ -60,6 +66,26 @@ def entities_in(text: str, *, skip_first: bool = False) -> list[str]:
     return out
 
 
+def _mentions_prior_subject(text: str, prior: ConversationTurn) -> bool:
+    """Does this message name something already under discussion?
+
+    ``entities_in`` only sees capitalised names. A user who writes "wtf is happening with shed" types
+    the subject in lowercase, so the message looks self-contained, is treated as a brand-new question,
+    and the whole previous turn is thrown away -- which is exactly the "I have to say it again"
+    failure this system exists to avoid. The prior *answer* is properly capitalised, so the name is
+    available; matching it case-insensitively is enough.
+
+    Known limit: this is not diacritic-insensitive. "kipsala" will not match an answer that wrote
+    "Ķīpsala" -- a separate concern, and failing here only loses the shortcut, not the history block.
+    """
+    tokens = set(re.findall(r"[a-z0-9']+", (text or "").lower()))
+    for name in inherited_entities(prior):
+        head = name.split()[0].lower()
+        if len(head) >= 4 and head in tokens:
+            return True
+    return False
+
+
 def is_follow_up(question: str, prior: ConversationTurn | None) -> bool:
     """Does this question lean on the previous turn?"""
     if prior is None:
@@ -74,6 +100,9 @@ def is_follow_up(question: str, prior: ConversationTurn | None) -> bool:
         # It names its own subject. Only an explicit "and what about X?" is a follow-up.
         return continuer and len(words) <= 8
     if continuer or STRONG_REFERENT_RE.search(text):
+        return True
+    # No capitalised subject, but it says the thing we were just talking about.
+    if _mentions_prior_subject(text, prior):
         return True
     if WEAK_REFERENT_RE.search(text) and len(words) <= 8:
         return True

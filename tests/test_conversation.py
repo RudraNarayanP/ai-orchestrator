@@ -77,6 +77,55 @@ def test_self_contained_questions_in_the_same_thread_are_not_follow_ups(question
 
 def test_no_history_means_never_a_follow_up():
     assert not memory.is_follow_up("And how did they build it?", None)
+
+
+# ------------------------------------------------- a lowercase subject still counts as the same one
+#
+# Live (2026-10-17, the user pasted the thread that triggered this): a real conversation about Riga
+# student housing, where every one of their messages is lowercase and full of shorthand. `entities_in`
+# only sees capitalised names, so "wtf is happening with shed" looked like a brand-new question, the
+# previous turn was discarded, and the user had to say it again -- the exact behaviour this product
+# is supposed to remove. The prior ANSWER is properly capitalised, so the name is available.
+
+HOUSING_PRIOR = ConversationTurn(
+    job_id="job_r",
+    question="so how much time bro for transit from like duck or like shed to like my rtu main campus",
+    answer="Commute from SHED Co-Living is about 22 minutes; Duck Republik Student Hotel is 50 minutes to the RTU Ķīpsala campus.",
+    confirmed_claims=["SHED keeps the deposit if the visa is refused."],
+    confidence="moderate",
+)
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "ayoo wtf is happening with shed bro lmao i don't want any of thse lmao",
+        "but is shed cheaper than duck republik",
+        "what about the duck one",
+    ],
+)
+def test_a_lowercase_message_naming_the_running_subject_is_a_follow_up(question):
+    assert memory.is_follow_up(question, HOUSING_PRIOR), question
+
+
+def test_an_unrelated_lowercase_question_is_still_not_a_follow_up():
+    """The shortcut must not turn every lowercase message into a continuation."""
+    assert not memory.is_follow_up("how do i boil an egg properly", HOUSING_PRIOR)
+
+
+def test_a_blunt_correction_is_read_as_a_dispute_not_a_new_question():
+    """A dispute is a dispute whatever its manners -- the never-concede path has to engage.
+
+    The same thread: the user corrects a wrong "the dorms are a safety net" claim with "shut up ...
+    tf you talkkg about". None of the polite patterns matched, so the system treated a challenge as
+    a fresh question and the re-check-against-the-pages rule never ran.
+    """
+    challenge = "shut up kipsala opens at like nov 6 around and like completley locks down by students who book out early dumbass tf you talkkg about"
+    assert memory.is_pushback(challenge, HOUSING_PRIOR)
+
+
+def test_a_polite_new_question_in_the_same_thread_is_not_read_as_a_dispute():
+    assert not memory.is_pushback("and what about the ones near agenskalns?", HOUSING_PRIOR)
     analysis = router.classify("And how did they build it?")
     assert analysis.follow_up is False and analysis.standalone_question is None
 
