@@ -306,14 +306,25 @@ class Verifier:
             disagreements=disagreements, round_no=round_no, corrections=corrections,
         )
         if omitted:
+            # Two different reasons, and the reader needs the right one: the review ran out of
+            # batches, or there was nothing attached to weigh. Both are an unfinished review; only
+            # the first is a limit we set ourselves.
+            attached = {e.claim_id for e in evidence if e.claim_id}
+            unweighed = [c for c in omitted if c.id not in attached]
+            unreached = [c for c in omitted if c.id in attached]
             report.reviewer_status = "INCOMPLETE"
             report.synthesis_status = "CURATED"
-            report.fallback_reason = (
-                f"review limit reached: {len(omitted)} claim(s) answering the question were never adjudicated"
+            causes = []
+            if unreached:
+                causes.append(f"review limit reached: {len(unreached)} claim(s) the review budget did not reach")
+            if unweighed:
+                causes.append(f"{len(unweighed)} claim(s) answering the question had no page of ours attached")
+            report.fallback_reason = "; ".join(causes)
+            report.caveats = list(report.caveats) + (
+                [f"verifier review incomplete (claim limit reached): {len(unreached)} claim(s) were never adjudicated"] if unreached else []
+            ) + (
+                ["verifier review incomplete (nothing to weigh): some points answering your question had no source page attached to check them against"] if unweighed else []
             )
-            report.caveats = list(report.caveats) + [
-                f"verifier review incomplete (claim limit reached): {len(omitted)} claim(s) were never adjudicated"
-            ]
         else:
             report.reviewer_status, report.synthesis_status, report.fallback_reason = "COMPLETED", "CURATED", ""
         report.raw_output = stored_raw(reply.text)
@@ -469,6 +480,7 @@ class Verifier:
             corrections=corrections,
         )
         judged = {v.claim_id for v in report.verdicts}
+        gaps = {c.id for c in left}
         for claim in claims:
             if claim.id in judged:
                 continue
@@ -481,6 +493,15 @@ class Verifier:
                     reasoning="never adjudicated: it was not put to the curator and no page we opened was checked against it",
                 )
             )
+            # `pending` decides what is worth another curator call -- a claim with no page of ours
+            # attached has nothing to weigh, so it is not sent. It must not also decide what counts
+            # as a gap: a claim answering the question that nobody adjudicated is an unfinished
+            # review whether or not there was anything to adjudicate it with. Live (2026-10-17,
+            # replayed): 16 claims, 4 dropped by `focus` with no page attached, reviewer_status
+            # COMPLETED and fallback_reason empty.
+            if claim.id not in gaps and addresses_question(question, claim.claim):
+                gaps.add(claim.id)
+                left.append(claim)
         return left
 
     def _material(self, question, claims, evidence, responses, disagreements, round_no: int = 1, corrections: list[Any] | None = None) -> str:

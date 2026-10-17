@@ -259,6 +259,39 @@ async def test_when_the_extra_batches_run_out_the_review_says_so(fake_openai):
     assert calls <= 1 + 1 + 2 * Verifier.RECOVERY_CALLS, f"extra review must stay bounded, took {calls}"
 
 
+async def test_a_claim_answering_the_question_with_no_page_is_still_a_gap(fake_openai):
+    """`pending` decides what is worth another curator call; it must not also decide what is a gap.
+
+    Live (2026-10-17, replayed job_261016150809_fa891ed9): 16 claims, four dropped by `focus` and
+    none of the four had a page of ours attached. They answered the question, nobody adjudicated
+    them -- and the pass reported reviewer_status=COMPLETED with an empty fallback_reason.
+    """
+    kept = [claim(f"The Act came into force on 25 May 2018, wording {i}.", f"clm_{i:02d}") for i in range(Verifier.MAX_CLAIMS)]
+    orphans = [claim(f"The Act received Royal Assent on 23 May 2018, wording {i}.", f"clm_{i:02d}")
+               for i in range(Verifier.MAX_CLAIMS, Verifier.MAX_CLAIMS + 2)]
+    evidence = [page(c.id) for c in kept]  # the orphans get no page at all
+    report = await run_curator(fake_openai, [answers_whatever_it_is_shown], kept + orphans, evidence)
+
+    unreviewed = {v.claim_id for v in report.verdicts if v.verdict is ClaimStatus.NOT_REVIEWED}
+    assert {c.id for c in orphans} <= unreviewed, "the unattached claims must be recorded, not dropped"
+    assert report.reviewer_status == "INCOMPLETE", (report.reviewer_status, report.fallback_reason)
+    assert "no page of ours attached" in report.fallback_reason, report.fallback_reason
+    assert "limit" not in report.fallback_reason, "this was not the budget running out -- say the real cause"
+
+
+def test_the_no_page_gap_reaches_the_reader_without_implying_wrongness():
+    report = VerifierReport(
+        job_id="j", round=1, confidence=Confidence.MODERATE, answer="x",
+        verdicts=[judged("clm_a", ASSSENT, ClaimStatus.SUPPORTED, [GOV])],
+        reviewer_status="INCOMPLETE", synthesis_status="CURATED",
+        fallback_reason="2 claim(s) answering the question had no page of ours attached",
+        caveats=["verifier review incomplete (nothing to weigh): some points answering your question had no source page attached to check them against"],
+    )
+    final = build_final_answer(report, [], 1, TWO_PART)
+    assert any("no source page attached" in c for c in final.caveats), final.caveats
+    assert not any("more to check than one review pass" in c for c in final.caveats), "that wording is for the budget limit"
+
+
 def test_the_limit_caveat_reaches_the_reader_in_plain_words():
     report = VerifierReport(
         job_id="j", round=1, confidence=Confidence.MODERATE, answer="x",

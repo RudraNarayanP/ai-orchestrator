@@ -496,6 +496,9 @@ _CAVEAT_REWRITES = (
     (re.compile(r"^verifier review incomplete \(cut off mid-reply", re.I), "The AI reviewer's reply was cut off before it finished, so the points it never reached rest only on the pages I could open and check."),
     (re.compile(r"^verifier review incomplete \(returned no verdicts", re.I), "The AI reviewer returned no judgements at all, so this rests only on the pages I could open and check."),
     (re.compile(r"^verifier review incomplete \(claim limit reached", re.I), "There was more to check than one review pass could hold, and I didn't get through all of it, so the parts I missed rest only on the pages I could open and check."),
+    # Nothing to weigh is a different gap from running out of budget: no page was attached to the
+    # point at all. It must not read as "the pages disagree", and it must not imply the point is wrong.
+    (re.compile(r"^verifier review incomplete \(nothing to weigh\)", re.I), "Some points answering your question had no source page attached for me to check them against, so they stay unverified -- that is not the same as them being wrong."),
     (re.compile(r"^verifier review incomplete", re.I), "The AI reviewer's pass was incomplete, so this rests only on the pages I could open and check."),
     # A half of the user's own question that research could not settle. The part text is kept: a
     # generic "some parts are unconfirmed" would not tell them WHICH one they still need to chase.
