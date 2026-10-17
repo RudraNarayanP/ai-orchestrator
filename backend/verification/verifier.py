@@ -45,8 +45,9 @@ from backend.research.style import (
     VERIFIER_ROLE,
     answer_budget,
     humanize,
-    premise_state,
     is_claim_check,
+    is_refusal,
+    premise_state,
     plain_caveats,
     render_truth,
     scrub,
@@ -1800,6 +1801,33 @@ def ground_answer(report: VerifierReport, question: str) -> VerifierReport:
     return report.model_copy(update={"answer": best.claim.strip().rstrip(".") + "."})
 
 
+# What the run can honestly say when it declines to answer but did open pages. It must describe its
+# own limitation, not the world's: "none of the pages states it" would be a claim about the evidence
+# this layer is exactly unable to make.
+_REFUSAL_WHY = "I opened pages and they confirm related points, but this run could not tie any of them to what you asked."
+# Phrases that presuppose the answer asserted something. Beside a refusal they are nonsense.
+_ASSERTIVE_WHY_RE = re.compile(r"\b(?:state|states|back|backs|support|supports|confirm|confirms|show)\s+this\b", re.I)
+_ASSERTIVE_CAVEAT_RE = re.compile(r"\b(?:backs|supports|state|confirms|prove)\s+this\b", re.I)
+
+
+def keep_a_refusal_consistent(answer: str, why: str, caveats: list[str]) -> tuple[str, list[str]]:
+    """A refusal asserts nothing, so nothing can be said to back "this".
+
+    Live (2026-10-16, six jobs): answer "Couldn't verify that one." shipped beside
+    why="5 pages we opened, from 3 independent sites, state this." and the caveat "Only one
+    independent site backs this." -- both describing an assertion the answer never makes. That is
+    the worst shape this product can take: a refusal the record appears to disprove, with no reason
+    stated. Non-negotiable 5 says a refusal must carry why; this makes the why true as well.
+    """
+    if not is_refusal(answer):
+        return why, caveats
+    out_why = why or ""
+    if not out_why or _ASSERTIVE_WHY_RE.search(out_why):
+        out_why = _REFUSAL_WHY if out_why else ""
+    kept = [c for c in caveats or [] if not _ASSERTIVE_CAVEAT_RE.search(str(c))]
+    return out_why, kept
+
+
 def build_final_answer(report: VerifierReport, responses: list[ProviderResponse], rounds_run: int, question: str = "") -> FinalAnswer:
     used = sorted({r.provider for r in responses if r.status.value == "completed"})
     failed = sorted({r.provider for r in responses if r.status.value != "completed"})
@@ -1866,18 +1894,21 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
                 tiny(body, max_sentences=sentences, max_chars=chars),
                 report.confidence.value if hasattr(report.confidence, "value") else str(report.confidence),
             )
+    why_text = lint_answer(
+        report.why, question=question, unknowns=([] if state in {"TRUE", "FALSE", "PARTLY"} else unknowns),
+        settled=[v.claim for v in report.verdicts if v.verdict in settled],
+    ).text if report.why else report.why
+    caveat_list = plain_caveats(list(report.caveats) + ([report.confidence_note] if report.confidence_note else []) + list(report.unresolved or []), limit=1)
+    why_text, caveat_list = keep_a_refusal_consistent(text, why_text, caveat_list)
     return FinalAnswer(
         answer=text,
         truth_state=state,
-        why=lint_answer(
-            report.why, question=question, unknowns=([] if state in {"TRUE", "FALSE", "PARTLY"} else unknowns),
-            settled=[v.claim for v in report.verdicts if v.verdict in settled],
-        ).text if report.why else report.why,
+        why=why_text,
         important_disagreement=lint_answer(report.important_disagreement, question=question).text if report.important_disagreement else report.important_disagreement,
         confidence=report.confidence,
         confidence_label=confidence_label(report.confidence),
         sources=report.sources,
-        caveats=plain_caveats(list(report.caveats) + ([report.confidence_note] if report.confidence_note else []) + list(report.unresolved or []), limit=1),
+        caveats=caveat_list,
         rounds_run=rounds_run,
         providers_used=used,
         providers_failed=failed,

@@ -383,6 +383,28 @@ def count_emojis(text: str) -> int:
     return len(EMOJI_RE.findall(text or ""))
 
 
+# Only these decline to state an answer. _PLAIN_STARTS is NOT reusable here: it also covers
+# "yeah, the idea is right", which is a PARTLY verdict and does take a position.
+_REFUSAL_STARTS = (
+    "i don't know", "i couldn't verify", "i could not verify", "i can't verify", "i cannot verify",
+    "couldn't verify", "could not verify", "can't verify", "that's not publicly documented",
+    "that isn't publicly documented", "the sources i found don't say", "i couldn't find that documented",
+    "i'm not sure", "i am not sure", "hmm, i'm not sure", "hmm, i am not sure",
+)
+
+
+def is_refusal(text: str) -> bool:
+    """Does this answer state nothing, i.e. decline to answer?
+
+    The prose around it has to know: a run that answers "Couldn't verify that one." and then
+    explains "5 pages we opened, from 3 independent sites, state this." is describing an
+    assertion it never made (live, 2026-10-16, six jobs). Whatever the ledger decided, the
+    answer layer must not talk about what "this" is backed by when there is no "this".
+    """
+    low = (text or "").strip().lower()
+    return bool(low) and low.startswith(_REFUSAL_STARTS)
+
+
 def humanize(answer: str, confidence: str = "moderate") -> str:
     """One fitting emoji, at the very end, on a confident answer only.
 
