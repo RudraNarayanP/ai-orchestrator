@@ -51,6 +51,47 @@ def test_the_same_date_written_the_other_way_confirms_too():
     assert "1889-03-31" not in out["missing"], "a canonical key is never what the page prints"
 
 
+# ------------------------------------------------- the same figure written the other way
+#
+# Live (2026-10-17, four-country housing question): destatis published "14,4 % weniger
+# fertiggestellte Wohnungen im Jahr 2024" -- the exact page for "Germany completed 251,900 homes
+# in 2024, 14.4% fewer than in 2023" -- and the run recorded it as a MISMATCH. The figure
+# normaliser deleted every separator, so the page became "144" while the claim kept "14.4" and the
+# number that is plainly on the page read as absent. A contradiction and a gap are different
+# findings, and the product reported the wrong one.
+
+DE_HOUSING_BODY = (
+    "14,4 % weniger fertiggestellte Wohnungen im Jahr 2024. Im Jahr 2024 wurden in Germany "
+    "rund 251,900 Wohnungen fertiggestellt, das waren 14,4 % weniger als im Jahr 2023. "
+    "Damit setzte sich der Abwaertstrend im Wohnungsbau fort."
+)
+DE_CLAIM = "Germany completed approximately 251,900 homes in 2024, 14.4% fewer than in 2023"
+
+
+def test_a_decimal_comma_on_the_page_is_the_same_figure_as_a_point_in_the_claim():
+    out = outcome(DE_CLAIM, page(DE_HOUSING_BODY, title="14,4 % weniger fertiggestellte Wohnungen im Jahr 2024"))
+    assert "14.4%" not in out["missing"], out
+    assert out["status"] is not SourceCheckStatus.MISMATCH, "a page stating the figure is not one that contradicts it"
+
+
+def test_a_thousands_group_is_still_read_as_a_thousands_group():
+    """The comma-with-three-digits-after-it case must keep collapsing, or "3,2 billion" breaks."""
+    out = outcome("The tower cost 3,200,000,000 francs.", page("The tower cost 3,200,000,000 francs to build in 1889."))
+    assert "3,200,000,000" not in out["missing"], out
+
+
+def test_a_decimal_comma_page_does_not_start_confirming_an_unrelated_whole_number():
+    """The new path must only ever unify 14,4 with 14.4 -- it must not become a looser match.
+
+    Pinned as a pair: "1,5" on the page is the same number as 1.5, and a claim about 15 is a
+    different number. (Whether 15 also slips through the older whole-string comparison is a
+    separate, pre-existing looseness this test deliberately does not claim to have fixed.)
+    """
+    body = "Only 1,5 homes were completed in Germany in 2024, per the office."
+    decimal = outcome("Germany completed 1.5 homes in 2024.", page(body))
+    assert "1.5" not in "".join(str(m) for m in decimal["missing"]), decimal
+
+
 def test_a_paraphrase_of_the_body_still_confirms():
     out = outcome("The tower's construction finished on 31 March 1889.", page())
     assert out["status"] == SourceCheckStatus.CONFIRMED, out

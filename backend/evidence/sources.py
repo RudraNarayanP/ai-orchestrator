@@ -199,6 +199,9 @@ def extract_date(page_html: str, text: str = "") -> str | None:
 
 _MAIN_REGION_RE = re.compile(r"(?is)<(main|article)\b[^>]*>(.*?)</\1\s*>")
 _CHROME_FIRST_WORDS = ("skip to main content", "sign in", "log in", "search", "menu", "cookie")
+# A comma between digits with one or two digits after it is a decimal mark ("14,4"), not a
+# thousands group ("3,200"). See check_support.
+_DECIMAL_COMMA = re.compile(r"(?<=\d),(?=\d{1,2}(?!\d))")
 
 
 def _main_region(html: str) -> str:
@@ -565,6 +568,17 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
     coverage = (len(hit) / len(tokens)) if tokens else 0.0
 
     missing: list[str] = []
+    # A European official page writes the same number the other way round: destatis says
+    # "14,4 %" where the claim says "14.4%". The normaliser below deletes both separators, which
+    # collapses the page to "144" while the claim keeps "14.4" -- so the page that states the
+    # figure exactly is recorded as a mismatch and the claim dies. A comma with 1-2 digits after
+    # it is read as a decimal mark; with exactly 3 it is a thousands group and keeps being
+    # deleted, so "3,200,000,000" still reads as "3200000000".
+    # Known and NOT fixed here: the older comparison deletes both separators on each side, so a
+    # page saying "1,5" can already satisfy a claim about "15". Tightening that would also change
+    # how "251,900" matches "251.900", which live confirmations depend on -- it needs its own pass
+    # against stored rows, not a ride-along with this one.
+    decimal_page = re.sub(r"[,\s]", "", _DECIMAL_COMMA.sub(".", text_lower))
     for number in sig["numbers"][:6]:
         digits = re.sub(r"[^0-9.]", "", number)
         if not digits:
@@ -572,8 +586,8 @@ def check_support(claim: str, page: FetchedPage, *, min_coverage: float = 0.42) 
         # "3.2 billion" should match "3.2B" and "3,200,000,000", so compare
         # significant digits loosely rather than by exact string.
         core = digits.rstrip("0").rstrip(".") or digits
-        if core not in re.sub(r"[,\s]", "", text_lower.replace(".", "")):
-            if digits not in re.sub(r"[,\s]", "", text_lower):
+        if core not in re.sub(r"[,\s]", "", text_lower.replace(".", "")) and core not in decimal_page:
+            if digits not in re.sub(r"[,\s]", "", text_lower) and digits not in decimal_page:
                 missing.append(number)
     for year in sig["years"][:4]:
         if year not in text_lower:
