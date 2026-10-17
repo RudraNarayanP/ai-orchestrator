@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import functools
 import sqlite3
 import threading
 import time
@@ -113,6 +114,25 @@ class _VecIndex:
         self.n += 1
 
 
+
+def _synchronized(method):
+    """Serialise every statement on the one shared sqlite connection.
+
+    ``check_same_thread=False`` lets a worker thread touch the connection, but sqlite3 objects are
+    not safe to use concurrently. The observed failures were `InterfaceError: bad parameter or other
+    API misuse` and a read returning no row beside another thread's commit (2026-10-17 stress: 14 of
+    640 iterations, with `open_segment` handing back None to the compress path). The lock is
+    reentrant, so a wrapped method may call another wrapped method.
+    """
+
+    @functools.wraps(method)
+    def locked(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return locked
+
+
 class ThreadStore:
     def __init__(self, path: str | Path = ":memory:", embedder: Embedder | None = None) -> None:
         self.path = str(path)
@@ -135,6 +155,7 @@ class ThreadStore:
             self.db.close()
 
     # ------------------------------------------------------------------ threads
+    @_synchronized
     def create_thread(self, title: str = "", project: str | None = None) -> str:
         tid = "thr" + uuid.uuid4().hex[:12]
         now = time.time()
@@ -144,6 +165,7 @@ class ThreadStore:
             self.db.commit()
         return tid
 
+    @_synchronized
     def get_thread(self, tid: str) -> dict[str, Any] | None:
         r = self.db.execute("select * from threads where thread_id=?", (tid,)).fetchone()
         if r is None:
@@ -152,15 +174,18 @@ class ThreadStore:
         d["state"] = json.loads(d.pop("state_json") or "{}")
         return d
 
+    @_synchronized
     def list_threads(self) -> list[dict[str, Any]]:
         rows = self.db.execute("select thread_id,title,project,created_at,updated_at,next_seq-1 as messages from threads order by updated_at desc").fetchall()
         return [dict(r) for r in rows]
 
+    @_synchronized
     def set_state(self, tid: str, state: dict[str, Any]) -> None:
         with self._lock:
             self.db.execute("update threads set state_json=?, updated_at=? where thread_id=?", (json.dumps(state), time.time(), tid))
             self.db.commit()
 
+    @_synchronized
     def delete_thread(self, tid: str) -> bool:
         """Physical delete of everything in the thread (messages, vectors, summaries, index rows)."""
         with self._lock:
@@ -176,6 +201,7 @@ class ThreadStore:
             return True
 
     # ------------------------------------------------------------------ segments
+    @_synchronized
     def open_segment(self, tid: str, provider: str, reason: str = "start") -> Segment:
         with self._lock:
             idx = (self.db.execute("select coalesce(max(idx),0)+1 from segments where thread_id=?", (tid,)).fetchone()[0])
@@ -186,20 +212,25 @@ class ThreadStore:
             self.db.commit()
         return self.segment(sid)  # type: ignore[return-value]
 
+    @_synchronized
     def segment(self, sid: str) -> Segment | None:
         r = self.db.execute("select * from segments where segment_id=?", (sid,)).fetchone()
         return self._seg(r) if r else None
 
+    @_synchronized
     def has_segments(self, tid: str) -> bool:
         return self.db.execute("select 1 from segments where thread_id=? limit 1", (tid,)).fetchone() is not None
 
+    @_synchronized
     def provider_ordinal(self, seg: Segment) -> int:
         """Which chat this is among the thread's chats with the same provider (1 = A)."""
         return self.db.execute("select count(*) from segments where thread_id=? and provider=? and idx<=?", (seg.thread_id, seg.provider, seg.idx)).fetchone()[0]
 
+    @_synchronized
     def segments(self, tid: str) -> list[Segment]:
         return [self._seg(r) for r in self.db.execute("select * from segments where thread_id=? order by idx", (tid,))]
 
+    @_synchronized
     def active_segment(self, tid: str) -> Segment | None:
         r = self.db.execute("select active_segment from threads where thread_id=?", (tid,)).fetchone()
         if r is None or not r[0]:
@@ -207,11 +238,13 @@ class ThreadStore:
         s = self.segment(r[0])
         return s if s is not None and s.open else None
 
+    @_synchronized
     def set_active(self, tid: str, sid: str) -> None:
         with self._lock:
             self.db.execute("update threads set active_segment=? where thread_id=?", (sid, tid))
             self.db.commit()
 
+    @_synchronized
     def primed_segment(self, tid: str, provider: str) -> Segment | None:
         """A chat Compress opened for this provider and that has not been used yet (it already holds the thread summary)."""
         r = self.db.execute("select * from segments where thread_id=? and provider=? and reason='compress' and closed_at is null and first_seq is null "
@@ -223,6 +256,7 @@ class ThreadStore:
         return Segment(r["segment_id"], r["thread_id"], r["idx"], r["provider"], r["provider_key"], r["opened_at"], r["closed_at"], r["first_seq"],
                        r["last_seq"], r["tokens"] or 0, json.loads(r["summary_json"]) if r["summary_json"] else None, r["method"] or "", r["reason"] or "")
 
+    @_synchronized
     def close_segment(self, sid: str, summary: dict[str, Any], method: str) -> None:
         seg = self.segment(sid)
         if seg is None:
@@ -237,10 +271,12 @@ class ThreadStore:
             self.db.commit()
 
     # ------------------------------------------------------------------ messages
+    @_synchronized
     def add_message(self, tid: str, role: str, content: str, *, provider: str = "", segment_id: str | None = None, ts: float | None = None,
                     job_id: str = "", meta: dict[str, Any] | None = None) -> Message:
         return self.add_messages(tid, [dict(role=role, content=content, provider=provider, segment_id=segment_id, ts=ts, job_id=job_id, meta=meta)])[0]
 
+    @_synchronized
     def add_messages(self, tid: str, items: Iterable[dict[str, Any]], *, embed: bool = True) -> list[Message]:
         items = list(items)
         if not items:
@@ -284,6 +320,7 @@ class ThreadStore:
 
     _COLS = "msg_id,thread_id,seq,segment_id,role,content,provider,ts,tokens,job_id,meta"
 
+    @_synchronized
     def messages(self, tid: str, *, last: int | None = None, segment_id: str | None = None, after_seq: int | None = None) -> list[Message]:
         q, args = f"select {self._COLS} from messages where thread_id=?", [tid]
         if segment_id:  # +thread_id: keep the planner on the (segment_id, seq) index instead of scanning the whole thread
@@ -297,6 +334,7 @@ class ThreadStore:
             return [self._msg(r) for r in reversed(rows)]
         return [self._msg(r) for r in self.db.execute(q + " order by seq", args)]
 
+    @_synchronized
     def update_meta(self, tid: str, seq: int, **changes: Any) -> None:
         """Merge ``changes`` into one stored message's context (e.g. mark a turn the provider never answered)."""
         with self._lock:
@@ -308,20 +346,24 @@ class ThreadStore:
             self.db.execute("update messages set meta=? where thread_id=? and seq=?", (json.dumps(meta), tid, seq))
             self.db.commit()
 
+    @_synchronized
     def set_segment_tokens(self, sid: str, n: int) -> None:
         with self._lock:
             self.db.execute("update segments set tokens=? where segment_id=?", (max(0, int(n)), sid))
             self.db.commit()
 
+    @_synchronized
     def add_segment_tokens(self, sid: str, n: int) -> None:
         with self._lock:
             self.db.execute("update segments set tokens=max(0,tokens+?) where segment_id=?", (n, sid))
             self.db.commit()
 
+    @_synchronized
     def count(self, tid: str) -> int:
         r = self.db.execute("select next_seq from threads where thread_id=?", (tid,)).fetchone()
         return (r[0] - 1) if r else 0
 
+    @_synchronized
     def get_by_ids(self, ids: list[int], tid: str) -> dict[int, Message]:
         out: dict[int, Message] = {}
         for i in range(0, len(ids), 400):
@@ -331,6 +373,7 @@ class ThreadStore:
         return out
 
     # ------------------------------------------------------------------ search (hybrid)
+    @_synchronized
     def _index(self, tid: str) -> _VecIndex | None:
         th = self.get_thread(tid)
         if th is None or th["embedder"] != self.embedder.name:
@@ -342,6 +385,7 @@ class ThreadStore:
             self._vec[tid] = idx
         return self._vec[tid]
 
+    @_synchronized
     def fts_ids(self, tid: str, terms: list[str], limit: int = 60) -> list[int]:
         if not terms:
             return []
@@ -354,6 +398,7 @@ class ThreadStore:
             return []
         return [r[0] for r in rows]
 
+    @_synchronized
     def vector_ids(self, tid: str, query: str, limit: int = 60) -> list[tuple[int, float]]:
         idx = self._index(tid)
         if idx is None or idx.n == 0:
@@ -366,6 +411,7 @@ class ThreadStore:
         floor = getattr(self.embedder, "floor", 0.2)
         return [(idx.ids[i], float(sims[i])) for i in top if sims[i] >= floor]
 
+    @_synchronized
     def search_summaries(self, tid: str, terms: list[str], limit: int = 5) -> list[SummaryFound]:
         if not terms:
             return []
@@ -382,6 +428,7 @@ class ThreadStore:
             out.append(SummaryFound(int(r["segment"]), seg[0] if seg else "", r["content"], 1.0 / (30 + n), full.summary if full else None))
         return out
 
+    @_synchronized
     def search(self, tid: str, query: str, *, k: int = 12, window: tuple[float, float] | None = None) -> tuple[list[Found], list[SummaryFound]]:
         """Hybrid recall over ONE thread: keywords + vectors + summaries, fused by rank, with a soft time boost."""
         terms = query_terms(query)
@@ -428,6 +475,7 @@ class ThreadStore:
                 break
         return out, sums
 
+    @_synchronized
     def stats(self) -> dict[str, Any]:
         q = lambda s: self.db.execute(s).fetchone()[0]  # noqa: E731
         return {"threads": q("select count(*) from threads"), "segments": q("select count(*) from segments"), "messages": q("select count(*) from messages")}
