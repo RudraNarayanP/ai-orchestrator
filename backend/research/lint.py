@@ -326,6 +326,32 @@ def question_parts(question: str) -> list[str]:
     return parts if len(parts) > 1 else [text]
 
 
+# "housing crisis in the Netherlands, Germany, France and Italy" asks about four named things.
+# question_parts cannot see that: it splits clauses that each read as a question, and a list of
+# nouns is a single clause. Without the list, a four-subject question is answered about whichever
+# two claims ranked highest, and nothing says the other two were ever asked about.
+_SERIES_ITEM = r"[\w'’-]+(?:\s+[\w'’-]+){0,2}"
+_SUBJECT_SERIES = re.compile(
+    rf"\b(?:in|for|across|among|between|on|of|to)\s+({_SERIES_ITEM}(?:\s*,\s*{_SERIES_ITEM}){{1,6}}(?:\s*,)?\s*(?:and|or)\s+{_SERIES_ITEM})",
+    re.I,
+)
+
+
+def asked_subjects(question: str) -> list[str]:
+    """The things a question enumerates -- countries, products, people, laws. In the order asked.
+
+    Empty unless the question lists three or more, which is where an answer starts to stand in for
+    a subset without saying so.
+    """
+    text = re.sub(r"\s+", " ", (question or "").strip())
+    m = _SUBJECT_SERIES.search(text)
+    if not m:
+        return []
+    items = [s.strip(" ,.") for s in re.split(r"\s*,\s*|\s+(?:and|or)\s+", m.group(1))]
+    items = [i for i in items if i and len(i.split()) <= 3]
+    return items if len(items) >= 3 else []
+
+
 _TEMPORAL_ASK = re.compile(r"\b(when|what year|which year|what date|which date|since when|how old)\b", re.I)
 _MONTH_WORD = re.compile(
     r"\b(january|february|march|april|june|july|august|september|october|november|december)\b", re.I

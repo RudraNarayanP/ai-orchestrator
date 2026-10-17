@@ -43,6 +43,7 @@ from backend.research.style import (
     SOURCE_PRIORITY,
     SYNTHESIS_INSTRUCTIONS,
     VERIFIER_ROLE,
+    answer_budget,
     humanize,
     premise_state,
     is_claim_check,
@@ -900,7 +901,10 @@ class Verifier:
         ][:6]
         if good:
             lead = as_sentence(good[0].claim)
-            answer = lead if len(good) == 1 else lead + " " + " ".join(as_sentence(v.claim) for v in good[1:3])
+            # The cap here used to be a hard 3, so a question naming four subjects was answered
+            # about whichever two claims ranked highest -- and nothing said the other two were asked.
+            room = max(3, answer_budget(question)[0] - 1)
+            answer = " ".join([lead] + [as_sentence(v.claim) for v in good[1:room]])
             confidence = max(
                 (v.confidence for v in good),
                 key={Confidence.HIGH: 3, Confidence.MODERATE: 2, Confidence.LOW: 1, Confidence.NONE: 0}.get,  # type: ignore[arg-type]
@@ -1857,8 +1861,9 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
                 question,
                 why=report.why or "",
             )
+            sentences, chars = answer_budget(question)
             text = humanize(
-                tiny(body),
+                tiny(body, max_sentences=sentences, max_chars=chars),
                 report.confidence.value if hasattr(report.confidence, "value") else str(report.confidence),
             )
     return FinalAnswer(

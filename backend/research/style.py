@@ -444,6 +444,21 @@ def tiny(answer: str, *, max_sentences: int = 2, max_chars: int = 260) -> str:
     return " ".join(kept)
 
 
+def answer_budget(question: str) -> tuple[int, int]:
+    """How much prose the question asked for: (sentences, characters).
+
+    A yes/no check is two sentences whatever the evidence says -- ``render_truth`` keeps that. This
+    is for an informational answer, where a question that enumerates four subjects cannot be
+    answered in 280 characters about two of them: the cap was silently deciding what was asked.
+    """
+    from backend.research.lint import asked_subjects  # noqa: PLC0415 -- lint imports this module
+
+    n = len(asked_subjects(question or ""))
+    if n < 3:
+        return 3, 280
+    return max(3, n + 1), max(280, 90 * n + 100)
+
+
 def _tidy(text: str) -> str:
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"\s+([.,;:!?])", r"\1", text)
@@ -735,7 +750,8 @@ def render_truth(state: str, *, question: str = "", answer: str = "", aspect: st
         base = "That one isn't settled yet."
         return tiny(f"{base} {fit_fact(fact, 300 - len(base) - 1)}".strip(), max_sentences=2, max_chars=300)
     if not claim:
-        return tiny(answer, max_sentences=3, max_chars=280)
+        sentences, chars = answer_budget(question)
+        return tiny(answer, max_sentences=sentences, max_chars=chars)
     if state == "TRUE":
         base = TRUTH_TRUE[:-1] + bro + "."
         extra = fact if fact and len(fact) > 12 and fact.lower() not in {"it is.", "that is correct."} else ""
@@ -760,7 +776,8 @@ def render_truth(state: str, *, question: str = "", answer: str = "", aspect: st
         line = head + (f" \u2014 {fit_fact(fix, 300 - len(head) - 4)}." if fix else ".")
         line = line.replace("\u2026.", "\u2026").replace("..", ".")
         return tiny(line, max_sentences=3, max_chars=300)
-    return tiny(answer, max_sentences=3, max_chars=280)
+    sentences, chars = answer_budget(question)
+    return tiny(answer, max_sentences=sentences, max_chars=chars)
 
 # ---- questions about the present: which claim answers them ------------------------------------------------------------
 _NEGATED_NOW_RE = re.compile(r"\b(?:no longer|not (?:currently )?in force|ceased to (?:be|have)|has been (?:omitted|repealed|revoked)|was (?:omitted|repealed|revoked)|is (?:omitted|repealed|revoked))\b", re.I)
