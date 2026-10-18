@@ -845,7 +845,10 @@ def render_truth(state: str, *, question: str = "", answer: str = "", aspect: st
         base = TRUTH_FALSE[:-1] + bro + "." if bro else TRUTH_FALSE
         return tiny(f"{base} {fit_fact(fact, 300 - len(base) - 1)}".strip(), max_sentences=2, max_chars=300)
     if state == "PARTLY":
-        part = f"the {aspect.strip()} part" if aspect.strip() else "one detail"
+        # "the date part" / "the number part" read naturally because they name a kind of thing asked
+        # about; "the detail part" is not English. An unspecified aspect is simply one detail.
+        named = aspect.strip().lower()
+        part = f"the {named} part" if named in {"date", "number", "figure", "year"} else "one detail"
         fix = fact.rstrip(".") if fact else ""
         head = f"Yeah, the idea is right, but {part} is a bit off"
         line = head + (f" \u2014 {fit_fact(fix, 300 - len(head) - 4)}." if fix else ".")

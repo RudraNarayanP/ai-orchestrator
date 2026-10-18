@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from backend.models import ClaimStatus, ClaimVerdict, Confidence, VerifierReport
 from backend.research.style import premise_main, premise_state, render_truth, verdict_lead
-from backend.verification.verifier import build_final_answer
+from backend.verification.verifier import _aspect, build_final_answer
 
 APPEAL = "Will the Court of Justice uphold the EU-US Data Privacy Framework in Latombe's appeal, Case C-703/25 P?"
 NO_ONE_CAN_SAY = (
@@ -158,3 +158,45 @@ def test_the_gpl_answer_reaches_the_user_as_a_no():
     final = build_final_answer(report, [], 1, question=GPL)
     assert final.truth_state == "FALSE", final.truth_state
     assert final.answer.lower().startswith(("no", "nah", "nope")), final.answer
+
+
+# ------------------------------------------------------ an aspect must be something the user put in play
+#
+# Live (2026-10-18, lg-ai-training-fair-use): the question asked no number, and the answer opened
+# "Yeah, the idea is right, but the number part is a bit off" -- because the supporting claim
+# happened to contain "Section 107". A digit in our own evidence is not a number the user claimed.
+
+FAIR_USE = "Is training a generative AI model on copyrighted books without a licence fair use under US law?"
+SECTION_107 = "Section 107 requires a case-specific four-factor assessment; two 2025 rulings found fair use on their records."
+
+
+def test_a_digit_in_our_evidence_is_not_a_number_the_user_claimed():
+    report = VerifierReport(
+        job_id="j", round=1,
+        verdicts=[ClaimVerdict(
+            claim_id="clm_f", claim=SECTION_107, verdict=ClaimStatus.PARTIALLY_SUPPORTED,
+            confidence=Confidence.LOW, reasoning="the statute conditions it", problems=["figure_absent"],
+        )],
+        confidence=Confidence.MODERATE, answer=SECTION_107, why="section 107 text",
+    )
+    assert _aspect(report, FAIR_USE) != "number", "no number was asked, so none can be 'off'"
+    final = build_final_answer(report, [], 1, question=FAIR_USE)
+    assert "number part" not in final.answer, final.answer
+
+
+def test_a_date_aspect_is_still_named_when_the_user_did_ask_a_date():
+    report = VerifierReport(
+        job_id="j", round=1,
+        verdicts=[ClaimVerdict(
+            claim_id="clm_d", claim="The Act commenced on 25 May 2018.", verdict=ClaimStatus.PARTIALLY_SUPPORTED,
+            confidence=Confidence.LOW, reasoning="one page says it", problems=["figure_absent"],
+        )],
+        confidence=Confidence.MODERATE, answer="The Act commenced on 25 May 2018.", why="a page",
+    )
+    assert _aspect(report, "When did the Act come into force?") == "date"
+
+
+def test_an_unnamed_aspect_reads_as_english_not_the_detail_part():
+    assert "the detail part" not in render_truth("PARTLY", question=FAIR_USE, answer=SECTION_107, aspect="detail")
+    assert "one detail" in render_truth("PARTLY", question=FAIR_USE, answer=SECTION_107, aspect="detail")
+    assert "the date part" in render_truth("PARTLY", question=FAIR_USE, answer=SECTION_107, aspect="date")

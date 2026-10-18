@@ -1442,12 +1442,22 @@ def _ledger_state(report: VerifierReport, question: str = "") -> str:
     return "PARTLY"
 
 
-def _aspect(report: VerifierReport) -> str:
+_ASKES_NUMBER_RE = re.compile(r"\d|\bhow (?:many|much|long|far)\b|\bwhat (?:percentage|proportion|penalty|fine|cost|rate|number)\b|\bnumber of\b", re.I)
+_ASKES_DATE_RE = re.compile(r"\b(?:19|20)\d\d\b|\bwhen\b|\bwhat (?:year|date)\b|\bsince when\b|\bhow old\b", re.I)
+
+
+def _aspect(report: VerifierReport, question: str = "") -> str:
     """Which detail is off, in a word, from the first claim that is not fully supported.
 
     Only a claim with a substantive problem names an aspect. A verdict downgraded for evidence
     strength alone (one source, an old or undated page) says nothing is wrong with the detail, so it
     must not be read as "the date part is a bit off" from a year that happens to sit in its text.
+
+    And the aspect has to be something the user put in play. Live (2026-10-18, lg-ai-training-fair-use):
+    the question was "Is training a generative AI model on copyrighted books ... fair use?" -- no
+    number asked -- and the answer opened "Yeah, the idea is right, but the number part is a bit off",
+    because the supporting claim happened to contain "Section 107". A digit in our own evidence is not
+    a number the user claimed.
     """
     strength_only = {"single_source", "outdated", "unverifiable", "contradicting_claim_had_no_usable_source"}
     for v in report.verdicts:
@@ -1458,9 +1468,17 @@ def _aspect(report: VerifierReport) -> str:
             text = v.claim.lower()
             if v.problems and all(p.lower() in strength_only for p in v.problems):
                 continue
-            if "outdated" in problems or re.search(r"\b(19|20)\d\d\b|\b(january|february|march|april|may|june|july|august|september|october|november|december)\b", text):
+            dated = "outdated" in problems or re.search(r"\b(19|20)\d\d\b|\b(january|february|march|april|may|june|july|august|september|october|november|december)\b", text)
+            numbered = bool(re.search(r"\d", text)) or "exaggeration" in problems
+            if question:
+                if dated and _ASKES_DATE_RE.search(question):
+                    return "date"
+                if numbered and _ASKES_NUMBER_RE.search(question):
+                    return "number"
+                return "detail"
+            if dated:
                 return "date"
-            if re.search(r"\d", text) or "exaggeration" in problems:
+            if numbered:
                 return "number"
             return "detail"
     return ""
@@ -1898,7 +1916,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
                 state,
                 question=question,
                 answer=body,
-                aspect=_aspect(report) if state == "PARTLY" else "",
+                aspect=_aspect(report, question) if state == "PARTLY" else "",
             )
             text = humanize(shown, "high" if state in {"TRUE", "FALSE"} and ledger_state in {"TRUE", "FALSE"} else "low")
         else:
