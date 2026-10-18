@@ -1703,11 +1703,11 @@ def answer_the_asked_question(state: str, report: VerifierReport, question: str)
     from the SUPPORTED claim that best matches the question, its polarity read off that claim; with no such claim the answer is
     "Couldn't verify". Nothing here ever upgrades a state; at most it replaces an off-question sentence or downgrades.
     """
-    from backend.research.style import _DENIAL_RE, _QUESTION_TAIL_RE, _first_sentence, _head_clause, _key_terms, is_claim_check  # noqa: PLC0415
+    from backend.research.style import _DENIAL_RE, _first_sentence, _head_clause, _key_terms, is_claim_check, premise_main  # noqa: PLC0415
 
     if state not in {"TRUE", "FALSE", "PARTLY"} or not question or not is_claim_check(question):
         return state, report
-    main = _QUESTION_TAIL_RE.split(question, maxsplit=1)[0]
+    main = premise_main(question)
     asked = _key_terms(" ".join(w for w in re.findall(r"\S+", main) if not w[:1].isupper()))
     # words that frame a claim check ("is it true", "right", "doesn't") say nothing about which fact was asked
     filler = {"true", "really", "right", "correct", "doesnt", "dont", "isnt", "cant", "wont", "arent", "does", "have", "that", "this", "with"}

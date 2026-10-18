@@ -662,6 +662,24 @@ _DENIAL_RE = re.compile(
 )
 _OPEN_RE = re.compile(r"\b(?:not (?:yet )?settled|unsettled|open question|remains? (?:open|unresolved|undecided)|courts? (?:are|remain) (?:split|divided)|no (?:court|appellate court|binding (?:court|decision|ruling)) has (?:yet )?(?:decided|ruled|established|held|resolved)|has not (?:yet )?been (?:decided|resolved|settled)|no(?:body| one)? can say|one cannot say|cannot be (?:said|predicted|known)|it (?:is|'s) not (?:known|predictable|determinable)|depends on the (?:four )?(?:statutory )?factors|depends on (?:a |the )?(?:case|fact)[- ]specific|case[- ]by[- ]case|not automatically|not necessarily|no blanket rule)\b", re.I)
 _QUESTION_TAIL_RE = re.compile(r",\s*(?:even|although|though|unless|except|including|which|who|whom|whose|where|if|when|while|but)\b", re.I)
+# The premise of a conditional question is its main clause. "Does GPL v3 oblige a company to publish
+# the source of its modified version if the program is only used inside the company and never given
+# to anyone outside it?" asks about an obligation; the "never" belongs to the condition. Because the
+# splitter above needs a comma before the conjunction, that "never" stayed in the main clause, the
+# agreement check switched itself off, and a curator who answered "No. GPLv3 does not require ..."
+# was rendered "Yeah, you're right." (live, 2026-10-18, eval_20261018_044504).
+_CONDITION_TAIL_RE = re.compile(
+    r"\s+(?:if|when|while|unless|although|though|once|wherever|even\s+if|provided\s+that)\b", re.I
+)
+
+
+def premise_main(question: str) -> str:
+    """The stretch of the question that actually states the premise being checked."""
+    text = _QUESTION_TAIL_RE.split((question or "").strip(), maxsplit=1)[0]
+    cut = _CONDITION_TAIL_RE.search(text)
+    if cut and len(text[: cut.start()].split()) >= 4:
+        text = text[: cut.start()].strip()
+    return text
 _LEAD_NO = re.compile(r"^\s*(?:no|nope|nah)\b", re.I)
 _LEAD_YES = re.compile(r"^\s*(?:yes|yeah|yep|yup)\b", re.I)
 # "No" answers a question; "No one can say" reports that nobody can. Reading the second as the first
@@ -720,7 +738,7 @@ def premise_state(state: str, question: str, answer: str) -> str:
         return "OPEN"
     # Only the question's own head clause sets its polarity: "Does India enforce awards ..., even one the government has NOT
     # notified?" asserts enforcement; the later "not" qualifies it (live 2026-10-12: answered "Yeah, you're right. India does not ...").
-    main = _QUESTION_TAIL_RE.split(question or "", maxsplit=1)[0]
+    main = premise_main(question)
     if _DENIAL_RE.search(main) or re.search(r"\b(?:no|without|nothing|none)\b", main, re.I):
         return state
     if _LEAD_YES.match(lead):

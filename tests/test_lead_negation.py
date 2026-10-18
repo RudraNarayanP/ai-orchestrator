@@ -23,7 +23,7 @@ because the rule is "an open question never gets a yes or a no", not "a bare 'no
 from __future__ import annotations
 
 from backend.models import ClaimStatus, ClaimVerdict, Confidence, VerifierReport
-from backend.research.style import premise_state, render_truth, verdict_lead
+from backend.research.style import premise_main, premise_state, render_truth, verdict_lead
 from backend.verification.verifier import build_final_answer
 
 APPEAL = "Will the Court of Justice uphold the EU-US Data Privacy Framework in Latombe's appeal, Case C-703/25 P?"
@@ -102,3 +102,59 @@ def test_render_truth_on_an_open_state_says_so_and_adds_no_emoji():
     shown = render_truth("OPEN", question=APPEAL, answer=NO_ONE_CAN_SAY)
     assert shown.startswith("That one isn't settled yet.")
     assert "✅" not in shown and "❌" not in shown
+
+
+# ------------------------------------------- the premise of a conditional question is its main clause
+#
+# Live (2026-10-18, eval_20261018_044504, lg-gpl-internal-use). The question asks whether GPLv3
+# obliges publishing source *if* the program is never distributed. The curator answered
+# "No. GPLv3 does not require a company to publish ...". The answer reached the user as
+# "Yeah, you're right." -- the tail splitter needed a comma before "if", so the condition's "never"
+# stayed in the clause treated as the premise, the agreement check decided the premise was itself
+# negative, and switched itself off.
+
+GPL = (
+    "Does the GNU GPL version 3 oblige a company to publish the source of its modified version "
+    "if the program is only used inside the company and never given to anyone outside it?"
+)
+GPL_ANSWER = "No. GPLv3 does not require a company to publish the source code of a modified program that is used only internally."
+
+
+def test_a_condition_never_belongs_to_the_premise():
+    main = premise_main(GPL)
+    assert "never" not in main, main
+    assert main.startswith("Does the GNU GPL version 3 oblige")
+
+
+def test_a_prepositional_without_is_part_of_the_premise_and_stays():
+    """The opposite case, already decided: "training without a licence" asks about an absent licence."""
+    assert "without a licence" in premise_main(
+        "Is training a generative AI model on copyrighted books without a licence fair use under US law?"
+    )
+
+
+def test_a_conditional_question_denied_by_the_reviewer_leads_with_the_denial():
+    assert premise_state("TRUE", GPL, GPL_ANSWER) == "FALSE"
+
+
+def test_the_gpl_answer_reaches_the_user_as_a_no():
+    report = VerifierReport(
+        job_id="j",
+        round=1,
+        verdicts=[
+            ClaimVerdict(
+                claim_id="clm_g",
+                claim="GPLv3 imposes no source-publishing duty on software that is never distributed outside the company.",
+                verdict=ClaimStatus.SUPPORTED,
+                confidence=Confidence.HIGH,
+                reasoning="the FSF text on the copyleft terms says so",
+                strong_evidence=["https://www.gnu.org/licenses/gpl-faq.html"],
+            )
+        ],
+        confidence=Confidence.HIGH,
+        answer=GPL_ANSWER,
+        why="the license text conditions the duty on distribution",
+    )
+    final = build_final_answer(report, [], 1, question=GPL)
+    assert final.truth_state == "FALSE", final.truth_state
+    assert final.answer.lower().startswith(("no", "nah", "nope")), final.answer
