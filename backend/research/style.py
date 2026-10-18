@@ -660,10 +660,42 @@ _DENIAL_RE = re.compile(
     r"\b(not|never|no longer|cannot|can'?t|doesn'?t|does not|didn'?t|did not|isn'?t|is not|aren'?t|are not|wasn'?t|weren'?t|myth|false"
     r"|void|unenforceable|invalid|unlawful|illegal|prohibited|impermissible|forbidden|barred|inadmissible|omitted|repealed|revoked)\b", re.I
 )
-_OPEN_RE = re.compile(r"\b(?:not (?:yet )?settled|unsettled|open question|remains? (?:open|unresolved|undecided)|courts? (?:are|remain) (?:split|divided)|no (?:court|appellate court|binding (?:court|decision|ruling)) has (?:yet )?(?:decided|ruled|established|held|resolved)|has not (?:yet )?been (?:decided|resolved|settled)|depends on the (?:four )?(?:statutory )?factors|depends on (?:a |the )?(?:case|fact)[- ]specific|case[- ]by[- ]case|not automatically|not necessarily|no blanket rule)\b", re.I)
+_OPEN_RE = re.compile(r"\b(?:not (?:yet )?settled|unsettled|open question|remains? (?:open|unresolved|undecided)|courts? (?:are|remain) (?:split|divided)|no (?:court|appellate court|binding (?:court|decision|ruling)) has (?:yet )?(?:decided|ruled|established|held|resolved)|has not (?:yet )?been (?:decided|resolved|settled)|no(?:body| one)? can say|one cannot say|cannot be (?:said|predicted|known)|it (?:is|'s) not (?:known|predictable|determinable)|depends on the (?:four )?(?:statutory )?factors|depends on (?:a |the )?(?:case|fact)[- ]specific|case[- ]by[- ]case|not automatically|not necessarily|no blanket rule)\b", re.I)
 _QUESTION_TAIL_RE = re.compile(r",\s*(?:even|although|though|unless|except|including|which|who|whom|whose|where|if|when|while|but)\b", re.I)
 _LEAD_NO = re.compile(r"^\s*(?:no|nope|nah)\b", re.I)
 _LEAD_YES = re.compile(r"^\s*(?:yes|yeah|yep|yup)\b", re.I)
+# "No" answers a question; "No one can say" reports that nobody can. Reading the second as the first
+# deleted the negation: the reviewer wrote "No one can say whether the Court of Justice will uphold
+# the EU-US Data Privacy Framework in Case C-703/25 P", and the answer that reached the user was
+# "Nah, that doesn't work like that. One can say whether the Court of Justice will uphold it" -- the
+# exact opposite of what the evidence said (live, 2026-10-18). A "no" that determines a following
+# noun is a quantifier, not a verdict.
+_NO_AS_DETERMINER = re.compile(
+    r"^\s*no\s+(?:one|one's|body|thing|party|court|source|page|evidence|ruling|decision|judgment|judgement"
+    r"|case|statute|law|provision|answer|record|document|opinion|finding|precedent|where|time|instance"
+    r"|example|such|appeal|claim|question|doubt)\b",
+    re.I,
+)
+
+
+def _denial_lead(text: str) -> bool:
+    """Does this text open by denying -- rather than by saying 'no such thing exists'?"""
+    return bool(_LEAD_NO.match(text or "")) and not _NO_AS_DETERMINER.match(text or "")
+
+
+def _strip_lead(text: str) -> str:
+    """Remove a leading yes/no verdict word, and only when it is one."""
+    if _NO_AS_DETERMINER.match(text or ""):
+        return (text or "").strip()
+    return _LEAD_YESNO.sub("", (text or "").strip())
+
+
+def verdict_lead(text: str) -> bool:
+    """Does this open with a yes/no verdict? False for "No one can say", where "no" determines a noun."""
+    clean = (text or "").strip()
+    if _NO_AS_DETERMINER.match(clean):
+        return False
+    return bool(_LEAD_YESNO.match(clean))
 # What follows these words qualifies the answer; it does not decide whether the answer agrees or disagrees with the question.
 _QUALIFIER_RE = re.compile(r"\b(?:although|though|while|whereas|but|however|except|unless|albeit|even if|provided that)\b|;")
 
@@ -694,13 +726,13 @@ def premise_state(state: str, question: str, answer: str) -> str:
     if _LEAD_YES.match(lead):
         return state  # the answer itself says yes: a "not yet in force" later in the sentence is a qualification, not a denial
     first = _head_clause(_first_sentence(lead))
-    if _LEAD_NO.match(lead) or (first and _DENIAL_RE.search(first)):
+    if _denial_lead(lead) or (first and _DENIAL_RE.search(first)):
         return "FALSE"
     # The denial can sit in a later sentence that answers the question itself ("Article 368 empowers Parliament to amend the
     # Constitution. ... Parliament cannot amend it in a manner that destroys its basic structure." -- live 2026-10-13, shown as
     # "Yeah, you're right"). A later sentence counts only when its head clause denies AND it shares the question's key terms.
     asked = _key_terms(main)
-    sentences = split_sentences(_LEAD_YESNO.sub("", lead))
+    sentences = split_sentences(_strip_lead(lead))
     for sentence in sentences[1:4]:
         head = _head_clause(sentence)
         if _DENIAL_RE.search(head) and len(asked & _key_terms(head)) >= 3:
@@ -724,7 +756,7 @@ def _key_terms(text: str) -> set[str]:
 
 
 def _first_sentence(text: str) -> str:
-    parts = split_sentences(_LEAD_YESNO.sub("", (text or "").strip()))
+    parts = split_sentences(_strip_lead(text))
     return parts[0].strip() if parts else ""
 
 

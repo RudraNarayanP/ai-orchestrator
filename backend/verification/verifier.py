@@ -52,6 +52,7 @@ from backend.research.style import (
     render_truth,
     scrub,
     tiny,
+    verdict_lead,
 )
 from backend.research.prompts import fence_all
 from backend.verification.llm import Endpoint, LLMClient
@@ -1352,9 +1353,6 @@ def _asked_figures(text: str) -> set[str]:
 
 
 _PAGE_CLAIM_RE = re.compile(r"^\s*the (?:url|link|page|pdf|document at|website at)\b|https?://", re.I)
-_LEAD_POLARITY_RE = re.compile(r"^\s*(?:no|yes|nah|nope|yep|yeah)\b", re.I)
-
-
 def _is_page_claim(claim: str) -> bool:
     return bool(_PAGE_CLAIM_RE.search(claim or ""))
 
@@ -1863,7 +1861,7 @@ def build_final_answer(report: VerifierReport, responses: list[ProviderResponse]
     # carried the "No." off the front, and then there is no denial left to read (live 2026-10-16, Erie -- the
     # curator answered "No. Under Erie ... apply the relevant state substantive law" and the run said
     # "Yeah, you're right.", agreement with the exact premise Erie rejects).
-    judged = said if question and said and not _LEAD_POLARITY_RE.match((report.answer or "").strip()) else report.answer
+    judged = said if question and said and not verdict_lead(report.answer or "") else report.answer
     state = premise_state(state, question, lint_answer(judged, question=question).text) if state else state
     state, report = answer_the_asked_question(state, report, question)
     S = ClaimStatus
